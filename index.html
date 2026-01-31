@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>Meteo 7 jours - La Foux d'Allos</title>
+    <link rel="stylesheet" href="style.css?v=3.20">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+
+<!-- Barre fixe en haut : Date + Toggle thème + Toggle source -->
+<header class="top-bar">
+    <div class="top-bar-left">
+        <h1 id="current-date">La Foux d'Allos</h1>
+    </div>
+    <div class="top-bar-right">
+        <button class="refresh-btn" id="refresh-btn" onclick="App.refreshData()" title="Rafraîchir les données">
+            <i data-lucide="refresh-cw"></i>
+        </button>
+        <button class="theme-toggle" onclick="App.toggleTheme()" title="Changer le thème">
+            <i data-lucide="sun" class="icon-light"></i>
+            <i data-lucide="moon" class="icon-dark"></i>
+        </button>
+        <button class="source-toggle" id="global-source-toggle" onclick="App.toggleGlobalSource()" title="Changer la source météo">
+            <span class="source-label">Open<br>Meteo</span>
+            <i data-lucide="arrow-left-right" class="lucide"></i>
+        </button>
+    </div>
+</header>
+
+<!-- Contenu principal -->
+<main id="content">
+    <!-- Skeleton loader initial (remplacé par JS) -->
+    <div class="skeleton-loader">
+        <div class="skeleton-text">
+            <i data-lucide="loader-2" class="lucide lucide-spin"></i>
+            <span>Chargement des prévisions...</span>
+        </div>
+        <div class="skeleton-section">
+            <div class="skeleton-summary">
+                <div class="skeleton-summary-item skeleton" style="width: 80px"></div>
+                <div class="skeleton-summary-item skeleton" style="width: 70px"></div>
+                <div class="skeleton-summary-item skeleton" style="width: 75px"></div>
+                <div class="skeleton-summary-item skeleton" style="width: 65px"></div>
+            </div>
+            <div class="skeleton-chart">
+                <div class="skeleton-bar skeleton" style="height: 40%"></div>
+                <div class="skeleton-bar skeleton" style="height: 65%"></div>
+                <div class="skeleton-bar skeleton" style="height: 55%"></div>
+                <div class="skeleton-bar skeleton" style="height: 80%"></div>
+                <div class="skeleton-bar skeleton" style="height: 70%"></div>
+                <div class="skeleton-bar skeleton" style="height: 50%"></div>
+                <div class="skeleton-bar skeleton" style="height: 75%"></div>
+                <div class="skeleton-bar skeleton" style="height: 60%"></div>
+                <div class="skeleton-bar skeleton" style="height: 45%"></div>
+                <div class="skeleton-bar skeleton" style="height: 70%"></div>
+                <div class="skeleton-bar skeleton" style="height: 85%"></div>
+                <div class="skeleton-bar skeleton" style="height: 55%"></div>
+                <div class="skeleton-bar skeleton" style="height: 40%"></div>
+                <div class="skeleton-bar skeleton" style="height: 60%"></div>
+                <div class="skeleton-bar skeleton" style="height: 75%"></div>
+                <div class="skeleton-bar skeleton" style="height: 50%"></div>
+                <div class="skeleton-bar skeleton" style="height: 65%"></div>
+                <div class="skeleton-bar skeleton" style="height: 45%"></div>
+                <div class="skeleton-bar skeleton" style="height: 55%"></div>
+                <div class="skeleton-bar skeleton" style="height: 70%"></div>
+                <div class="skeleton-bar skeleton" style="height: 60%"></div>
+                <div class="skeleton-bar skeleton" style="height: 50%"></div>
+                <div class="skeleton-bar skeleton" style="height: 65%"></div>
+                <div class="skeleton-bar skeleton" style="height: 45%"></div>
+            </div>
+            <div class="skeleton-cards">
+                <div class="skeleton-card">
+                    <div class="skeleton-time skeleton"></div>
+                    <div class="skeleton-icon skeleton"></div>
+                    <div class="skeleton-temp skeleton"></div>
+                    <div class="skeleton-data">
+                        <div class="skeleton-line skeleton" style="width: 85%"></div>
+                        <div class="skeleton-line skeleton" style="width: 65%"></div>
+                    </div>
+                </div>
+                <div class="skeleton-card">
+                    <div class="skeleton-time skeleton"></div>
+                    <div class="skeleton-icon skeleton"></div>
+                    <div class="skeleton-temp skeleton"></div>
+                    <div class="skeleton-data">
+                        <div class="skeleton-line skeleton" style="width: 85%"></div>
+                        <div class="skeleton-line skeleton" style="width: 65%"></div>
+                    </div>
+                </div>
+                <div class="skeleton-card">
+                    <div class="skeleton-time skeleton"></div>
+                    <div class="skeleton-icon skeleton"></div>
+                    <div class="skeleton-temp skeleton"></div>
+                    <div class="skeleton-data">
+                        <div class="skeleton-line skeleton" style="width: 85%"></div>
+                        <div class="skeleton-line skeleton" style="width: 65%"></div>
+                    </div>
+                </div>
+                <div class="skeleton-card">
+                    <div class="skeleton-time skeleton"></div>
+                    <div class="skeleton-icon skeleton"></div>
+                    <div class="skeleton-temp skeleton"></div>
+                    <div class="skeleton-data">
+                        <div class="skeleton-line skeleton" style="width: 85%"></div>
+                        <div class="skeleton-line skeleton" style="width: 65%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Barre de navigation en bas (mobile) / en haut du contenu (desktop) -->
+<nav class="bottom-nav">
+    <div class="altitude-tabs" id="altitude-tabs">
+        <!-- Tabs altitudes générés dynamiquement -->
+    </div>
+    <div class="day-nav" id="day-nav">
+        <!-- Navigation jours générée dynamiquement -->
+    </div>
+</nav>
+
+<footer>
+    <div>Données : Open-Meteo + MET Norway (7 jours)</div>
+</footer>
+
+<!-- Scripts JS séparés -->
+<script src="js/core.js?v=1.0"></script>
+<script src="js/ui.js?v=1.0"></script>
+
+</body>
+</html>
