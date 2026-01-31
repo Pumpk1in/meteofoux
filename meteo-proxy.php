@@ -26,21 +26,12 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
 header('Content-Type: application/json');
 
-// ================= CONFIG EXTERNE =================
-// Charger la configuration depuis un fichier séparé (sécurité)
-$config_file = __DIR__ . '/config.php';
-if (!file_exists($config_file)) {
-    echo json_encode(['error' => 'Fichier config.php manquant']);
-    exit;
-}
-$config = require $config_file;
-
-$use_proxy = $config['proxy']['enabled'] ?? false;
-
-$proxy_host = $use_proxy ? $config['proxy']['host'] : '';
-$proxy_port = $use_proxy ? $config['proxy']['port'] : '';
-$proxy_user = $use_proxy ? $config['proxy']['user'] : '';
-$proxy_pass = $use_proxy ? $config['proxy']['pass'] : '';
+// ================= CONFIG =================
+// Proxy HTTP désactivé (plus utilisé)
+$proxy_host = '';
+$proxy_port = '';
+$proxy_user = '';
+$proxy_pass = '';
 
 // ================= PARAMS =================
 
