@@ -49,9 +49,12 @@ const Utils = {
     // Nombre de cartes visibles selon l'écran
     visibleCardCount: () => window.innerWidth >= 1024 ? 4 : 4,
 
+    // Parse un timestamp GMT (ajoute Z si nécessaire pour interprétation UTC)
+    parseTime: (timeStr) => new Date(timeStr.endsWith('Z') ? timeStr : timeStr + 'Z'),
+
     // Extrait la date locale (YYYY-MM-DD) d'un timestamp GMT
     getLocalDay: (timeStr) => {
-        const date = new Date(timeStr.endsWith('Z') ? timeStr : timeStr + 'Z');
+        const date = Utils.parseTime(timeStr);
         return date.toLocaleDateString('fr-CA'); // Format YYYY-MM-DD
     },
 
@@ -328,7 +331,7 @@ const DataNormalizer = {
             // Utiliser next_1_hours si dispo, sinon fallback sur next_6_hours
             const forecast = entry.metno.data.next_1_hours || entry.metno.data.next_6_hours;
 
-            const hour = new Date(entry.metno.time).getUTCHours();
+            const hour = Utils.parseTime(entry.metno.time).getUTCHours();
             const isDay = hour >= 7 && hour < 17;
 
             return {
@@ -354,7 +357,7 @@ const DataNormalizer = {
             if (isToday && entry.om) {
                 prepared.om = entry.om;
             } else if (!isToday && entry.om6h) {
-                const hour = new Date(entry.time).getUTCHours();
+                const hour = Utils.parseTime(entry.time).getUTCHours();
                 const isDay = hour >= 6 && hour < 18;
 
                 prepared.om = {

@@ -76,12 +76,18 @@ if (!$force_refresh && file_exists($cache_file)) {
 
 $url_metno = "https://api.met.no/weatherapi/locationforecast/2.0/?lat=$lat&lon=$lon";
 
+// Dates pour couvrir minuit heure locale (Europe/Paris = UTC+1 ou UTC+2)
+// On commence la veille à 22h UTC pour capturer minuit local
+$start_date = gmdate('Y-m-d', strtotime('-1 day'));
+$end_date = gmdate('Y-m-d', strtotime('+7 days'));
+
 $url_openmeteo = "https://api.open-meteo.com/v1/forecast?" . http_build_query([
     'latitude' => $lat,
     'longitude' => $lon,
     'models' => 'best_match,meteofrance_arome_france_hd,meteofrance_arome_france,meteofrance_seamless,meteoswiss_icon_seamless',
     'timezone' => 'GMT',
-    'forecast_days' => 7,
+    'start_date' => $start_date,
+    'end_date' => $end_date,
     'hourly' => implode(',', [
         'temperature_2m','apparent_temperature','dew_point_2m','freezing_level_height',
         'relative_humidity_2m','precipitation','rain','snowfall','showers',

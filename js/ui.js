@@ -55,6 +55,7 @@ const Charts = {
                 type: 'datetime',
                 labels: {
                     style: { colors: isDark ? '#94a3b8' : '#6b7280' },
+                    datetimeUTC: false,
                     datetimeFormatter: { hour: 'HH:mm' }
                 },
                 axisBorder: { show: false },
@@ -245,6 +246,7 @@ const Charts = {
                 max: xMaxVisible,
                 labels: {
                     style: { colors: isDark ? '#94a3b8' : '#6b7280' },
+                    datetimeUTC: false,
                     datetimeFormatter: { hour: 'HH:mm' }
                 },
                 axisBorder: { show: false },
@@ -522,12 +524,8 @@ const App = {
 
     renderDayContent(day, pointData, isToday, useOpenMeteo, canToggle) {
         const { point, series, omHourly, elevation } = pointData;
-        // Filtrer par jour local OU par jour UTC (pour inclure 23:00 UTC = minuit local)
-        const dayEntries = series.filter(e => {
-            const localDay = Utils.getLocalDay(e.time);
-            const utcDay = e.time.substring(0, 10);
-            return localDay === day || utcDay === day;
-        });
+        // Filtrer par jour local uniquement
+        const dayEntries = series.filter(e => Utils.getLocalDay(e.time) === day);
         const now = new Date();
 
         // Préparer les données
@@ -536,10 +534,10 @@ const App = {
 
         if (isToday) {
             const nowMs = now.getTime();
-            displayEntries = dayEntries.filter(e => new Date(e.time).getTime() >= nowMs - 3600000);
+            displayEntries = dayEntries.filter(e => Utils.parseTime(e.time).getTime() >= nowMs - 3600000);
         } else {
             // Préparer les 4 périodes (6h)
-            displayEntries = dayEntries.filter(e => new Date(e.time).getUTCHours() % 6 === 0).slice(0, 4);
+            displayEntries = dayEntries.filter(e => Utils.parseTime(e.time).getUTCHours() % 6 === 0).slice(0, 4);
             // ET toutes les heures (pour le toggle) - pour tous les jours avec données hourly
             if (useOpenMeteo && omHourly) {
                 // Open-Meteo : construire les entrées directement depuis omHourly (pas depuis series)
@@ -708,7 +706,7 @@ const App = {
                     const forecast = isHourly
                         ? (m.data?.next_1_hours?.details || {})
                         : (m.data?.next_6_hours?.details || {});
-                    const timestamp = new Date(m.time).getTime();
+                    const timestamp = Utils.parseTime(m.time).getTime();
                     return {
                         time: timestamp,
                         temp: details.air_temperature ?? null,
@@ -895,7 +893,7 @@ const Components = {
     CardsGrid(entries, isToday) {
         const visibleCount = Utils.visibleCardCount();
         const cardsHtml = entries.map((entry, index) => {
-            const d = new Date(entry.time);
+            const d = Utils.parseTime(entry.time);
             const label = isToday ? Utils.formatTimeLabel(d) : Utils.periodLabel(d.getUTCHours());
             const cardData = DataNormalizer.toCardData(entry, isToday);
             const extraClass = (isToday && index >= visibleCount) ? 'hidden-card' : '';
@@ -922,7 +920,7 @@ const Components = {
     CardsGridTomorrow(periodEntries, hourlyEntries, day) {
         // Cartes périodes (Nuit, Matin, Midi, Soir)
         const periodCardsHtml = periodEntries.map(entry => {
-            const d = new Date(entry.time);
+            const d = Utils.parseTime(entry.time);
             const label = Utils.periodLabel(d.getUTCHours());
             const cardData = DataNormalizer.toCardData(entry, false);
             return this.WeatherCard(label, cardData, '');
@@ -930,7 +928,7 @@ const Components = {
 
         // Cartes horaires (toutes les heures)
         const hourlyCardsHtml = hourlyEntries.map(entry => {
-            const d = new Date(entry.time);
+            const d = Utils.parseTime(entry.time);
             const label = Utils.formatTimeLabel(d);
             const cardData = DataNormalizer.toCardData(entry, true);
             return this.WeatherCard(label, cardData, '');
