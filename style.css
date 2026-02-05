@@ -4,7 +4,7 @@
 :root {
     --bg: #020617;
     --bg-secondary: #0f172a;
-    --card: rgba(255, 255, 255, 0.06);
+    --card: rgba(255, 255, 255, 0.075);
     --card-hover: rgba(255, 255, 255, 0.09);
     --text: #e5e7eb;
     --muted: #94a3b8;
@@ -518,10 +518,10 @@ main {
 .chart-wrapper {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 0.75rem;
-    padding: 0.8rem 0rem;
+    padding: 0.6rem 0rem 1.2rem;
     border: 1px solid var(--border);
     min-width: 0; /* Force le respect de la grille */
-    overflow: hidden;
+    overflow: visible;
 }
 
 .chart-scroll {

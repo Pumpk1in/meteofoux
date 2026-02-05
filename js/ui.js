@@ -70,7 +70,7 @@ const Charts = {
 
     // Graphique unifié : Température, Vent, Précipitations, UV
     // hasExtendedData = true pour Open-Meteo (ressenti, rafales), false pour MET.no
-    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true) {
+    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}) {
         // Stocker la métadonnée pour updateTheme
         this.instanceMeta[containerId] = { hasExtendedData };
 
@@ -119,8 +119,10 @@ const Charts = {
         // < 480px : très petit (légende 2 lignes, graphique 260px)
         // 480-768px : intermédiaire (légende 1 ligne, graphique 260px)
         // >= 768px : PC (légende 1 ligne, graphique 300px)
+        // MET.no (!hasExtendedData) : légende 5 items au lieu de 7, titres plus hauts
         const width = window.innerWidth;
-        const titleOffsetY = width < 480 ? -90 : (width < 768 ? -100 : -120);
+        const baseTitleOffsetY = width < 480 ? -90 : (width < 768 ? -100 : -120);
+        const titleOffsetY = hasExtendedData ? baseTitleOffsetY : baseTitleOffsetY - 10;
 
         const yaxis = [
             // Axe Température (gauche)
@@ -243,6 +245,14 @@ const Charts = {
                         pan: true,
                         reset: false
                     }
+                },
+                events: {
+                    animationEnd: function() {
+                        Charts.addWeatherIcons(containerId, iconByHour);
+                    },
+                    updated: function() {
+                        setTimeout(() => Charts.addWeatherIcons(containerId, iconByHour), 100);
+                    }
                 }
             },
             series,
@@ -308,6 +318,47 @@ const Charts = {
                 legend: { labels: { colors: isDark ? '#94a3b8' : '#6b7280' } },
                 xaxis: { labels: { style: { colors: isDark ? '#94a3b8' : '#6b7280' } } }
             });
+        });
+    },
+
+    // Ajoute les icônes météo sous les labels de l'axe X
+    addWeatherIcons(containerId, iconByHour) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+
+        // Autoriser le débordement pour les icônes sous l'axe X
+        const svg = el.querySelector('.apexcharts-svg');
+        if (svg) svg.style.overflow = 'visible';
+
+        // Supprimer les icônes précédentes
+        el.querySelectorAll('.weather-icon-annotation').forEach(e => e.remove());
+
+        // Trouver les labels de l'axe X
+        const xaxisGroup = el.querySelector('.apexcharts-xaxis-texts-g');
+        if (!xaxisGroup) return;
+
+        xaxisGroup.querySelectorAll('text').forEach(textEl => {
+            const label = (textEl.querySelector('tspan')?.textContent || textEl.textContent).trim();
+            const icon = iconByHour[label];
+            if (!icon) return;
+
+            // Ne pas ajouter d'icône si le label est masqué
+            const opacity = parseFloat(textEl.getAttribute('opacity') ?? '1');
+            if (opacity < 0.1) return;
+
+            const x = parseFloat(textEl.getAttribute('x'));
+            const y = parseFloat(textEl.getAttribute('y'));
+
+            const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+            img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `weather/svg/${icon}.svg`);
+            img.setAttribute('href', `weather/svg/${icon}.svg`);
+            img.setAttribute('x', x - 6);
+            img.setAttribute('y', y + 4);
+            img.setAttribute('width', 16);
+            img.setAttribute('height', 16);
+            img.classList.add('weather-icon-annotation');
+
+            xaxisGroup.appendChild(img);
         });
     }
 };
@@ -781,7 +832,8 @@ const App = {
                         wind_gusts: isHourly ? (d.wind_gusts || d.windSpeed) : d.windSpeed,
                         snow: d.snow || 0,
                         rain: d.rain || 0,
-                        uv_index: isHourly ? (d.uv_index || 0) : 0
+                        uv_index: isHourly ? (d.uv_index || 0) : 0,
+                        icon: d.icon || 'clearsky_day'
                     };
                 })
                 .filter(d => d !== null); // Filtrer les entrées null
@@ -800,9 +852,8 @@ const App = {
                 .map(entry => {
                     const m = entry.metno;
                     const details = m.data?.instant?.details || {};
-                    const forecast = isHourly
-                        ? (m.data?.next_1_hours?.details || {})
-                        : (m.data?.next_6_hours?.details || {});
+                    const forecastObj = isHourly ? m.data?.next_1_hours : m.data?.next_6_hours;
+                    const forecast = forecastObj?.details || {};
                     const timestamp = Utils.parseTime(m.time).getTime();
                     return {
                         time: timestamp,
@@ -813,7 +864,8 @@ const App = {
                         wind_gusts: details.wind_speed_of_gust ?? details.wind_speed ?? null,
                         snow: forecast.snowfall || 0,
                         rain: forecast.rain || 0,
-                        uv_index: details.ultraviolet_index_clear_sky ?? 0
+                        uv_index: details.ultraviolet_index_clear_sky ?? 0,
+                        icon: forecastObj?.summary?.symbol_code || 'clearsky_day'
                     };
                 });
         }
@@ -834,11 +886,20 @@ const App = {
             uv: chartData.map(d => [d.time, d.uv_index || 0])
         };
 
+        // Construire la map icône par heure pour les annotations du graphique
+        const iconByHour = {};
+        chartData.forEach(d => {
+            const date = new Date(d.time);
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            iconByHour[`${hh}:${mm}`] = d.icon;
+        });
+
         // Créer le graphique unifié
         // hasExtendedData = true seulement pour Open-Meteo/AROME hourly (ressenti, rafales disponibles)
         const hasExtendedData = useOMData && isHourly;
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
-            Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData);
+            Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour);
         }
     },
 
