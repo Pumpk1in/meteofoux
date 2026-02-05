@@ -13,11 +13,11 @@ const Charts = {
         if (hasExtendedData) {
             return isDark
                 ? ['#f97316', '#fdba74', '#98dfb6', '#39b36c', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#ea580c', '#f97316', '#16a34a', '#15803d', '#d97706', '#0ea5e9', '#2563eb']; // light
+                : ['#ea580c', '#f97316', '#16a34a', '#15803d', '#fbbf24', '#0ea5e9', '#2563eb']; // light
         } else {
             return isDark
                 ? ['#f97316', '#98dfb6', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#ea580c', '#16a34a', '#d97706', '#0ea5e9', '#2563eb']; // light
+                : ['#ea580c', '#16a34a', '#fbbf24', '#0ea5e9', '#2563eb']; // light
         }
     },
 
