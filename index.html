@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png">
     <title>Meteo 7 jours - La Foux d'Allos</title>
-    <link rel="stylesheet" href="style.css?v=3.26">
+    <link rel="stylesheet" href="style.css?v=3.30">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
@@ -128,7 +128,18 @@
 </nav>
 
 <footer>
-    <div>Données : Open-Meteo + MET Norway (7 jours)</div>
+    <div><strong>Modèles</strong> :<br> Open-Meteo (best_match → Météo-Fra. AROME) · MET Norway</div>
+    <details>
+        <summary>Comment sont calculées les prévisions ?</summary>
+        <p><strong>Sources</strong> : Fusion de deux APIs — Open-Meteo (prioritaire, 7 jours) et MET Norway (fallback). Les données sont mises en cache 15 minutes.</p>
+        <p><strong>Priorité des modèles</strong> : Température, vent, UV → best_match → AROME HD → Météo-France Seamless. Précipitations et codes météo → best_match → AROME → Seamless. Isotherme 0°C → best_match avec fallback MeteoSwiss.</p>
+        <p><strong>Cohérence</strong> : Si best_match indique un code météo de précipitation (pluie/neige) sans données de précipitation associées, fallback automatique sur Météo-France AROME pour cette heure.</p>
+        <p><strong>Calcul de la neige</strong> : Méthode Roebber avec ratio neige/eau dynamique (base 14:1), calibrée pour les Alpes. Le ratio est ajusté selon : température (plus froid = neige plus légère), humidité (>90% = neige plus dense), vent (>3 m/s = compaction). La valeur retenue est le maximum entre Open-Meteo et Roebber.</p>
+        <p><strong>Qualité de neige</strong> : "Sèche" si température ≤ -2°C ou point de rosée ≤ -3°C, "humide" sinon.</p>
+        <p><strong>Classification neige/pluie</strong> : Les précipitations sont classées comme neige si température ≤ 1.5°C ET point de rosée ≤ 0.5°C.</p>
+        <p><strong>Isotherme 0°C</strong> : Corrigé automatiquement via MeteoSwiss lorsqu'une inversion thermique est détectée (température négative mais isotherme au-dessus de l'altitude).</p>
+        <p><strong>Points de mesure</strong> : Station (1794m), Vescal (2050m), Observatoire (2600m) — coordonnées GPS spécifiques à La Foux d'Allos.</p>
+    </details>
 </footer>
 
 <!-- Scripts JS séparés -->
