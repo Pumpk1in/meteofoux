@@ -453,9 +453,46 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
         return 'lightrain'; // Variants=0
     }
 
-    // ==================== PAS DE PRÉCIPITATION ====================
-    // Utiliser le code WMO pour nuages/soleil/brouillard
-    
+    // ==================== PAS DE PRÉCIPITATION DÉTECTÉE ====================
+    // Mais le weather_code peut quand même indiquer des précipitations
+    // (incohérence entre modèles). On utilise le code WMO comme fallback.
+
+    // Codes WMO de précipitation sans données rain/snowfall détectées
+    // → Afficher une icône cohérente avec le code plutôt que clearsky
+    if (in_array($wmo_code, [51, 53, 55, 56, 57])) {
+        // Bruine (légère, modérée, forte, verglaçante)
+        return 'lightrain';
+    }
+    if (in_array($wmo_code, [61, 63, 80])) {
+        // Pluie légère à modérée
+        return 'lightrain';
+    }
+    if (in_array($wmo_code, [65, 81, 82])) {
+        // Pluie forte
+        return 'rain';
+    }
+    if (in_array($wmo_code, [66, 67, 68, 69])) {
+        // Pluie verglaçante / neige mêlée
+        return $is_day ? 'lightsleet' : 'lightsleetshowers' . $suffix;
+    }
+    if (in_array($wmo_code, [71, 85])) {
+        // Neige légère
+        return $is_day ? 'lightsnow' : 'lightsnowshowers' . $suffix;
+    }
+    if (in_array($wmo_code, [73])) {
+        // Neige modérée
+        return $is_day ? 'snow' : 'snowshowers' . $suffix;
+    }
+    if (in_array($wmo_code, [75, 77, 86])) {
+        // Neige forte
+        return 'heavysnow';
+    }
+    if (in_array($wmo_code, [95, 96, 99])) {
+        // Orage
+        return 'rainandthunder';
+    }
+
+    // Nuages/soleil/brouillard
     return match ($wmo_code) {
         0 => 'clearsky' . $suffix,      // Ciel clair
         1 => 'fair' . $suffix,          // Peu nuageux
@@ -528,7 +565,7 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null) {
         $wind_speed = get_model_value($hourly, 'wind_speed_10m', $i, $prio_hd);
         $wind_dir = get_model_value($hourly, 'wind_direction_10m', $i, $prio_hd);
         $wind_gusts = get_model_value($hourly, 'wind_gusts_10m', $i, $prio_hd);
-        $cloud = get_model_value($hourly, 'cloud_cover', $i, $prio_hd);
+        $cloud = get_model_value($hourly, 'cloud_cover', $i, $prio_decomp);
 
         // Précipitation totale
         $precip = get_model_value($hourly, 'precipitation', $i, $prio_hd) ?? 0;
@@ -550,11 +587,48 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null) {
         
         // Weather code - IMPORTANT pour determine_symbol quand pas de précipitations
         $weather_code = get_model_value($hourly, 'weather_code', $i, $prio_decomp);
-        
+
+        // ============================================================
+        // CORRECTION INCOHÉRENCE WEATHER_CODE / PRÉCIPITATIONS
+        // Open-Meteo "best_match" peut mixer des modèles incohérents :
+        // weather_code=61 (pluie) mais rain=0.
+        //
+        // Stratégie : fallback sur meteofrance_arome_france si incohérent,
+        // puis correction basée sur cloud_cover en dernier recours.
+        // ============================================================
+        $precip_codes = range(51, 99); // Codes WMO de précipitation
+        $has_precip_data = ($rain > 0 || $snowfall > 0 || $precip > 0);
+
+        if (in_array($weather_code, $precip_codes) && !$has_precip_data) {
+            // Incohérence détectée : essayer meteofrance_arome_france
+            $arome_prio = ['meteofrance_arome_france'];
+            $arome_weather_code = get_model_value($hourly, 'weather_code', $i, $arome_prio);
+            $arome_rain = get_model_value($hourly, 'rain', $i, $arome_prio);
+            $arome_snowfall = get_model_value($hourly, 'snowfall', $i, $arome_prio);
+            $arome_precip = get_model_value($hourly, 'precipitation', $i, $arome_prio) ?? 0;
+
+            $arome_has_precip = ($arome_rain > 0 || $arome_snowfall > 0 || $arome_precip > 0);
+            $arome_is_precip_code = in_array($arome_weather_code, $precip_codes);
+
+            // AROME est cohérent ?
+            if ($arome_weather_code !== null && ($arome_is_precip_code === $arome_has_precip)) {
+                // Utiliser les données AROME (cohérentes)
+                $weather_code = $arome_weather_code;
+                $rain = $arome_rain;
+                $snowfall = $arome_snowfall;
+                $precip = $arome_precip;
+            } else {
+                // AROME aussi incohérent ou indisponible → correction basée sur cloud_cover
+                $weather_code = ($cloud >= 80) ? 3 : (($cloud >= 50) ? 2 : 1);
+            }
+        }
+
         // ============================================================
         // FALLBACK INTELLIGENT NEIGE/PLUIE
         // Si on a des précipitations mais pas de décomposition rain/snowfall,
         // on utilise la température et le point de rosée pour déduire le type.
+        // Note: $rain et $snowfall sont déjà récupérés plus haut pour la
+        // correction du weather_code.
         // ============================================================
         if ($rain === null && $snowfall === null) {
             if ($precip > 0 && $temp !== null) {
@@ -681,7 +755,8 @@ function aggregate_hourly_to_6h($hourly) {
         'weather_code' => [],
         'symbol_code' => [],
         'snow_quality' => [],
-        'uv_index_max' => []
+        'uv_index_max' => [],
+        'cloud_cover' => []
     ];
 
     $count = count($hourly['time']);
@@ -703,6 +778,7 @@ function aggregate_hourly_to_6h($hourly) {
         $snowfall_roebber_sum = 0;
         $prob_max = 0;
         $uv_max = 0;
+        $cloud_covers = [];
         $weather_codes = [];
         $freezing_points = [];
         $freezing_any_corrected = false;
@@ -730,6 +806,9 @@ function aggregate_hourly_to_6h($hourly) {
             $snowfall_roebber_sum += $hourly['snowfall_roebber'][$idx] ?? 0;
             $prob_max = max($prob_max, $hourly['precipitation_probability'][$idx] ?? 0);
             $uv_max = max($uv_max, $hourly['uv_index'][$idx] ?? 0);
+            if (isset($hourly['cloud_cover'][$idx]) && $hourly['cloud_cover'][$idx] !== null) {
+                $cloud_covers[] = $hourly['cloud_cover'][$idx];
+            }
 
             // Collecter les freezing_point pour déterminer le dominant
             if (isset($hourly['freezing_point'][$idx]) && $hourly['freezing_point'][$idx] !== null) {
@@ -807,6 +886,7 @@ function aggregate_hourly_to_6h($hourly) {
         $six_hourly['symbol_code'][] = $symbol;
         $six_hourly['snow_quality'][] = $snow_quality;
         $six_hourly['uv_index_max'][] = $uv_max > 0 ? round($uv_max, 1) : null;
+        $six_hourly['cloud_cover'][] = !empty($cloud_covers) ? round(array_sum($cloud_covers) / count($cloud_covers)) : null;
     }
 
     return $six_hourly;

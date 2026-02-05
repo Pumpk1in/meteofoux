@@ -948,7 +948,7 @@ const Components = {
     },
 
     WeatherCard(label, data, extraClass = '') {
-        const { icon, temp, windDir, windSpeed, snow, rain, precipProb, snowQuality } = data;
+        const { icon, temp, windDir, windSpeed, snow, rain, precipProb, snowQuality, cloudCover } = data;
 
         let snowQualityHtml = '';
         if (snow > 0 && snowQuality) {
@@ -971,6 +971,16 @@ const Components = {
             ? `${Utils.windDirection(windDir)}. ${windKmh}`
             : '--';
 
+        // Couverture nuageuse
+        let cloudHtml = '';
+        if (cloudCover !== null) {
+            cloudHtml = `
+                <div class="cloud-cover" title="Couverture nuageuse">
+                    <i data-lucide="cloudy" class="lucide"></i>
+                    <span>${Math.round(cloudCover)}<small>%</small></span>
+                </div>`;
+        }
+
         return `
         <div class="card ${extraClass}">
             <div class="time-icon">
@@ -983,6 +993,7 @@ const Components = {
                     <i data-lucide="wind" class="lucide"></i>
                     <span><strong>${windDisplay}</strong> <small>km/h</small></span>
                 </div>
+                ${cloudHtml}
                 ${snow > 0 ? `
                     <div class="snow" title="Cumul de neige">
                         <span>${snowHtml}${snowQualityHtml}</span>

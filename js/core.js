@@ -235,7 +235,8 @@ const DataService = {
                 icon: data.symbol_code[idx],
                 snowQuality: data.snow_quality[idx],
                 isDay: data.is_day[idx],
-                uv_index: data.uv_index?.[idx] ?? rawUvIndex[timeKey] ?? 0
+                uv_index: data.uv_index?.[idx] ?? rawUvIndex[timeKey] ?? 0,
+                cloudCover: data.cloud_cover?.[idx] ?? null
             };
         });
 
@@ -254,7 +255,8 @@ const DataService = {
             freezingPoint: data.freezing_point[idx],
             freezingPointCorrected: data.freezing_point_corrected?.[idx] || false,
             icon: data.symbol_code[idx],
-            snowQuality: data.snow_quality[idx]
+            snowQuality: data.snow_quality[idx],
+            cloudCover: data.cloud_cover?.[idx] ?? null
         }; });
 
         // Calculer les jours avec données Open-Meteo complètes (au moins 4 créneaux 6h)
@@ -322,7 +324,8 @@ const DataNormalizer = {
                 precipProb: entry.om.precipProb,
                 freezingPoint: entry.om.freezingPoint,
                 snowQuality: entry.om.snowQuality,
-                isDay: entry.om.isDay
+                isDay: entry.om.isDay,
+                cloudCover: entry.om.cloudCover
             };
         }
 
@@ -343,7 +346,8 @@ const DataNormalizer = {
                 rain: forecast?.details?.rain || 0,
                 precipProb: 0,
                 snowQuality: forecast?.details?.snow_quality || null,
-                isDay: isDay
+                isDay: isDay,
+                cloudCover: details.cloud_area_fraction ?? null
             };
         }
 
@@ -371,7 +375,8 @@ const DataNormalizer = {
                     icon: entry.om6h.icon,
                     snowQuality: entry.om6h.snowQuality,
                     dewPoint: null,
-                    isDay: isDay
+                    isDay: isDay,
+                    cloudCover: entry.om6h.cloudCover
                 };
             } else {
                 prepared.metno = entry.metno;
