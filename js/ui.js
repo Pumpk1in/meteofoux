@@ -952,10 +952,6 @@ const App = {
 
         // Recréer les icônes Lucide pour les nouvelles cartes visibles
         lucide.createIcons();
-    },
-
-    refresh() {
-        DataService.refresh();
     }
 };
 

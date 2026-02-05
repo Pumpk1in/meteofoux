@@ -26,6 +26,36 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
 header('Content-Type: application/json');
 
+// ================= CONSTANTES MÉTÉO =================
+
+// Seuils de détection neige (fallback quand rain/snowfall absents)
+const SNOW_TEMP_THRESHOLD = 1.5;       // °C - Neige si temp <= cette valeur
+const SNOW_DEW_POINT_THRESHOLD = 0.5;  // °C - ET dew_point <= cette valeur
+
+// Seuils qualité de neige (sèche vs humide)
+const DRY_SNOW_TEMP_THRESHOLD = -2;       // °C - Neige sèche si temp <= cette valeur
+const DRY_SNOW_DEW_POINT_THRESHOLD = -3;  // °C - OU dew_point <= cette valeur
+
+// Méthode Roebber (Snow-to-Liquid Ratio)
+const ROEBBER_BASE_SLR = 14.0;        // Ratio de base alpin (observations ~14-15:1)
+const ROEBBER_TEMP_THRESHOLD_K = 271.16; // -2°C en Kelvin (pivot chaud/froid)
+const ROEBBER_HUMIDITY_REF = 75;       // % - Humidité de référence (neutre)
+const ROEBBER_WIND_THRESHOLD = 3;      // m/s - Seuil de compaction par le vent
+const SLR_MIN = 5.0;                   // Borne basse réaliste
+const SLR_MAX = 25.0;                  // Borne haute réaliste
+
+// Seuils d'intensité des précipitations (pour icônes)
+const SNOW_LIGHT_THRESHOLD = 1.0;      // cm - en dessous = neige légère
+const SNOW_HEAVY_THRESHOLD = 2.5;      // cm - au dessus = neige forte
+const RAIN_LIGHT_THRESHOLD = 2.5;      // mm - en dessous = pluie légère
+const RAIN_HEAVY_THRESHOLD = 7.5;      // mm - au dessus = pluie forte
+const SLEET_LIGHT_THRESHOLD = 1.0;     // mm - en dessous = neige fondue légère
+const SLEET_HEAVY_THRESHOLD = 2.5;     // mm - au dessus = neige fondue forte
+
+// Cache
+const CACHE_DURATION = 15 * 60;        // 15 minutes en secondes
+const CACHE_MIN_SIZE = 50 * 1024;      // 50 Ko minimum pour un cache valide
+
 // ================= CONFIG =================
 // Proxy HTTP désactivé (plus utilisé)
 $proxy_host = '';
@@ -47,8 +77,8 @@ if ($lat === null || $lon === null) {
 // ================= CACHE CONFIG =================
 
 $cache_dir = __DIR__ . '/cache';
-$cache_duration = 15 * 60; // 15 minutes en secondes
-$min_size = 50 * 1024; // 50 Ko convertis en octets
+$cache_duration = CACHE_DURATION;
+$min_size = CACHE_MIN_SIZE;
 $cache_file = $cache_dir . '/meteo_' . round($lat, 4) . '_' . round($lon, 4) . '.json';
 
 // Créer le dossier cache si nécessaire
@@ -155,7 +185,7 @@ function get_model_value($data, $key, $index, $models_priority) {
  */
 function is_snow_conditions($temp, $dew_point) {
     if ($temp === null) return false;
-    return $temp <= 1.5 && ($dew_point === null || $dew_point <= 0.5);
+    return $temp <= SNOW_TEMP_THRESHOLD && ($dew_point === null || $dew_point <= SNOW_DEW_POINT_THRESHOLD);
 }
 
 /**
@@ -172,8 +202,8 @@ function get_snow_quality($snowfall, $temp, $dew_point) {
         return null;
     }
     
-    // Neige humide/collante si temp > -2°C ET point de rosée > -3°C
-    $is_sticky = ($temp > -2 && $dew_point > -3);
+    // Neige humide/collante si temp > seuil ET point de rosée > seuil
+    $is_sticky = ($temp > DRY_SNOW_TEMP_THRESHOLD && $dew_point > DRY_SNOW_DEW_POINT_THRESHOLD);
     
     return $is_sticky ? 'wet' : 'dry';
 }
@@ -193,9 +223,8 @@ function get_snow_quality($snowfall, $temp, $dew_point) {
  * @return float Ratio SLR (ex: 15 signifie 1mm eau = 1.5cm neige)
  */
 function calculate_roebber_slr($temp, $humidity = null, $wind_speed = null) {
-    // Base alpine (observations moyennes dans les Alpes)
-    $base_slr = 14.0;
-    $threshold_k = 271.16;  // -2°C en Kelvin
+    $base_slr = ROEBBER_BASE_SLR;
+    $threshold_k = ROEBBER_TEMP_THRESHOLD_K;
 
     if ($temp === null) {
         return $base_slr;
@@ -213,19 +242,17 @@ function calculate_roebber_slr($temp, $humidity = null, $wind_speed = null) {
 
     // Ajustement humidité (Roebber factor)
     // Humidité haute (>90%) = neige plus humide/dense = SLR plus bas
-    // Référence: 75% = neutre
-    $humidity = $humidity ?? 75;
-    $humid_adj = (75 - $humidity) / 15;  // ~[-1, +1]
+    $humidity = $humidity ?? ROEBBER_HUMIDITY_REF;
+    $humid_adj = (ROEBBER_HUMIDITY_REF - $humidity) / 15;  // ~[-1, +1]
 
     // Ajustement vent - compaction (Roebber factor)
-    // Vent > 3 m/s commence à compacter la neige
     $wind_speed = $wind_speed ?? 0;
-    $wind_adj = -max(0, ($wind_speed - 3)) * 0.3;  // Pénalité progressive
+    $wind_adj = -max(0, ($wind_speed - ROEBBER_WIND_THRESHOLD)) * 0.3;  // Pénalité progressive
 
     $slr = $base_slr + $temp_adj + $humid_adj + $wind_adj;
 
-    // Borner entre 5 et 25 (valeurs réalistes observées)
-    return max(5.0, min($slr, 25.0));
+    // Borner entre valeurs réalistes observées
+    return max(SLR_MIN, min($slr, SLR_MAX));
 }
 
 /**
@@ -263,6 +290,47 @@ function calculate_kuchera_snowfall($precipitation, $slr) {
     return $precipitation * $slr / 10.0;
 }
 */
+
+/**
+ * Classifie les précipitations en neige/pluie et calcule les quantités via Roebber SLR
+ *
+ * Logique commune utilisée par Open-Meteo et MET.no :
+ * 1. Détecte si les conditions sont neigeuses (temp + dew_point)
+ * 2. Calcule le SLR Roebber (temp, humidité, vent)
+ * 3. Convertit la précipitation en cm de neige ou mm de pluie
+ * 4. Détermine la qualité de neige (sèche/humide)
+ *
+ * @param float $precip Précipitation totale en mm
+ * @param float|null $temp Température en °C
+ * @param float|null $dew_point Point de rosée en °C
+ * @param float|null $humidity Humidité relative en %
+ * @param float|null $wind_speed Vitesse du vent en m/s
+ * @return array ['snowfall' => float, 'rain' => float, 'snow_quality' => string|null, 'roebber_slr' => float, 'snowfall_roebber' => float]
+ */
+function classify_precipitation($precip, $temp, $dew_point, $humidity = null, $wind_speed = null) {
+    $roebber_slr = calculate_roebber_slr($temp, $humidity, $wind_speed);
+
+    if ($precip <= 0) {
+        return [
+            'snowfall' => 0,
+            'rain' => 0,
+            'snow_quality' => null,
+            'roebber_slr' => $roebber_slr,
+            'snowfall_roebber' => 0
+        ];
+    }
+
+    $is_snow = is_snow_conditions($temp, $dew_point);
+    $snowfall_roebber = $is_snow ? round(calculate_snowfall_from_slr($precip, $roebber_slr), 2) : 0;
+
+    return [
+        'snowfall' => $is_snow ? $precip : 0,
+        'rain' => $is_snow ? 0 : $precip,
+        'snow_quality' => $is_snow ? get_snow_quality($snowfall_roebber, $temp, $dew_point) : null,
+        'roebber_slr' => $roebber_slr,
+        'snowfall_roebber' => $snowfall_roebber
+    ];
+}
 
 /**
  * Calcule le point de rosée à partir de la température et de l'humidité relative
@@ -391,63 +459,59 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
     if ($rain > 0 && $snowfall > 0) {
         $total = $rain + $snowfall;
         
-        // Heavy sleet (>= 2.5)
-        if ($total >= 2.5) {
+        // Heavy sleet
+        if ($total >= SLEET_HEAVY_THRESHOLD) {
             if ($thunder) return $showers ? 'heavysleetshowersandthunder' : 'heavysleetandthunder';
             if ($showers) return 'heavysleetshowers' . $suffix;
             return $is_day ? 'heavysleet' : 'heavysleetshowers' . $suffix;
         }
-        // Normal sleet (>= 1.0)
-        if ($total >= 1.0) {
+        // Normal sleet
+        if ($total >= SLEET_LIGHT_THRESHOLD) {
             if ($thunder) return $showers ? 'sleetshowersandthunder' : 'sleetandthunder';
             if ($showers) return 'sleetshowers' . $suffix;
             return $is_day ? 'sleet' : 'sleetshowers' . $suffix;
         }
-        // Light sleet (< 1.0) - noter le double 's' dans lightssleet...
+        // Light sleet - noter le double 's' dans lightssleet...
         if ($thunder) return $showers ? 'lightssleetshowersandthunder' : 'lightsleetandthunder';
         if ($showers) return 'lightsleetshowers' . $suffix;
         return $is_day ? 'lightsleet' : 'lightsleetshowers' . $suffix;
     }
 
     // ==================== NEIGE ====================
-    // Seuils : light < 1.0, moderate 1.0-2.5, heavy >= 2.5 cm/h
-    
     if ($snowfall > 0) {
-        // Heavy snow (>= 2.5 cm)
-        if ($snowfall >= 2.5) {
+        // Heavy snow
+        if ($snowfall >= SNOW_HEAVY_THRESHOLD) {
             if ($thunder) return $showers ? 'heavysnowshowersandthunder' : 'heavysnowandthunder';
             if ($showers) return 'heavysnowshowers' . $suffix;
             return 'heavysnow'; // Variants=0, pas de _day/_night
         }
-        // Normal snow (>= 1.0 cm)
-        if ($snowfall >= 1.0) {
+        // Normal snow
+        if ($snowfall >= SNOW_LIGHT_THRESHOLD) {
             if ($thunder) return $showers ? 'snowshowersandthunder' : 'snowandthunder';
             if ($showers) return 'snowshowers' . $suffix;
             return $is_day ? 'snow' : 'snowshowers' . $suffix; // Fallback nuit
         }
-        // Light snow (< 1.0 cm) - noter le double 's' dans lightssnow...
+        // Light snow - noter le double 's' dans lightssnow...
         if ($thunder) return $showers ? 'lightssnowshowersandthunder' : 'lightsnowandthunder';
         if ($showers) return 'lightsnowshowers' . $suffix;
         return $is_day ? 'lightsnow' : 'lightsnowshowers' . $suffix; // Fallback nuit
     }
 
     // ==================== PLUIE ====================
-    // Seuils : light < 2.5, moderate 2.5-7.5, heavy >= 7.5 mm/h
-    
     if ($rain > 0) {
-        // Heavy rain (>= 7.5 mm)
-        if ($rain >= 7.5) {
+        // Heavy rain
+        if ($rain >= RAIN_HEAVY_THRESHOLD) {
             if ($thunder) return $showers ? 'heavyrainshowersandthunder' : 'heavyrainandthunder';
             if ($showers) return 'heavyrainshowers' . $suffix;
             return 'heavyrain'; // Variants=0
         }
-        // Normal rain (>= 2.5 mm)
-        if ($rain >= 2.5) {
+        // Normal rain
+        if ($rain >= RAIN_LIGHT_THRESHOLD) {
             if ($thunder) return $showers ? 'rainshowersandthunder' : 'rainandthunder';
             if ($showers) return 'rainshowers' . $suffix;
             return 'rain'; // Variants=0
         }
-        // Light rain (< 2.5 mm)
+        // Light rain
         if ($thunder) return $showers ? 'lightrainshowersandthunder' : 'lightrainandthunder';
         if ($showers) return 'lightrainshowers' . $suffix;
         return 'lightrain'; // Variants=0
@@ -675,20 +739,12 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
         $rain = $rain ?? 0;
         $snowfall = $snowfall ?? 0;
 
-        // ============================================================
-        // CALCUL ROEBBER : neige basée sur précipitation + ratio dynamique
-        // Méthode calibrée pour les Alpes (temp, humidité, vent)
-        // Plus réaliste en montagne que le ratio fixe d'Open-Meteo (~0.7)
-        // ============================================================
-        // Note: wind_speed est encore en km/h ici, on convertit en m/s pour Roebber
+        // Calcul Roebber (calibré Alpes) via classify_precipitation
+        // Note: wind_speed est en km/h ici, on convertit en m/s pour Roebber
         $wind_ms_for_slr = $wind_speed !== null ? $wind_speed / 3.6 : null;
-        $roebber_slr = calculate_roebber_slr($temp, $humidity, $wind_ms_for_slr);
-        $snowfall_roebber = 0;
-
-        // Calculer la neige Roebber seulement si conditions de neige
-        if ($precip > 0 && is_snow_conditions($temp, $dew)) {
-            $snowfall_roebber = round(calculate_snowfall_from_slr($precip, $roebber_slr), 2);
-        }
+        $classified = classify_precipitation($precip, $temp, $dew, $humidity, $wind_ms_for_slr);
+        $roebber_slr = $classified['roebber_slr'];
+        $snowfall_roebber = $classified['snowfall_roebber'];
 
         // ============================================================
         // CORRECTION HYBRIDE : si Open-Meteo dit "pluie" mais que les
@@ -933,48 +989,16 @@ function enrich_metno_timeseries(&$metno) {
             $entry['data']['instant']['details']['dew_point_temperature'] = $dew;
         }
 
-        // Calculer le SLR Roebber (temp, humidité, vent)
-        $roebber_slr = calculate_roebber_slr($temp, $humidity, $wind_speed);
+        // Enrichir next_1_hours et next_6_hours avec la même logique
+        foreach (['next_1_hours', 'next_6_hours'] as $period) {
+            if (!isset($entry['data'][$period])) continue;
 
-        // Enrichir next_1_hours
-        if (isset($entry['data']['next_1_hours'])) {
-            $precip = $entry['data']['next_1_hours']['details']['precipitation_amount'] ?? 0;
+            $precip = $entry['data'][$period]['details']['precipitation_amount'] ?? 0;
+            $classified = classify_precipitation($precip, $temp, $dew, $humidity, $wind_speed);
 
-            // Déduire neige/pluie avec la même logique que Open-Meteo
-            if ($precip > 0) {
-                $is_snow = is_snow_conditions($temp, $dew);
-                // Neige en cm avec Roebber (précip mm × SLR / 10)
-                $snowfall_cm = $is_snow ? round(calculate_snowfall_from_slr($precip, $roebber_slr), 2) : 0;
-                $entry['data']['next_1_hours']['details']['snowfall'] = $snowfall_cm;
-                $entry['data']['next_1_hours']['details']['rain'] = $is_snow ? 0 : $precip;
-                $entry['data']['next_1_hours']['details']['snow_quality'] = $is_snow
-                    ? get_snow_quality($snowfall_cm, $temp, $dew)
-                    : null;
-            } else {
-                $entry['data']['next_1_hours']['details']['snowfall'] = 0;
-                $entry['data']['next_1_hours']['details']['rain'] = 0;
-                $entry['data']['next_1_hours']['details']['snow_quality'] = null;
-            }
-        }
-
-        // Enrichir next_6_hours
-        if (isset($entry['data']['next_6_hours'])) {
-            $precip = $entry['data']['next_6_hours']['details']['precipitation_amount'] ?? 0;
-
-            if ($precip > 0) {
-                $is_snow = is_snow_conditions($temp, $dew);
-                // Neige en cm avec Roebber (précip mm × SLR / 10)
-                $snowfall_cm = $is_snow ? round(calculate_snowfall_from_slr($precip, $roebber_slr), 2) : 0;
-                $entry['data']['next_6_hours']['details']['snowfall'] = $snowfall_cm;
-                $entry['data']['next_6_hours']['details']['rain'] = $is_snow ? 0 : $precip;
-                $entry['data']['next_6_hours']['details']['snow_quality'] = $is_snow
-                    ? get_snow_quality($snowfall_cm, $temp, $dew)
-                    : null;
-            } else {
-                $entry['data']['next_6_hours']['details']['snowfall'] = 0;
-                $entry['data']['next_6_hours']['details']['rain'] = 0;
-                $entry['data']['next_6_hours']['details']['snow_quality'] = null;
-            }
+            $entry['data'][$period]['details']['snowfall'] = $classified['snowfall_roebber'];
+            $entry['data'][$period]['details']['rain'] = $classified['rain'];
+            $entry['data'][$period]['details']['snow_quality'] = $classified['snow_quality'];
         }
     }
 }
@@ -1107,9 +1131,9 @@ $output = [
                 'coverage' => '~10 jours'
             ]
         ],
-        'slr_method' => 'Roebber simplifié (base 14, calibré Alpes) - facteurs: temp, humidity, wind',
-        'snow_detection' => 'temp <= 1.5°C AND dew_point <= 0.5°C',
-        'snow_quality' => 'wet if temp > -2°C AND dew_point > -3°C, else dry',
+        'slr_method' => 'Roebber simplifié (base ' . ROEBBER_BASE_SLR . ', calibré Alpes) - facteurs: temp, humidity, wind',
+        'snow_detection' => 'temp <= ' . SNOW_TEMP_THRESHOLD . '°C AND dew_point <= ' . SNOW_DEW_POINT_THRESHOLD . '°C',
+        'snow_quality' => 'wet if temp > ' . DRY_SNOW_TEMP_THRESHOLD . '°C AND dew_point > ' . DRY_SNOW_DEW_POINT_THRESHOLD . '°C, else dry',
         'freezing_level_correction' => 'corrected=true when API value > elevation AND temp <= 0°C',
         'from_cache' => false
     ]

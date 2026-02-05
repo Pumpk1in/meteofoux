@@ -9,8 +9,6 @@ const CONFIG = {
         { name: 'Vescal', lat: 44.3122, lon: 6.5743, key: 'vescal', color: '#866fcc' },
         { name: 'Observatoire', lat: 44.2848, lon: 6.5356, key: 'observatoire', color: '#d866a1' },
     ],
-    cacheDuration: 10 * 60 * 1000,  // 10 minutes
-    cachePrefix: 'fmeteo_cache_',
     dayLabels: ['DI', 'LU', 'MA', 'ME', 'JE', 'VE', 'SA'],
     charts: {
         maxDays: 7,            // Nombre max de jours avec graphique (0 = désactivé)
@@ -323,8 +321,7 @@ const DataService = {
     },
 
     refresh() {
-        CONFIG.points.forEach(p => localStorage.removeItem(CONFIG.cachePrefix + p.key));
-        setTimeout(() => location.reload(), 150);
+        location.reload();
     }
 };
 
