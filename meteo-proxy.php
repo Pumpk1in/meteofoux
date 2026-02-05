@@ -624,6 +624,19 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null) {
         }
 
         // ============================================================
+        // CORRECTION WEATHER_CODE / CLOUD_COVER (cas inverse)
+        // Si weather_code indique beau temps (0=clair, 1=peu nuageux) mais
+        // cloud_cover est élevé, corriger le weather_code.
+        // ============================================================
+        if (in_array($weather_code, [0, 1]) && $cloud !== null) {
+            if ($cloud >= 80) {
+                $weather_code = 3; // Couvert
+            } elseif ($cloud >= 50 && $weather_code === 0) {
+                $weather_code = 2; // Partiellement nuageux
+            }
+        }
+
+        // ============================================================
         // FALLBACK INTELLIGENT NEIGE/PLUIE
         // Si on a des précipitations mais pas de décomposition rain/snowfall,
         // on utilise la température et le point de rosée pour déduire le type.
