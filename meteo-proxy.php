@@ -406,15 +406,53 @@ function correct_freezing_level($freezing_level, $freezing_level_fallback, $temp
 }
 
 /**
+ * Résout l'icône MET.no pour un type de précipitation donné.
+ *
+ * Centralise la logique thunder/showers/fallback nuit en un seul endroit.
+ * Chaque type a un mapping avec les noms d'icônes MET.no correspondants.
+ *
+ * Note: MET.no a des typos dans leurs noms de fichiers :
+ * - lightssleetshowersandthunder (double 's' après "light")
+ * - lightssnowshowersandthunder (double 's' après "light")
+ *
+ * @param string $type Type de précipitation (ex: 'heavysnow', 'lightsleet')
+ * @param bool $showers WMO indique des averses
+ * @param bool $thunder WMO indique un orage
+ * @param bool $is_day Jour ou nuit
+ * @param string $suffix '_day' ou '_night'
+ * @return string Symbol code MET.no
+ */
+function resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix) {
+    // Mapping : type → [showersandthunder, andthunder, showers, base, night_fallback]
+    // night_fallback : true = utilise "showers" + suffix la nuit (Variants=0 sans _night)
+    //                  false = pas de fallback (Variants=0, icône fixe jour/nuit)
+    $icons = [
+        'heavysleet'  => ['heavysleetshowersandthunder',  'heavysleetandthunder',  'heavysleetshowers',  'heavysleet',  true],
+        'sleet'       => ['sleetshowersandthunder',        'sleetandthunder',       'sleetshowers',       'sleet',       true],
+        'lightsleet'  => ['lightssleetshowersandthunder',  'lightsleetandthunder',  'lightsleetshowers',  'lightsleet',  true],
+        'heavysnow'   => ['heavysnowshowersandthunder',    'heavysnowandthunder',   'heavysnowshowers',   'heavysnow',   false],
+        'snow'        => ['snowshowersandthunder',         'snowandthunder',        'snowshowers',        'snow',        true],
+        'lightsnow'   => ['lightssnowshowersandthunder',   'lightsnowandthunder',   'lightsnowshowers',   'lightsnow',   true],
+        'heavyrain'   => ['heavyrainshowersandthunder',    'heavyrainandthunder',   'heavyrainshowers',   'heavyrain',   false],
+        'rain'        => ['rainshowersandthunder',         'rainandthunder',        'rainshowers',        'rain',        false],
+        'lightrain'   => ['lightrainshowersandthunder',    'lightrainandthunder',   'lightrainshowers',   'lightrain',   false],
+    ];
+
+    [$sat, $at, $sh, $base, $night_fb] = $icons[$type];
+
+    if ($thunder) return $showers ? $sat : $at;
+    if ($showers) return $sh . $suffix;
+    if (!$is_day && $night_fb) return $sh . $suffix;
+    return $base;
+}
+
+/**
  * Détermine le symbol_code MET.no basé sur les précipitations et le code WMO
- * 
+ *
  * Référence : legend.csv de MET.no
  * - Variants=1 : icônes avec _day/_night (clearsky, fair, partlycloudy, *showers*)
  * - Variants=0 : icônes uniques (cloudy, fog, rain, snow, sleet sans "showers")
- * 
- * Fallback nuit : pour les icônes sans variante nuit (snow, lightsnow, sleet, lightsleet),
- * on utilise la version "showers" + _night pour avoir une icône nocturne cohérente.
- * 
+ *
  * Codes WMO :
  * - 0: ciel clair, 1: peu nuageux, 2: partiellement nuageux, 3: couvert
  * - 45,48: brouillard
@@ -425,135 +463,62 @@ function correct_freezing_level($freezing_level, $freezing_level_fallback, $temp
  * - 80-82: averses de pluie
  * - 85-86: averses de neige
  * - 95,96,99: orage
- * 
- * Note: MET.no a des typos dans leurs noms de fichiers :
- * - lightssleetshowersandthunder (double 's')
- * - lightssnowshowersandthunder (double 's')
  */
 function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
     $wmo_code = $wmo_code ?? 0;
     $suffix = $is_day ? '_day' : '_night';
-
-    // Détection du type de précipitation par code WMO
     $showers = in_array($wmo_code, [80, 81, 82, 85, 86], true);
     $thunder = in_array($wmo_code, [95, 96, 99], true);
-    $is_sleet_wmo = in_array($wmo_code, [56, 57, 66, 67, 68, 69], true);
-    
-    // ==================== SLEET (neige fondue / pluie verglaçante) ====================
-    
-    // Sleet détecté par code WMO
-    if ($is_sleet_wmo) {
-        // Forte intensité (codes 57, 67, 69)
-        if (in_array($wmo_code, [57, 67, 69])) {
-            if ($thunder) return $showers ? 'heavysleetshowersandthunder' : 'heavysleetandthunder';
-            if ($showers) return 'heavysleetshowers' . $suffix;
-            return $is_day ? 'heavysleet' : 'heavysleetshowers' . $suffix;
-        }
-        // Faible intensité (codes 56, 66, 68)
-        if ($thunder) return $showers ? 'lightssleetshowersandthunder' : 'lightsleetandthunder';
-        if ($showers) return 'lightsleetshowers' . $suffix;
-        return $is_day ? 'lightsleet' : 'lightsleetshowers' . $suffix;
+
+    // Déterminer le type de précipitation, puis déléguer à resolve_precip_icon
+
+    // Sleet par code WMO (bruine/pluie verglaçante, pluie et neige mêlées)
+    if (in_array($wmo_code, [56, 57, 66, 67, 68, 69], true)) {
+        $type = in_array($wmo_code, [57, 67, 69]) ? 'heavysleet' : 'lightsleet';
+        return resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix);
     }
-    
-    // Sleet détecté par les données : pluie ET neige en même temps
+
+    // Sleet par les données : pluie ET neige en même temps
     if ($rain > 0 && $snowfall > 0) {
         $total = $rain + $snowfall;
-        
-        // Heavy sleet
-        if ($total >= SLEET_HEAVY_THRESHOLD) {
-            if ($thunder) return $showers ? 'heavysleetshowersandthunder' : 'heavysleetandthunder';
-            if ($showers) return 'heavysleetshowers' . $suffix;
-            return $is_day ? 'heavysleet' : 'heavysleetshowers' . $suffix;
-        }
-        // Normal sleet
-        if ($total >= SLEET_LIGHT_THRESHOLD) {
-            if ($thunder) return $showers ? 'sleetshowersandthunder' : 'sleetandthunder';
-            if ($showers) return 'sleetshowers' . $suffix;
-            return $is_day ? 'sleet' : 'sleetshowers' . $suffix;
-        }
-        // Light sleet - noter le double 's' dans lightssleet...
-        if ($thunder) return $showers ? 'lightssleetshowersandthunder' : 'lightsleetandthunder';
-        if ($showers) return 'lightsleetshowers' . $suffix;
-        return $is_day ? 'lightsleet' : 'lightsleetshowers' . $suffix;
+        $type = $total >= SLEET_HEAVY_THRESHOLD ? 'heavysleet'
+              : ($total >= SLEET_LIGHT_THRESHOLD ? 'sleet' : 'lightsleet');
+        return resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix);
     }
 
-    // ==================== NEIGE ====================
+    // Neige
     if ($snowfall > 0) {
-        // Heavy snow
-        if ($snowfall >= SNOW_HEAVY_THRESHOLD) {
-            if ($thunder) return $showers ? 'heavysnowshowersandthunder' : 'heavysnowandthunder';
-            if ($showers) return 'heavysnowshowers' . $suffix;
-            return 'heavysnow'; // Variants=0, pas de _day/_night
-        }
-        // Normal snow
-        if ($snowfall >= SNOW_LIGHT_THRESHOLD) {
-            if ($thunder) return $showers ? 'snowshowersandthunder' : 'snowandthunder';
-            if ($showers) return 'snowshowers' . $suffix;
-            return $is_day ? 'snow' : 'snowshowers' . $suffix; // Fallback nuit
-        }
-        // Light snow - noter le double 's' dans lightssnow...
-        if ($thunder) return $showers ? 'lightssnowshowersandthunder' : 'lightsnowandthunder';
-        if ($showers) return 'lightsnowshowers' . $suffix;
-        return $is_day ? 'lightsnow' : 'lightsnowshowers' . $suffix; // Fallback nuit
+        $type = $snowfall >= SNOW_HEAVY_THRESHOLD ? 'heavysnow'
+              : ($snowfall >= SNOW_LIGHT_THRESHOLD ? 'snow' : 'lightsnow');
+        return resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix);
     }
 
-    // ==================== PLUIE ====================
+    // Pluie
     if ($rain > 0) {
-        // Heavy rain
-        if ($rain >= RAIN_HEAVY_THRESHOLD) {
-            if ($thunder) return $showers ? 'heavyrainshowersandthunder' : 'heavyrainandthunder';
-            if ($showers) return 'heavyrainshowers' . $suffix;
-            return 'heavyrain'; // Variants=0
-        }
-        // Normal rain
-        if ($rain >= RAIN_LIGHT_THRESHOLD) {
-            if ($thunder) return $showers ? 'rainshowersandthunder' : 'rainandthunder';
-            if ($showers) return 'rainshowers' . $suffix;
-            return 'rain'; // Variants=0
-        }
-        // Light rain
-        if ($thunder) return $showers ? 'lightrainshowersandthunder' : 'lightrainandthunder';
-        if ($showers) return 'lightrainshowers' . $suffix;
-        return 'lightrain'; // Variants=0
+        $type = $rain >= RAIN_HEAVY_THRESHOLD ? 'heavyrain'
+              : ($rain >= RAIN_LIGHT_THRESHOLD ? 'rain' : 'lightrain');
+        return resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix);
     }
 
-    // ==================== PAS DE PRÉCIPITATION DÉTECTÉE ====================
-    // Mais le weather_code peut quand même indiquer des précipitations
-    // (incohérence entre modèles). On utilise le code WMO comme fallback.
+    // Pas de précipitation détectée → fallback WMO
+    // Codes WMO fixes (Variants=0, pas de jour/nuit)
+    $wmo_fixed = [
+        51 => 'lightrain', 53 => 'lightrain', 55 => 'lightrain',
+        61 => 'lightrain', 63 => 'lightrain', 80 => 'lightrain',
+        65 => 'rain', 81 => 'rain', 82 => 'rain',
+        95 => 'rainandthunder', 96 => 'rainandthunder', 99 => 'rainandthunder',
+        75 => 'heavysnow', 77 => 'heavysnow', 86 => 'heavysnow',
+    ];
+    if (isset($wmo_fixed[$wmo_code])) return $wmo_fixed[$wmo_code];
 
-    // Codes WMO de précipitation sans données rain/snowfall détectées
-    // → Afficher une icône cohérente avec le code plutôt que clearsky
-    if (in_array($wmo_code, [51, 53, 55, 56, 57])) {
-        // Bruine (légère, modérée, forte, verglaçante)
-        return 'lightrain';
-    }
-    if (in_array($wmo_code, [61, 63, 80])) {
-        // Pluie légère à modérée
-        return 'lightrain';
-    }
-    if (in_array($wmo_code, [65, 81, 82])) {
-        // Pluie forte
-        return 'rain';
-    }
-    if (in_array($wmo_code, [66, 67, 68, 69])) {
-        // Pluie verglaçante / neige mêlée
-        return $is_day ? 'lightsleet' : 'lightsleetshowers' . $suffix;
-    }
-    if (in_array($wmo_code, [71, 85])) {
-        // Neige légère
-        return $is_day ? 'lightsnow' : 'lightsnowshowers' . $suffix;
-    }
-    if (in_array($wmo_code, [73])) {
-        // Neige modérée
-        return $is_day ? 'snow' : 'snowshowers' . $suffix;
-    }
-    if (in_array($wmo_code, [75, 77, 86])) {
-        // Neige forte
-        return 'heavysnow';
-    }
-    if (in_array($wmo_code, [95, 96, 99])) {
-        // Orage
-        return 'rainandthunder';
+    // Codes WMO avec fallback nuit (Variants=0, on utilise showers_night)
+    // Note: codes 56-69 sont déjà traités par la branche sleet WMO ci-dessus
+    $wmo_night_fb = [
+        71 => 'lightsnow', 85 => 'lightsnow',
+        73 => 'snow',
+    ];
+    if (isset($wmo_night_fb[$wmo_code])) {
+        return resolve_precip_icon($wmo_night_fb[$wmo_code], false, false, $is_day, $suffix);
     }
 
     // Nuages/soleil/brouillard
