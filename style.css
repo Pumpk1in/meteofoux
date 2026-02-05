@@ -498,6 +498,11 @@ main {
     display: none !important;
 }
 
+/* Padding sur la légende pour compenser les marges négatives du chart */
+.apexcharts-legend {
+    padding: 0 28px 0 15px!important;
+}
+
 /* ============================================
    CARDS GRID
    ============================================ */
