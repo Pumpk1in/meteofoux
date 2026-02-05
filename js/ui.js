@@ -316,11 +316,29 @@ const App = {
     state: {
         currentDay: null,
         currentPoint: 'station',
-        globalSource: 'openmeteo',
+        globalSource: 'openmeteo',  // 'openmeteo', 'arome', ou 'metno'
         theme: 'dark',
         days: [],
         expandedDays: new Set(), // Jours avec vue horaire étendue
         todayHoursExpanded: false // État du "Voir heures suivantes" pour aujourd'hui
+    },
+
+    // Helper pour obtenir les données selon la source sélectionnée
+    getSourceData(pointData) {
+        const source = this.state.globalSource;
+        if (source === 'arome') {
+            return {
+                hourly: pointData.aromeHourly,
+                sixHourly: pointData.aromeSixHourly,
+                availableDays: pointData.aromeAvailableDays
+            };
+        }
+        // 'openmeteo' ou fallback
+        return {
+            hourly: pointData.omHourly,
+            sixHourly: pointData.omSixHourly,
+            availableDays: pointData.omAvailableDays
+        };
     },
 
     async init() {
@@ -404,9 +422,16 @@ const App = {
 
     updateSourceToggle() {
         const toggle = document.getElementById('global-source-toggle');
-        const isOM = this.state.globalSource === 'openmeteo';
-        toggle.className = `source-toggle ${isOM ? 'is-openmeteo' : 'is-metno'}`;
-        toggle.querySelector('.source-label').innerHTML = isOM ? 'Open<br>Meteo' : 'Met<br>.no';
+        const source = this.state.globalSource;
+        toggle.className = `source-toggle is-${source}`;
+        const labels = {
+            'openmeteo': 'Open<br>Meteo',
+            'arome': 'AROME<br>MF',
+            'metno': 'Met<br>.no'
+        };
+        toggle.querySelector('.source-label').innerHTML = labels[source] || labels['openmeteo'];
+        // Mettre à jour l'attribut data-source sur le HTML pour le style du header
+        document.documentElement.setAttribute('data-source', source);
     },
 
     updateTopBar() {
@@ -453,7 +478,10 @@ const App = {
 
         if (!canToggle) return;
 
-        this.state.globalSource = this.state.globalSource === 'openmeteo' ? 'metno' : 'openmeteo';
+        // Cycle : openmeteo → arome → metno → openmeteo
+        const sources = ['openmeteo', 'arome', 'metno'];
+        const currentIndex = sources.indexOf(this.state.globalSource);
+        this.state.globalSource = sources[(currentIndex + 1) % sources.length];
         localStorage.setItem('fmeteo_source', this.state.globalSource);
         this.updateSourceToggle();
         this.render();
@@ -489,9 +517,12 @@ const App = {
         const data = DataService.state.data;
         const isToday = Utils.isToday(this.state.currentDay);
         const pointData = data[this.state.currentPoint];
-        const omAvailableDays = Object.values(data)[0].omAvailableDays;
-        const canToggle = omAvailableDays.has(this.state.currentDay);
-        const useOpenMeteo = this.state.globalSource === 'openmeteo' && canToggle;
+        const source = this.state.globalSource;
+        const sourceData = this.getSourceData(pointData);
+        const availableDays = sourceData.availableDays;
+        const canToggle = availableDays.has(this.state.currentDay);
+        // useOMData = true si on utilise des données Open-Meteo ou AROME (pas MET.no)
+        const useOMData = (source === 'openmeteo' || source === 'arome') && canToggle;
 
         this.updateTopBar();
 
@@ -501,14 +532,14 @@ const App = {
         // Sur mobile : afficher uniquement le jour sélectionné
         // Sur desktop : afficher tous les jours en scroll
         if (Utils.isMobile()) {
-            const html = this.renderDayContent(this.state.currentDay, pointData, isToday, useOpenMeteo, canToggle);
+            const html = this.renderDayContent(this.state.currentDay, pointData, isToday, useOMData, canToggle, source, sourceData);
             document.getElementById('content').innerHTML = html;
         } else {
             const html = this.state.days.map(day => {
                 const isDayToday = Utils.isToday(day);
-                const dayCanToggle = omAvailableDays.has(day);
-                const dayUseOM = this.state.globalSource === 'openmeteo' && dayCanToggle;
-                return this.renderDayContent(day, pointData, isDayToday, dayUseOM, dayCanToggle);
+                const dayCanToggle = availableDays.has(day);
+                const dayUseOM = (source === 'openmeteo' || source === 'arome') && dayCanToggle;
+                return this.renderDayContent(day, pointData, isDayToday, dayUseOM, dayCanToggle, source, sourceData);
             }).join('');
             document.getElementById('content').innerHTML = html;
         }
@@ -547,8 +578,36 @@ const App = {
         requestAnimationFrame(() => this.renderCharts());
     },
 
-    renderDayContent(day, pointData, isToday, useOpenMeteo, canToggle) {
-        const { point, series, omHourly, elevation } = pointData;
+    renderDayContent(day, pointData, isToday, useOMData, canToggle, source, sourceData) {
+        const { point, series, elevation } = pointData;
+        const hourlyData = sourceData?.hourly || pointData.omHourly;
+        const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
+
+        // Pour AROME : vérifier si on a des données valides (non-null) pour ce jour
+        if (source === 'arome' && hourlyData) {
+            const dayDataWithValues = Object.keys(hourlyData)
+                .filter(time => Utils.getLocalDay(time) === day)
+                .filter(time => hourlyData[time]?.temp !== null);
+
+            if (dayDataWithValues.length === 0) {
+                // Pas de données AROME pour ce jour
+                return `
+                    <section class="day-section day-section-no-data" data-day="${day}" id="day-${day}">
+                        <h2 class="day-header">
+                            <span class="day-label">${Utils.formatDateLabel(day)}</span>
+                            <span class="point-badge" style="--point-color: ${CONFIG.points.find(p => p.key === this.state.currentPoint).color}">
+                                ${CONFIG.points.find(p => p.key === this.state.currentPoint).name} ${elevation ? `(${Math.round(elevation)}m)` : ''}
+                            </span>
+                        </h2>
+                        <div class="no-data-message">
+                            <p>Données AROME non disponibles pour ce jour</p>
+                            <small>AROME couvre ~4-5 jours. Utilisez Open-Meteo ou MET.no pour les prévisions à plus long terme.</small>
+                        </div>
+                    </section>
+                `;
+            }
+        }
+
         // Filtrer par jour local uniquement
         const dayEntries = series.filter(e => Utils.getLocalDay(e.time) === day);
         const now = new Date();
@@ -564,12 +623,19 @@ const App = {
             // Préparer les 4 périodes (6h)
             displayEntries = dayEntries.filter(e => Utils.parseTime(e.time).getUTCHours() % 6 === 0).slice(0, 4);
             // ET toutes les heures (pour le toggle) - pour tous les jours avec données hourly
-            if (useOpenMeteo && omHourly) {
-                // Open-Meteo : construire les entrées directement depuis omHourly (pas depuis series)
-                hourlyEntriesForTomorrow = Object.keys(omHourly)
+            if (useOMData && hourlyData) {
+                // Open-Meteo/AROME : construire les entrées directement depuis hourlyData
+                // Filtrer les entrées avec données valides (temp non-null)
+                hourlyEntriesForTomorrow = Object.keys(hourlyData)
                     .filter(time => Utils.getLocalDay(time) === day)
+                    .filter(time => hourlyData[time]?.temp !== null)
                     .sort()
-                    .map(time => ({ time, om: omHourly[time], metno: null }));
+                    .map(time => ({
+                        time,
+                        om: source === 'openmeteo' ? hourlyData[time] : null,
+                        arome: source === 'arome' ? hourlyData[time] : null,
+                        metno: null
+                    }));
             } else {
                 // MET.no : filtrer les entrées avec données next_1_hours, par jour local uniquement
                 hourlyEntriesForTomorrow = dayEntries.filter(e =>
@@ -581,34 +647,34 @@ const App = {
 
         if (!displayEntries.length) return '';
 
-        const preparedEntries = displayEntries.map(e => DataNormalizer.prepareEntry(e, isToday, useOpenMeteo));
+        const preparedEntries = displayEntries.map(e => DataNormalizer.prepareEntry(e, isToday, source));
 
         // Préparer les entrées horaires pour tous les jours avec données hourly
         const preparedHourlyEntries = hourlyEntriesForTomorrow.length > 0
-            ? hourlyEntriesForTomorrow.map(e => DataNormalizer.prepareEntry(e, true, useOpenMeteo))
+            ? hourlyEntriesForTomorrow.map(e => DataNormalizer.prepareEntry(e, true, source))
             : [];
 
         // Calculer le résumé sur TOUTE la journée (pas seulement les cartes affichées)
         let summaryEntries;
-        if (useOpenMeteo && omHourly) {
-            // Open-Meteo : utiliser toutes les heures de la journée
-            summaryEntries = Object.keys(omHourly)
+        if (useOMData && hourlyData) {
+            // Open-Meteo/AROME : utiliser toutes les heures de la journée
+            summaryEntries = Object.keys(hourlyData)
                 .filter(time => Utils.getLocalDay(time) === day)
-                .map(time => ({ time, om: omHourly[time] }));
+                .map(time => ({ time, om: hourlyData[time] }));
         } else {
             // MET.no : utiliser toutes les entrées du jour (pas seulement displayEntries)
             summaryEntries = dayEntries
                 .filter(e => e.metno?.data?.next_1_hours || e.metno?.data?.next_6_hours)
-                .map(e => DataNormalizer.prepareEntry(e, true, false));
+                .map(e => DataNormalizer.prepareEntry(e, true, 'metno'));
         }
         const totals = DataNormalizer.computeTotals(summaryEntries, true);
 
         // Calculer l'isotherme 0°C
         let freezing = { min: null, max: null };
-        if (useOpenMeteo && omHourly) {
-            const dayData = Object.keys(omHourly)
+        if (useOMData && hourlyData) {
+            const dayData = Object.keys(hourlyData)
                 .filter(t => Utils.getLocalDay(t) === day)
-                .map(t => omHourly[t])
+                .map(t => hourlyData[t])
                 .filter(v => v?.freezingPoint > 100);
 
             if (dayData.length > 0) {
@@ -621,9 +687,8 @@ const App = {
         const summaryHtml = Components.Summary(totals, freezing, elevation);
 
         // Déterminer si on peut afficher un graphique pour ce jour
-        const { omSixHourly } = pointData;
         const dayIndex = this.state.days.indexOf(day);
-        const chartAvailability = Utils.getChartDataAvailability(day, omHourly, omSixHourly, series, useOpenMeteo);
+        const chartAvailability = Utils.getChartDataAvailability(day, hourlyData, sixHourlyData, series, useOMData);
         const showChart = CONFIG.charts.maxDays > 0
             && dayIndex < CONFIG.charts.maxDays
             && chartAvailability.type !== 'none';
@@ -661,8 +726,10 @@ const App = {
     renderCharts() {
         const data = DataService.state.data;
         const pointData = data[this.state.currentPoint];
-        const { omHourly, omSixHourly, series } = pointData;
-        const omAvailableDays = Object.values(data)[0].omAvailableDays;
+        const { series } = pointData;
+        const source = this.state.globalSource;
+        const sourceData = this.getSourceData(pointData);
+        const availableDays = sourceData.availableDays;
 
         // Déterminer quels jours ont besoin d'un graphique
         const daysToRender = Utils.isMobile() ? [this.state.currentDay] : this.state.days;
@@ -671,28 +738,30 @@ const App = {
             // Vérifier si on dépasse le nombre max de jours avec graphique
             if (CONFIG.charts.maxDays === 0 || dayIndex >= CONFIG.charts.maxDays) return;
 
-            const useOpenMeteo = this.state.globalSource === 'openmeteo' && omAvailableDays.has(day);
+            const useOMData = (source === 'openmeteo' || source === 'arome') && availableDays.has(day);
 
             // Utiliser la nouvelle fonction pour déterminer le type de données disponibles
-            const chartAvailability = Utils.getChartDataAvailability(day, omHourly, omSixHourly, series, useOpenMeteo);
+            const chartAvailability = Utils.getChartDataAvailability(day, sourceData.hourly, sourceData.sixHourly, series, useOMData);
 
             // Ne pas rendre si pas assez de données
             if (chartAvailability.type === 'none') return;
 
             // Rendre le graphique avec le type de données approprié
-            this.renderChartForDay(day, pointData, useOpenMeteo, chartAvailability.type);
+            this.renderChartForDay(day, pointData, useOMData, chartAvailability.type, sourceData);
         });
     },
 
-    renderChartForDay(day, pointData, useOpenMeteo, dataType = 'hourly') {
-        const { omHourly, omSixHourly, series } = pointData;
+    renderChartForDay(day, pointData, useOMData, dataType = 'hourly', sourceData = null) {
+        const { series } = pointData;
+        const hourlyData = sourceData?.hourly || pointData.omHourly;
+        const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
 
         let chartData = [];
         const isHourly = dataType === 'hourly';
 
-        if (useOpenMeteo) {
-            // Données Open-Meteo
-            const dataSource = isHourly ? omHourly : omSixHourly;
+        if (useOMData) {
+            // Données Open-Meteo ou AROME
+            const dataSource = isHourly ? hourlyData : sixHourlyData;
             if (!dataSource) return;
 
             chartData = Object.keys(dataSource)
@@ -700,6 +769,8 @@ const App = {
                 .sort()
                 .map(time => {
                     const d = dataSource[time];
+                    // Ignorer les entrées sans données (AROME après J+4.5)
+                    if (d.temp === null && d.tempMax === null) return null;
                     const timestamp = new Date(time.endsWith('Z') ? time : time + ':00Z').getTime();
                     return {
                         time: timestamp,
@@ -712,7 +783,8 @@ const App = {
                         rain: d.rain || 0,
                         uv_index: isHourly ? (d.uv_index || 0) : 0
                     };
-                });
+                })
+                .filter(d => d !== null); // Filtrer les entrées null
         } else {
             // Données MET.no
             chartData = series
@@ -763,8 +835,8 @@ const App = {
         };
 
         // Créer le graphique unifié
-        // hasExtendedData = true seulement pour Open-Meteo hourly (ressenti, rafales disponibles)
-        const hasExtendedData = useOpenMeteo && isHourly;
+        // hasExtendedData = true seulement pour Open-Meteo/AROME hourly (ressenti, rafales disponibles)
+        const hasExtendedData = useOMData && isHourly;
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
             Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData);
         }

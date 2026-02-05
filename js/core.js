@@ -202,6 +202,7 @@ const DataService = {
 
     processPointData(point, rawData, now) {
         const omAgg = rawData.openmeteo_aggregated;
+        const aromeAgg = rawData.arome_aggregated;
         const omRaw = rawData.openmeteo?.hourly; // Données brutes pour UV (pas encore dans agrégé)
         const elevation = rawData.elevation || rawData.openmeteo?.elevation || null;
 
@@ -213,9 +214,9 @@ const DataService = {
             });
         }
 
-        const omHourly = this.indexByTime(omAgg?.hourly, (data, idx) => {
+        // Fonction commune pour créer les données horaires
+        const createHourlyData = (agg) => this.indexByTime(agg?.hourly, (data, idx) => {
             const timeKey = data.time[idx].substring(0, 16);
-            // Utiliser Roebber si plus élevé que Open-Meteo (calibré pour les Alpes)
             const snowOM = data.snowfall[idx] || 0;
             const snowRoebber = data.snowfall_roebber?.[idx] || 0;
 
@@ -240,54 +241,74 @@ const DataService = {
             };
         });
 
-        const omSixHourly = this.indexByTime(omAgg?.six_hourly, (data, idx) => {
-            // Utiliser Roebber si plus élevé que Open-Meteo (calibré pour les Alpes)
+        // Fonction commune pour créer les données 6h
+        const createSixHourlyData = (agg) => this.indexByTime(agg?.six_hourly, (data, idx) => {
             const snowOM = data.snowfall[idx] || 0;
             const snowRoebber = data.snowfall_roebber?.[idx] || 0;
             return {
-            tempMin: data.temperature_min[idx],
-            tempMax: data.temperature_max[idx],
-            windSpeed: data.wind_speed_max[idx],
-            windDir: data.wind_direction[idx],
-            snow: Math.max(snowOM, snowRoebber),
-            rain: data.rain[idx] || 0,
-            precipProb: data.precipitation_probability[idx] || 0,
-            freezingPoint: data.freezing_point[idx],
-            freezingPointCorrected: data.freezing_point_corrected?.[idx] || false,
-            icon: data.symbol_code[idx],
-            snowQuality: data.snow_quality[idx],
-            cloudCover: data.cloud_cover?.[idx] ?? null
-        }; });
+                tempMin: data.temperature_min[idx],
+                tempMax: data.temperature_max[idx],
+                windSpeed: data.wind_speed_max[idx],
+                windDir: data.wind_direction[idx],
+                snow: Math.max(snowOM, snowRoebber),
+                rain: data.rain[idx] || 0,
+                precipProb: data.precipitation_probability[idx] || 0,
+                freezingPoint: data.freezing_point[idx],
+                freezingPointCorrected: data.freezing_point_corrected?.[idx] || false,
+                icon: data.symbol_code[idx],
+                snowQuality: data.snow_quality[idx],
+                cloudCover: data.cloud_cover?.[idx] ?? null
+            };
+        });
 
-        // Calculer les jours avec données Open-Meteo complètes (au moins 4 créneaux 6h)
-        const omDayCounts = {};
-        if (omAgg?.six_hourly?.time) {
-            omAgg.six_hourly.time.forEach(t => {
-                const day = Utils.getLocalDay(t);
-                omDayCounts[day] = (omDayCounts[day] || 0) + 1;
-            });
-        }
-        const omAvailableDays = new Set(
-            Object.entries(omDayCounts)
-                .filter(([_, count]) => count >= 4)
-                .map(([day]) => day)
-        );
+        // Fonction pour calculer les jours disponibles (au moins 4 créneaux 6h)
+        const calculateAvailableDays = (agg) => {
+            const dayCounts = {};
+            if (agg?.six_hourly?.time) {
+                agg.six_hourly.time.forEach(t => {
+                    const day = Utils.getLocalDay(t);
+                    dayCounts[day] = (dayCounts[day] || 0) + 1;
+                });
+            }
+            return new Set(
+                Object.entries(dayCounts)
+                    .filter(([_, count]) => count >= 4)
+                    .map(([day]) => day)
+            );
+        };
+
+        // Données Open-Meteo (best_match)
+        const omHourly = createHourlyData(omAgg);
+        const omSixHourly = createSixHourlyData(omAgg);
+        const omAvailableDays = calculateAvailableDays(omAgg);
+
+        // Données AROME (Météo-France uniquement)
+        const aromeHourly = createHourlyData(aromeAgg);
+        const aromeSixHourly = createSixHourlyData(aromeAgg);
+        const aromeAvailableDays = calculateAvailableDays(aromeAgg);
 
         const metnoSeries = rawData.metno?.properties?.timeseries || [];
         const series = metnoSeries.map(entry => {
             const timeKey = entry.time.substring(0, 16);
             const dayStr = Utils.getLocalDay(entry.time);
             const isWithinOM = omAvailableDays.has(dayStr);
+            const isWithinArome = aromeAvailableDays.has(dayStr);
 
             return {
                 time: entry.time,
                 metno: entry,
                 om: isWithinOM ? omHourly[timeKey] || null : null,
-                om6h: isWithinOM ? omSixHourly[timeKey] || null : null
+                om6h: isWithinOM ? omSixHourly[timeKey] || null : null,
+                arome: isWithinArome ? aromeHourly[timeKey] || null : null,
+                arome6h: isWithinArome ? aromeSixHourly[timeKey] || null : null
             };
         });
 
-        return { point, series, omHourly, omSixHourly, elevation, omAvailableDays };
+        return {
+            point, series, elevation,
+            omHourly, omSixHourly, omAvailableDays,
+            aromeHourly, aromeSixHourly, aromeAvailableDays
+        };
     },
 
     indexByTime(data, mapper) {
@@ -354,29 +375,38 @@ const DataNormalizer = {
         return null;
     },
 
-    prepareEntry(entry, isToday, useOpenMeteo) {
+    prepareEntry(entry, isToday, source) {
         const prepared = { time: entry.time };
 
-        if (useOpenMeteo) {
-            if (isToday && entry.om) {
-                prepared.om = entry.om;
-            } else if (!isToday && entry.om6h) {
+        // source peut être 'openmeteo', 'arome', ou 'metno'
+        // Pour compatibilité, true = 'openmeteo', false = 'metno'
+        if (source === true) source = 'openmeteo';
+        if (source === false) source = 'metno';
+
+        if (source === 'openmeteo' || source === 'arome') {
+            // Sélectionner les bonnes données selon la source
+            const hourlyData = source === 'arome' ? entry.arome : entry.om;
+            const sixHourlyData = source === 'arome' ? entry.arome6h : entry.om6h;
+
+            if (isToday && hourlyData) {
+                prepared.om = hourlyData;
+            } else if (!isToday && sixHourlyData) {
                 const hour = Utils.parseTime(entry.time).getUTCHours();
                 const isDay = hour >= 6 && hour < 18;
 
                 prepared.om = {
-                    temp: entry.om6h.tempMax,
-                    windSpeed: entry.om6h.windSpeed,
-                    windDir: entry.om6h.windDir,
-                    snow: entry.om6h.snow,
-                    rain: entry.om6h.rain,
-                    precipProb: entry.om6h.precipProb,
-                    freezingPoint: entry.om6h.freezingPoint,
-                    icon: entry.om6h.icon,
-                    snowQuality: entry.om6h.snowQuality,
+                    temp: sixHourlyData.tempMax,
+                    windSpeed: sixHourlyData.windSpeed,
+                    windDir: sixHourlyData.windDir,
+                    snow: sixHourlyData.snow,
+                    rain: sixHourlyData.rain,
+                    precipProb: sixHourlyData.precipProb,
+                    freezingPoint: sixHourlyData.freezingPoint,
+                    icon: sixHourlyData.icon,
+                    snowQuality: sixHourlyData.snowQuality,
                     dewPoint: null,
                     isDay: isDay,
-                    cloudCover: entry.om6h.cloudCover
+                    cloudCover: sixHourlyData.cloudCover
                 };
             } else {
                 prepared.metno = entry.metno;

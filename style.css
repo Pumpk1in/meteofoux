@@ -4,8 +4,8 @@
 :root {
     --bg: #020617;
     --bg-secondary: #0f172a;
-    --card: #1e293b;
-    --card-hover: #273347;
+    --card: rgba(255, 255, 255, 0.06);
+    --card-hover: rgba(255, 255, 255, 0.09);
     --text: #e5e7eb;
     --muted: #94a3b8;
     --accent: #38bdf8;
@@ -18,9 +18,9 @@
 
 /* Thème clair */
 [data-theme="light"] {
-    --bg: #dadddf;
-    --bg-secondary: #e2e8f0;
-    --card: #ffffffbd;
+    --bg: #ffffff;
+    --bg-secondary: #f2f2f2;
+    --card: rgba(255, 255, 255, 1);
     --card-hover: #f8fafc;
     --text: #1e293b;
     --muted: #596a81;
@@ -74,7 +74,7 @@ body {
 }
 
 [data-theme="light"] .top-bar {
-    background: rgba(241, 245, 249, 0.95);
+    background: rgba(255, 255, 255, 0.95);
 }
 
 .top-bar h1 {
@@ -238,6 +238,72 @@ body {
     color: #f59f30;
 }
 
+.source-toggle.is-arome {
+    background: rgba(168, 85, 247, 0.25);
+    border-color: rgba(168, 85, 247, 0.5);
+}
+
+.source-toggle.is-arome .source-label {
+    color: #a855f7;
+}
+
+/* Day sections - fond coloré selon la source */
+.day-section {
+    border-radius: 8px;
+}
+
+[data-source="openmeteo"] .day-section {
+    background: rgba(8, 39, 68, 0.4);
+}
+
+[data-source="arome"] .day-section {
+    background: rgba(43, 16, 72, 0.4);
+}
+
+[data-source="metno"] .day-section {
+    background: rgba(58, 35, 13, 0.4);
+}
+
+[data-theme="light"][data-source="openmeteo"] body {
+    background: rgba(165, 208, 244, 0.5);
+}
+
+[data-theme="light"][data-source="arome"] body{
+    background: rgba(211, 187, 242, 0.5);
+}
+
+[data-theme="light"][data-source="metno"] body {
+    background: rgba(228, 195, 155, 0.5);
+}
+
+/* ============================================
+   NO DATA MESSAGE (AROME)
+   ============================================ */
+.no-data-message {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--muted);
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px dashed rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.no-data-message p {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.no-data-message small {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.day-section-no-data {
+    opacity: 0.7;
+}
+
 /* ============================================
    BOTTOM NAVIGATION
    ============================================ */
@@ -359,7 +425,7 @@ main {
 }
 
 [data-theme="light"] .day-section {
-    background: rgb(255 255 255 / 24%);
+    background: rgba(255, 255, 255, 0.5);
 }
 
 .day-header {
@@ -406,7 +472,7 @@ main {
 }
 
 [data-theme="light"] .summary-bar {
-    background: rgba(255, 255, 255, 0.6);
+    background: var(--card);
 }
 
 .summary-item {
@@ -469,7 +535,7 @@ main {
 }
 
 [data-theme="light"] .chart-wrapper {
-    background: rgba(255, 255, 255, 0.57);
+    background: var(--card);
 }
 
 .chart-wrapper h4 {

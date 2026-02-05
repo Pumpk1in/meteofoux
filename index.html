@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png">
     <title>Meteo 7 jours - La Foux d'Allos</title>
-    <link rel="stylesheet" href="style.css?v=3.34">
+    <link rel="stylesheet" href="style.css?v=3.44">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
@@ -128,12 +128,16 @@
 </nav>
 
 <footer>
-    <div><strong>Modèles</strong> :<br> Open-Meteo (best_match → Météo-Fra. AROME) · MET Norway</div>
+    <div><strong>Sources</strong> :<br> Open-Meteo · AROME Météo-France · MET Norway</div>
     <details>
         <summary>Comment sont calculées les prévisions ?</summary>
-        <p><strong>Sources</strong> : Fusion de deux APIs — Open-Meteo (prioritaire, 7 jours) et MET Norway (fallback). Les données sont mises en cache 15 minutes.</p>
-        <p><strong>Priorité des modèles</strong> : Température, vent, UV → best_match → AROME HD → Météo-France Seamless. Précipitations et codes météo → best_match → AROME → Seamless. Isotherme 0°C → best_match avec fallback MeteoSwiss.</p>
-        <p><strong>Cohérence</strong> : Si best_match indique un code météo de précipitation (pluie/neige) sans données de précipitation associées, fallback automatique sur Météo-France AROME pour cette heure. Inversement, si le code météo indique ciel clair mais que la couverture nuageuse est ≥ 80%, l'icône est corrigée vers "couvert".</p>
+        <p><strong>3 sources disponibles</strong> (toggle en haut à droite) :</p>
+        <ul>
+            <li><strong>Open-Meteo</strong> : Fusion multi-modèles "best_match" optimisée, 7 jours. Priorité : best_match → AROME HD → Seamless.</li>
+            <li><strong>AROME</strong> : Modèles Météo-France uniquement (sans best_match), ~4-5 jours. Priorité : AROME HD (1.5km) → AROME (2.5km) → Seamless.</li>
+            <li><strong>MET.no</strong> : Institut météorologique norvégien, ~10 jours.</li>
+        </ul>
+        <p><strong>Cohérence</strong> : Si le code météo indique des précipitations sans données associées, fallback automatique sur AROME. Si le code indique ciel clair mais couverture nuageuse ≥ 80%, l'icône est corrigée vers "couvert".</p>
         <p><strong>Calcul de la neige</strong> : Méthode Roebber avec ratio neige/eau dynamique (base 14:1), calibrée pour les Alpes. Le ratio est ajusté selon : température (plus froid = neige plus légère), humidité (>90% = neige plus dense), vent (>3 m/s = compaction). La valeur retenue est le maximum entre Open-Meteo et Roebber.</p>
         <p><strong>Qualité de neige</strong> : "Sèche" si température ≤ -2°C ou point de rosée ≤ -3°C, "humide" sinon.</p>
         <p><strong>Classification neige/pluie</strong> : Les précipitations sont classées comme neige si température ≤ 1.5°C ET point de rosée ≤ 0.5°C.</p>
@@ -143,8 +147,8 @@
 </footer>
 
 <!-- Scripts JS séparés -->
-<script src="js/core.js?v=1.4"></script>
-<script src="js/ui.js?v=1.6"></script>
+<script src="js/core.js?v=1.7"></script>
+<script src="js/ui.js?v=2.0"></script>
 
 </body>
 </html>

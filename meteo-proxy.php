@@ -506,28 +506,32 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
 /**
  * Enrichit les données hourly d'Open-Meteo
  * Fusionne les données de plusieurs modèles selon leur spécialité
- * 
+ *
  * @param array $openmeteo Données brutes Open-Meteo
  * @param float $elevation Altitude de la station (depuis Open-Meteo)
+ * @param array|null $priorities Priorités personnalisées ['hd' => [...], 'decomp' => [...], 'prob' => [...], 'freezing' => [...]]
  */
-function enrich_openmeteo_hourly($openmeteo, $elevation = null) {
+function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = null) {
     if (!isset($openmeteo['hourly']['time'])) return null;
 
     $hourly = $openmeteo['hourly'];
     $count = count($hourly['time']);
-    
-    // Priorités par type de donnée :
+
+    // Priorités par défaut (best_match) ou personnalisées
     // - best_match en premier : fusion optimisée, plus précise en montagne
     // - Fallbacks sur modèles Météo-France spécifiques si best_match absent
-    
+
     // Température, vent, précip totale
-    $prio_hd = ['best_match', 'meteofrance_arome_france_hd', 'meteofrance_seamless', 'meteofrance_arome_france'];
-    
+    $prio_hd = $priorities['hd'] ?? ['best_match', 'meteofrance_arome_france_hd', 'meteofrance_seamless', 'meteofrance_arome_france'];
+
     // Rain/snowfall/weather_code (best_match les a, sinon arome_france)
-    $prio_decomp = ['best_match', 'meteofrance_arome_france', 'meteofrance_seamless'];
-    
+    $prio_decomp = $priorities['decomp'] ?? ['best_match', 'meteofrance_arome_france', 'meteofrance_seamless'];
+
     // Precipitation_probability (uniquement seamless et best_match)
-    $prio_prob = ['meteofrance_seamless', 'best_match'];
+    $prio_prob = $priorities['prob'] ?? ['meteofrance_seamless', 'best_match'];
+
+    // Freezing level (isotherme 0)
+    $prio_freezing = $priorities['freezing'] ?? ['best_match'];
 
     $enriched = [
         'time' => [],
@@ -574,8 +578,8 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null) {
         $precip_prob = get_model_value($hourly, 'precipitation_probability', $i, $prio_prob) ?? 0;
 
         // Isotherme 0 - avec correction pour inversions thermiques
-        // Priorité: best_match, fallback sur meteoswiss_icon_seamless si incohérent
-        $freezing_point_raw = get_model_value($hourly, 'freezing_level_height', $i, ['best_match']);
+        // Priorité: selon $prio_freezing, fallback sur meteoswiss_icon_seamless si incohérent
+        $freezing_point_raw = get_model_value($hourly, 'freezing_level_height', $i, $prio_freezing);
         $freezing_point_meteoswiss = $hourly['freezing_level_height_meteoswiss_icon_seamless'][$i] ?? null;
         $freezing_correction = correct_freezing_level($freezing_point_raw, $freezing_point_meteoswiss, $temp, $elevation);
         $freezing_point = $freezing_correction['value'];
@@ -1005,13 +1009,32 @@ if ($res_metno) {
 $elevation = $res_open['elevation'] ?? null;
 
 $aggregated = null;
+$arome_aggregated = null;
+
 if (isset($res_open['hourly'])) {
+    // Agrégation Open-Meteo (best_match en priorité) - comportement par défaut
     $hourly_enriched = enrich_openmeteo_hourly($res_open, $elevation);
     $six_hourly_agg = aggregate_hourly_to_6h($hourly_enriched);
-    
+
     $aggregated = [
         'hourly' => $hourly_enriched,
         'six_hourly' => $six_hourly_agg
+    ];
+
+    // Agrégation AROME (modèles Météo-France uniquement, sans best_match)
+    // Chaîne : arome_hd → arome → seamless (pas de fallback meteoswiss)
+    $arome_priorities = [
+        'hd' => ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_seamless'],
+        'decomp' => ['meteofrance_arome_france', 'meteofrance_seamless'],
+        'prob' => ['meteofrance_seamless'],
+        'freezing' => ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_seamless']
+    ];
+    $hourly_arome = enrich_openmeteo_hourly($res_open, $elevation, $arome_priorities);
+    $six_hourly_arome = aggregate_hourly_to_6h($hourly_arome);
+
+    $arome_aggregated = [
+        'hourly' => $hourly_arome,
+        'six_hourly' => $six_hourly_arome
     ];
 }
 
@@ -1064,14 +1087,25 @@ $output = [
     'metno' => $metno_merged,
     'openmeteo' => $res_open,
     'openmeteo_aggregated' => $aggregated,
+    'arome_aggregated' => $arome_aggregated,
     'elevation' => $elevation,
     'meta' => [
         'generated_at' => gmdate('Y-m-d\TH:i:s\Z'),
-        'models_priority' => [
-            'general' => 'best_match (fusion optimisée, plus précise en montagne)',
-            'fallback_hd' => 'meteofrance_arome_france_hd (1.5km)',
-            'fallback_decomp' => 'meteofrance_arome_france (rain/snowfall)',
-            'precip_probability' => 'meteofrance_seamless'
+        'sources' => [
+            'openmeteo' => [
+                'description' => 'Open-Meteo best_match (fusion optimisée multi-modèles)',
+                'priority' => 'best_match → arome_hd → seamless → arome',
+                'coverage' => '7 jours'
+            ],
+            'arome' => [
+                'description' => 'Météo-France AROME (modèles français uniquement)',
+                'priority' => 'arome_hd → arome → seamless',
+                'coverage' => '~4.5 jours (données null après)'
+            ],
+            'metno' => [
+                'description' => 'MET.no Locationforecast (Institut météo norvégien)',
+                'coverage' => '~10 jours'
+            ]
         ],
         'slr_method' => 'Roebber simplifié (base 14, calibré Alpes) - facteurs: temp, humidity, wind',
         'snow_detection' => 'temp <= 1.5°C AND dew_point <= 0.5°C',
