@@ -37,7 +37,7 @@ const Charts = {
             grid: {
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                 strokeDashArray: 3,
-                padding: { left: 0, right: -25, top: 0, bottom: 0 }
+                padding: { left: -20, right: -40, top: 0, bottom: 0 }
             },
             tooltip: {
                 theme: isDark ? 'dark' : 'light',
@@ -115,14 +115,27 @@ const Charts = {
             yTempConfig.max = Math.ceil(mid + 5);
         }
 
+        // OffsetY des titres d'axes selon la taille d'écran
+        // < 480px : très petit (légende 2 lignes, graphique 260px)
+        // 480-768px : intermédiaire (légende 1 ligne, graphique 260px)
+        // >= 768px : PC (légende 1 ligne, graphique 300px)
+        const width = window.innerWidth;
+        const titleOffsetY = width < 480 ? -90 : (width < 768 ? -100 : -120);
+
         const yaxis = [
             // Axe Température (gauche)
             {
-                title: { text: '°C', style: { color: '#f97316', fontSize: '10px' }, offsetX: 5 },
+                title: {
+                    text: '°C',
+                    rotate: 0,
+                    offsetX: 25,
+                    offsetY: titleOffsetY,
+                    style: { color: '#f97316', fontSize: '10px' }
+                },
                 labels: {
                     formatter: v => Math.round(v) + '°',
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -15
+                    offsetX: -25
                 },
                 showAlways: true,
                 ...yTempConfig
@@ -136,13 +149,19 @@ const Charts = {
         // Axe Vent (droite)
         yaxis.push({
             opposite: true,
-            axisBorder: { show: false, offsetX: -20 },
+            axisBorder: { show: false },
             axisTicks: { show: false },
-            title: { text: 'km/h', style: { color: '#06b6d4', fontSize: '10px' }, offsetX: -10 },
+            title: {
+                text: 'km/h',
+                rotate: 0,
+                offsetX: -25,
+                offsetY: titleOffsetY,
+                style: { color: '#06b6d4', fontSize: '10px' }
+            },
             labels: {
                 formatter: v => Math.round(v),
                 style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                offsetX: -35
+                offsetX: -45
             },
             seriesName: 'Vent',
             min: 0,
@@ -163,13 +182,19 @@ const Charts = {
         yaxis.push(
             {
                 opposite: true,
-                axisBorder: { show: false, offsetX: -20 },
+                axisBorder: { show: false },
                 axisTicks: { show: false },
-                title: { text: 'UV', style: { color: '#fbbf24', fontSize: '10px' }, offsetX: -10 },
+                title: {
+                    text: 'UV',
+                    rotate: 0,
+                    offsetX: -20,
+                    offsetY: titleOffsetY,
+                    style: { color: '#fbbf24', fontSize: '10px' }
+                },
                 labels: {
                     formatter: v => v.toFixed(0),
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -15
+                    offsetX: -5
                 },
                 seriesName: 'UV',
                 min: 0,

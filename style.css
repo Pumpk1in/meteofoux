@@ -452,7 +452,7 @@ main {
 .chart-wrapper {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 0.75rem;
-    padding: 1rem 0rem;
+    padding: 0.8rem 0rem;
     border: 1px solid var(--border);
     min-width: 0; /* Force le respect de la grille */
     overflow: hidden;
@@ -489,6 +489,8 @@ main {
 
 .chart {
     min-height: 180px;
+    margin-left: -10px;
+    margin-right: -25px;
 }
 
 /* Cacher la toolbar ApexCharts (pan activé par défaut) */

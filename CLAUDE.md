@@ -48,13 +48,20 @@ This is a static web application with a PHP backend proxy. No build step require
 
 **Caching:** JSON files in `cache/` with 15-minute TTL, validated by minimum 50KB size.
 
-### Frontend JS Modules (in index.html)
+### Frontend JS Modules (in js/)
 
-- **CONFIG**: Observation points coordinates, cache duration, French day labels
-- **DataService**: API fetching with retry logic, 35s timeout
-- **DataNormalizer**: Converts API responses to unified card format, MIN_PRECIP threshold = 0.5cm
-- **Charts**: ApexCharts configuration for temperature, wind, precipitation graphs
-- **App**: State management (day, location, theme, source), UI rendering
+- **core.js**: CONFIG, Utils, DataService, DataNormalizer - data fetching and normalization
+- **ui.js**: Charts (ApexCharts), Components, App - rendering and state management
+
+### ApexCharts Layout (js/ui.js)
+
+**Différence entre labels offsetX et grid padding :**
+- `labels.offsetX` : déplace les valeurs des axes (ex: les chiffres "10", "20" de km/h) sans changer l'espace graphe-légendes
+- `grid.padding.left/right` : change l'espace entre le graphe et les légendes (rapproche ou éloigne les légendes du graphe)
+- `title.offsetX` : déplace uniquement le titre de l'axe (ex: "km/h", "°C")
+
+**Pour rapprocher les légendes du graphe :** modifier `grid.padding` (valeurs négatives = plus proche)
+**Pour déplacer les légendes latéralement :** modifier `labels.offsetX`
 
 ### Geographic Points
 
