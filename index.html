@@ -134,13 +134,14 @@
         <p><strong>3 sources disponibles</strong> (toggle en haut à droite) :</p>
         <ul>
             <li><strong>Open-Meteo</strong> : Fusion multi-modèles "best_match" optimisée, 7 jours. Priorité : best_match → AROME HD → Seamless.</li>
-            <li><strong>AROME</strong> : Modèles Météo-France uniquement (sans best_match), ~4-5 jours. Priorité : AROME HD (1.5km) → AROME (2.5km) → ARPEGE → Seamless. La nébulosité utilise ARPEGE en priorité : AROME HD ne fournit pas de cloud_cover, et AROME standard semble moins précis qu'ARPEGE pour la nébulosité comparé aux observations sur place.</li>
+            <li><strong>AROME</strong> : Modèles Météo-France uniquement (sans best_match), ~4-5 jours. Priorité : AROME HD (1.5km) → AROME (2.5km) → ARPEGE → Seamless.</li>
             <li><strong>MET.no</strong> : Institut météorologique norvégien, ~10 jours.</li>
         </ul>
         <p><strong>Cohérence</strong> : Si le code météo indique des précipitations sans données associées, fallback automatique sur AROME. Si le code indique ciel clair mais couverture nuageuse ≥ 80%, l'icône est corrigée vers "couvert".</p>
         <p><strong>Calcul de la neige</strong> : Méthode Roebber avec ratio neige/eau dynamique (base 14:1), calibrée pour les Alpes. Le ratio est ajusté selon : température (plus froid = neige plus légère), humidité (>90% = neige plus dense), vent (>3 m/s = compaction). La valeur retenue est le maximum entre Open-Meteo et Roebber.</p>
         <p><strong>Qualité de neige</strong> : "Sèche" si température ≤ -2°C ou point de rosée ≤ -3°C, "humide" sinon.</p>
         <p><strong>Classification neige/pluie</strong> : Les précipitations sont classées comme neige si température ≤ 1.5°C ET point de rosée ≤ 0.5°C.</p>
+        <p><strong>Nébulosité</strong> : Pour la source AROME, la couverture nuageuse utilise le modèle ARPEGE en priorité. AROME HD ne fournit pas cette donnée, et AROME standard semble moins précis qu'ARPEGE comparé aux observations sur place.</p>
         <p><strong>Isotherme 0°C</strong> : Corrigé automatiquement via MeteoSwiss lorsqu'une inversion thermique est détectée (température négative mais isotherme au-dessus de l'altitude).</p>
         <p><strong>Points de mesure</strong> : Station (1794m), Vescal (2050m), Observatoire (2600m) — coordonnées GPS spécifiques à La Foux d'Allos.</p>
     </details>
