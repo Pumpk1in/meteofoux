@@ -317,7 +317,7 @@ body {
     -webkit-backdrop-filter: blur(10px);
     border-top: 1px solid var(--border);
     z-index: 100;
-    padding: 0.5rem 0;
+    padding: 0 0 0.55rem 0;
     padding-bottom: env(safe-area-inset-bottom, 0.5rem);
 }
 
@@ -329,17 +329,18 @@ body {
     display: flex;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border);
 }
 
 .altitude-btn {
-    padding: 0.4rem 0.8rem;
+    padding: 0.5rem 0.6rem;
     border-radius: 2rem;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -359,7 +360,7 @@ body {
     display: flex;
     justify-content: center;
     gap: 0.3rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
 }
 
 .day-btn {
@@ -1035,7 +1036,7 @@ footer details p {
         align-items: center;
         justify-content: center;
         gap: 2rem;
-        padding: 0.5rem 1rem;
+        padding: 0.6rem 1rem;
     }
 
     .altitude-tabs {

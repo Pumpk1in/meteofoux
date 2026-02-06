@@ -6,8 +6,9 @@
 const CONFIG = {
     points: [
         { name: 'Station', lat: 44.2902, lon: 6.5689, key: 'station', color: '#309fcf' },
-        { name: 'Vescal', lat: 44.3122, lon: 6.5743, key: 'vescal', color: '#866fcc' },
         { name: 'Observatoire', lat: 44.2848, lon: 6.5356, key: 'observatoire', color: '#d866a1' },
+        { name: 'Marin-Pascal', lat: 44.2935, lon: 6.5904, key: 'marin-pascal', color: '#de9333' },
+        { name: 'Vescal', lat: 44.3122, lon: 6.5743, key: 'vescal', color: '#866fcc' }
     ],
     dayLabels: ['DI', 'LU', 'MA', 'ME', 'JE', 'VE', 'SA'],
     charts: {
