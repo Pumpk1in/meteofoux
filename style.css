@@ -253,27 +253,27 @@ body {
 }
 
 [data-source="openmeteo"] .day-section {
-    background: rgba(8, 39, 68, 0.4);
+    background: rgba(8, 42, 74, 0.5);
 }
 
 [data-source="arome"] .day-section {
-    background: rgba(43, 16, 72, 0.4);
+    background: rgba(50, 17, 85, 0.5);
 }
 
 [data-source="metno"] .day-section {
-    background: rgba(58, 35, 13, 0.4);
+    background: rgba(67, 40, 15, 0.5);
 }
 
 [data-theme="light"][data-source="openmeteo"] body {
-    background: rgba(165, 208, 244, 0.5);
+    background: rgba(149, 200, 244, 0.5);
 }
 
 [data-theme="light"][data-source="arome"] body{
-    background: rgba(211, 187, 242, 0.5);
+    background: rgba(184, 153, 233, 0.5);
 }
 
 [data-theme="light"][data-source="metno"] body {
-    background: rgba(228, 195, 155, 0.5);
+    background: rgba(233, 196, 152, 0.5);
 }
 
 /* ============================================
@@ -663,7 +663,7 @@ main {
 }
 
 [data-theme="light"] .data {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(0, 0, 0, 0.043);
 }
 
 .wind,
@@ -941,7 +941,7 @@ main {
 
 .skeleton-data {
     width: 100%;
-    background: rgba(0, 0, 0, 0.17);
+    background: rgba(0, 0, 0, 0.15);
     border-radius: 0.5rem;
     padding: 0.6rem;
     display: flex;
