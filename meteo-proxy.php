@@ -662,14 +662,19 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
 
         // ============================================================
         // CORRECTION WEATHER_CODE / CLOUD_COVER (cas inverse)
-        // Si weather_code indique beau temps (0=clair, 1=peu nuageux) mais
-        // cloud_cover est élevé, corriger le weather_code.
+        // Si weather_code indique beau temps mais cloud_cover est élevé,
+        // corriger le weather_code.
+        // Seuils alignés sur les oktas WMO :
+        //   0-11% = clair (0 okta), 12-36% = peu nuageux (1-2 oktas),
+        //   37-79% = partiellement nuageux (3-6 oktas), 80%+ = couvert (7-8 oktas)
         // ============================================================
-        if (in_array($weather_code, [0, 1]) && $cloud !== null) {
+        if (in_array($weather_code, [0, 1, 2]) && $cloud !== null) {
             if ($cloud >= 80) {
                 $weather_code = 3; // Couvert
-            } elseif ($cloud >= 50 && $weather_code === 0) {
-                $weather_code = 2; // Partiellement nuageux
+            } elseif ($cloud >= 37) {
+                $weather_code = max($weather_code, 2); // Partiellement nuageux
+            } elseif ($cloud >= 12) {
+                $weather_code = max($weather_code, 1); // Peu nuageux
             }
         }
 
