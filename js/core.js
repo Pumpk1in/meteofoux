@@ -416,6 +416,69 @@ const DataNormalizer = {
         return prepared;
     },
 
+    // Normalise les données d'un jour en tableau prêt pour les charts,
+    // quelle que soit la source (Open-Meteo, AROME, MET.no)
+    toChartData(day, sourceData, pointData, useOMData, dataType) {
+        const hourlyData = sourceData?.hourly || pointData.omHourly;
+        const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
+        const isHourly = dataType === 'hourly';
+
+        if (useOMData) {
+            const dataSource = isHourly ? hourlyData : sixHourlyData;
+            if (!dataSource) return [];
+
+            return Object.keys(dataSource)
+                .filter(time => Utils.getLocalDay(time) === day)
+                .sort()
+                .map(time => {
+                    const d = dataSource[time];
+                    if (d.temp === null && d.tempMax === null) return null;
+                    const timestamp = new Date(time.endsWith('Z') ? time : time + ':00Z').getTime();
+                    return {
+                        time: timestamp,
+                        temp: isHourly ? d.temp : d.tempMax,
+                        apparent_temperature: isHourly ? (d.apparent_temperature || d.temp) : d.tempMax,
+                        windSpeed: d.windSpeed,
+                        wind_gusts: isHourly ? (d.wind_gusts || d.windSpeed) : d.windSpeed,
+                        snow: d.snow || 0,
+                        rain: d.rain || 0,
+                        uv_index: isHourly ? (d.uv_index || 0) : 0,
+                        icon: d.icon || 'clearsky_day'
+                    };
+                })
+                .filter(d => d !== null);
+        }
+
+        // MET.no
+        const { series } = pointData;
+        return series
+            .filter(entry => {
+                if (!entry.metno) return false;
+                if (Utils.getLocalDay(entry.time) !== day) return false;
+                return isHourly
+                    ? !!entry.metno.data?.next_1_hours
+                    : !!entry.metno.data?.next_6_hours;
+            })
+            .map(entry => {
+                const m = entry.metno;
+                const details = m.data?.instant?.details || {};
+                const forecastObj = isHourly ? m.data?.next_1_hours : m.data?.next_6_hours;
+                const forecast = forecastObj?.details || {};
+                const timestamp = Utils.parseTime(m.time).getTime();
+                return {
+                    time: timestamp,
+                    temp: details.air_temperature ?? null,
+                    apparent_temperature: details.air_temperature ?? null,
+                    windSpeed: details.wind_speed ?? null,
+                    wind_gusts: details.wind_speed_of_gust ?? details.wind_speed ?? null,
+                    snow: forecast.snowfall || 0,
+                    rain: forecast.rain || 0,
+                    uv_index: details.ultraviolet_index_clear_sky ?? 0,
+                    icon: forecastObj?.summary?.symbol_code || 'clearsky_day'
+                };
+            });
+    },
+
     computeTotals(entries, isHourlyView) {
         let snow = 0, rain = 0;
         const temps = [];

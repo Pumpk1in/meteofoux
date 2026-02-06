@@ -656,7 +656,7 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
                 $precip = $arome_precip;
             } else {
                 // AROME aussi incohérent ou indisponible → correction basée sur cloud_cover
-                $weather_code = ($cloud >= 80) ? 3 : (($cloud >= 50) ? 2 : 1);
+                $weather_code = ($cloud >= 80) ? 3 : (($cloud >= 37) ? 2 : (($cloud >= 12) ? 1 : 0));
             }
         }
 

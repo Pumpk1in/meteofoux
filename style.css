@@ -517,7 +517,7 @@ main {
 }
 
 .chart-wrapper {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--card);
     border-radius: 0.75rem;
     padding: 0.6rem 0rem 1.3rem;
     border: 1px solid var(--border);
@@ -849,7 +849,7 @@ main {
 .skeleton-chart {
     height: 260px;
     margin-bottom: 1rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--card);
     border-radius: 0.75rem;
     border: 1px solid var(--border);
     display: flex;

@@ -803,73 +803,7 @@ const App = {
     },
 
     renderChartForDay(day, pointData, useOMData, dataType = 'hourly', sourceData = null) {
-        const { series } = pointData;
-        const hourlyData = sourceData?.hourly || pointData.omHourly;
-        const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
-
-        let chartData = [];
-        const isHourly = dataType === 'hourly';
-
-        if (useOMData) {
-            // Données Open-Meteo ou AROME
-            const dataSource = isHourly ? hourlyData : sixHourlyData;
-            if (!dataSource) return;
-
-            chartData = Object.keys(dataSource)
-                .filter(time => Utils.getLocalDay(time) === day)
-                .sort()
-                .map(time => {
-                    const d = dataSource[time];
-                    // Ignorer les entrées sans données (AROME après J+4.5)
-                    if (d.temp === null && d.tempMax === null) return null;
-                    const timestamp = new Date(time.endsWith('Z') ? time : time + ':00Z').getTime();
-                    return {
-                        time: timestamp,
-                        temp: isHourly ? d.temp : d.tempMax,
-                        tempMin: isHourly ? d.temp : d.tempMin,
-                        apparent_temperature: isHourly ? (d.apparent_temperature || d.temp) : d.tempMax,
-                        windSpeed: isHourly ? d.windSpeed : d.windSpeed,
-                        wind_gusts: isHourly ? (d.wind_gusts || d.windSpeed) : d.windSpeed,
-                        snow: d.snow || 0,
-                        rain: d.rain || 0,
-                        uv_index: isHourly ? (d.uv_index || 0) : 0,
-                        icon: d.icon || 'clearsky_day'
-                    };
-                })
-                .filter(d => d !== null); // Filtrer les entrées null
-        } else {
-            // Données MET.no
-            chartData = series
-                .filter(entry => {
-                    if (!entry.metno) return false;
-                    const localDay = Utils.getLocalDay(entry.time);
-                    if (localDay !== day) return false;
-                    // Filtrer selon le type de données requis
-                    return isHourly
-                        ? !!entry.metno.data?.next_1_hours
-                        : !!entry.metno.data?.next_6_hours;
-                })
-                .map(entry => {
-                    const m = entry.metno;
-                    const details = m.data?.instant?.details || {};
-                    const forecastObj = isHourly ? m.data?.next_1_hours : m.data?.next_6_hours;
-                    const forecast = forecastObj?.details || {};
-                    const timestamp = Utils.parseTime(m.time).getTime();
-                    return {
-                        time: timestamp,
-                        temp: details.air_temperature ?? null,
-                        tempMin: isHourly ? details.air_temperature : (forecast.air_temperature_min ?? details.air_temperature),
-                        apparent_temperature: details.air_temperature ?? null,
-                        windSpeed: details.wind_speed ?? null,
-                        wind_gusts: details.wind_speed_of_gust ?? details.wind_speed ?? null,
-                        snow: forecast.snowfall || 0,
-                        rain: forecast.rain || 0,
-                        uv_index: details.ultraviolet_index_clear_sky ?? 0,
-                        icon: forecastObj?.summary?.symbol_code || 'clearsky_day'
-                    };
-                });
-        }
-
+        const chartData = DataNormalizer.toChartData(day, sourceData, pointData, useOMData, dataType);
         if (chartData.length < 2) return;
 
         const isDark = this.state.theme === 'dark';
@@ -895,9 +829,8 @@ const App = {
             iconByHour[`${hh}:${mm}`] = d.icon;
         });
 
-        // Créer le graphique unifié
-        // hasExtendedData = true seulement pour Open-Meteo/AROME hourly (ressenti, rafales disponibles)
-        const hasExtendedData = useOMData && isHourly;
+        // hasExtendedData = true seulement pour Open-Meteo/AROME hourly (ressenti, rafales)
+        const hasExtendedData = useOMData && dataType === 'hourly';
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
             Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour);
         }
