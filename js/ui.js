@@ -394,6 +394,10 @@ const App = {
 
     async init() {
         try {
+            // Charger les points personnalisés avant tout
+            CustomPoints.init();
+            this.state.currentPoint = CONFIG.points[0].key;
+
             // Charger le thème sauvegardé
             const savedTheme = localStorage.getItem('fmeteo_theme') || 'dark';
             this.state.theme = savedTheme;
@@ -453,22 +457,31 @@ const App = {
         // Tabs altitudes
         const altitudeTabsHtml = CONFIG.points.map(point => {
             const isActive = point.key === this.state.currentPoint;
+            const deleteBtn = point.custom
+                ? `<span class="altitude-btn-delete" onclick="event.stopPropagation(); App.confirmDeletePoint('${point.key}')" title="Supprimer">&times;</span>`
+                : '';
             return `
-                <button class="altitude-btn ${isActive ? 'active' : ''}"
+                <button class="altitude-btn ${isActive ? 'active' : ''} ${point.custom ? 'altitude-btn-custom' : ''}"
                         data-point="${point.key}"
                         onclick="App.selectPoint('${point.key}')"
                         style="--point-color: ${point.color}">
                     ${point.name.split(' ')[0]}
+                    ${deleteBtn}
                 </button>
             `;
         }).join('');
 
-        document.getElementById('altitude-tabs').innerHTML = altitudeTabsHtml;
+        const addBtnHtml = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM
+            ? `<button class="altitude-btn altitude-btn-add" onclick="App.openAddPointModal()" title="Ajouter un point">+</button>`
+            : '';
+
+        document.getElementById('altitude-tabs').innerHTML = altitudeTabsHtml + addBtnHtml;
 
         // Mettre à jour le toggle source global
         this.updateSourceToggle();
 
         lucide.createIcons();
+        this.initDragReorder();
     },
 
     updateSourceToggle() {
@@ -834,6 +847,346 @@ const App = {
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
             Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour);
         }
+    },
+
+    // === Drag Reorder Points ===
+
+    initDragReorder() {
+        const container = document.getElementById('altitude-tabs');
+        if (!container || container._dragInit) return;
+        container._dragInit = true;
+
+        let drag = null;
+        let timer = null;
+
+        const getItems = () => [...container.querySelectorAll('.altitude-btn:not(.altitude-btn-add)')];
+
+        const start = (x, y, target) => {
+            if (target.closest('.altitude-btn-delete')) return;
+            const el = target.closest('.altitude-btn:not(.altitude-btn-add)');
+            if (!el) return;
+            drag = { el, x, y, active: false };
+            timer = setTimeout(() => {
+                if (!drag) return;
+                drag.active = true;
+                el.classList.add('dragging');
+                container.style.overflowX = 'hidden';
+                if (navigator.vibrate) navigator.vibrate(30);
+            }, 400);
+        };
+
+        const move = (x, y, e) => {
+            if (!drag) return;
+            if (!drag.active) {
+                if (Math.abs(x - drag.x) > 8 || Math.abs(y - drag.y) > 8) {
+                    clearTimeout(timer);
+                    drag = null;
+                }
+                return;
+            }
+            e.preventDefault();
+
+            const dx = x - drag.x;
+            drag.el.style.transform = `translateX(${dx}px) scale(1.05)`;
+            drag.el.style.zIndex = '10';
+
+            const items = getItems();
+            const idx = items.indexOf(drag.el);
+            const rect = drag.el.getBoundingClientRect();
+            const center = rect.left + rect.width / 2;
+
+            // Swap avec le voisin de droite
+            if (idx < items.length - 1) {
+                const next = items[idx + 1];
+                const nc = next.getBoundingClientRect();
+                if (center > nc.left + nc.width / 2) {
+                    next.after(drag.el);
+                    drag.x = x;
+                    drag.el.style.transform = 'scale(1.05)';
+                    return;
+                }
+            }
+            // Swap avec le voisin de gauche
+            if (idx > 0) {
+                const prev = items[idx - 1];
+                const pc = prev.getBoundingClientRect();
+                if (center < pc.left + pc.width / 2) {
+                    prev.before(drag.el);
+                    drag.x = x;
+                    drag.el.style.transform = 'scale(1.05)';
+                }
+            }
+        };
+
+        const end = () => {
+            clearTimeout(timer);
+            if (drag?.active) {
+                drag.el.classList.remove('dragging');
+                drag.el.style.transform = '';
+                drag.el.style.zIndex = '';
+                container.style.overflowX = '';
+
+                // Sauvegarder le nouvel ordre
+                const order = getItems().map(b => b.dataset.point);
+                CustomPoints.saveOrder(order);
+                const orderMap = {};
+                order.forEach((k, i) => orderMap[k] = i);
+                CONFIG.points.sort((a, b) => (orderMap[a.key] ?? 999) - (orderMap[b.key] ?? 999));
+            }
+            drag = null;
+        };
+
+        // Touch
+        container.addEventListener('touchstart', e => {
+            start(e.touches[0].clientX, e.touches[0].clientY, e.target);
+        }, { passive: true });
+        container.addEventListener('touchmove', e => {
+            if (drag) move(e.touches[0].clientX, e.touches[0].clientY, e);
+        }, { passive: false });
+        container.addEventListener('touchend', end);
+        container.addEventListener('touchcancel', end);
+
+        // Souris
+        container.addEventListener('mousedown', e => start(e.clientX, e.clientY, e.target));
+        document.addEventListener('mousemove', e => { if (drag) move(e.clientX, e.clientY, e); });
+        document.addEventListener('mouseup', end);
+    },
+
+    // === Custom Points Modal ===
+
+    _leafletLoaded: false,
+    _mapInstance: null,
+    _mapMarker: null,
+
+    async loadLeaflet() {
+        if (this._leafletLoaded) return;
+        // CSS
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+        // JS
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+        this._leafletLoaded = true;
+    },
+
+    async openAddPointModal() {
+        // Injecter le modal
+        const modal = document.createElement('div');
+        modal.id = 'add-point-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Ajouter un point</h3>
+                    <button class="modal-close" onclick="App.closeAddPointModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-field">
+                        <label for="point-name">Nom</label>
+                        <input type="text" id="point-name" placeholder="Ex: Marseille, Col du Lautaret..." maxlength="30" autocomplete="off">
+                    </div>
+                    <div id="modal-map" class="modal-map"></div>
+                    <div class="modal-coords" id="modal-coords">
+                        Cliquez sur la carte pour placer un point
+                    </div>
+                    <div class="modal-error" id="modal-error"></div>
+                    <div class="modal-gps-toggle">
+                        <button class="btn-gps-toggle" onclick="App.toggleManualGPS()">&#9654; Saisie manuelle GPS</button>
+                    </div>
+                    <div class="modal-gps-fields" id="modal-gps-fields" style="display:none">
+                        <div class="modal-field modal-field-inline">
+                            <label for="point-lat">Lat</label>
+                            <input type="number" id="point-lat" step="0.0001" min="41.3" max="51.1" placeholder="44.2902">
+                        </div>
+                        <div class="modal-field modal-field-inline">
+                            <label for="point-lon">Lon</label>
+                            <input type="number" id="point-lon" step="0.0001" min="-5.2" max="9.6" placeholder="6.5689">
+                        </div>
+                        <button class="btn-gps-apply" onclick="App.applyManualGPS()">Appliquer</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn modal-btn-cancel" onclick="App.closeAddPointModal()">Annuler</button>
+                    <button class="modal-btn modal-btn-confirm" id="modal-btn-add" onclick="App.confirmAddPoint()" disabled>Ajouter</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Listener sur le nom pour activer/désactiver le bouton
+        document.getElementById('point-name').addEventListener('input', () => {
+            const name = document.getElementById('point-name').value.trim();
+            document.getElementById('modal-btn-add').disabled = !name || !this._mapMarker;
+        });
+
+        // Charger Leaflet puis initialiser la carte
+        try {
+            await this.loadLeaflet();
+            this.initMap();
+        } catch (e) {
+            console.error('Erreur chargement Leaflet:', e);
+            document.getElementById('modal-map').innerHTML = '<p style="text-align:center;color:var(--muted);padding:2rem">Erreur de chargement de la carte</p>';
+        }
+    },
+
+    initMap() {
+        const map = L.map('modal-map', {
+            maxBounds: L.latLngBounds([41.3, -5.2], [51.1, 9.6]),
+            maxBoundsViscosity: 1.0
+        }).setView([44.29, 6.57], 7);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OSM',
+            maxZoom: 15
+        }).addTo(map);
+
+        // Afficher les points existants comme cercles
+        CONFIG.points.forEach(p => {
+            L.circleMarker([p.lat, p.lon], {
+                radius: 6, color: p.color, fillColor: p.color, fillOpacity: 0.7, weight: 2
+            }).addTo(map).bindTooltip(p.name, { permanent: false });
+        });
+
+        // Clic pour placer le marqueur
+        map.on('click', (e) => {
+            const { lat, lng } = e.latlng;
+            if (!CustomPoints.isInFrance(lat, lng)) {
+                document.getElementById('modal-error').textContent = 'Ce point est hors de la France métropolitaine';
+                return;
+            }
+            document.getElementById('modal-error').textContent = '';
+            this.placeMarker(map, lat, lng);
+        });
+
+        this._mapInstance = map;
+
+        // Fix: Leaflet a besoin d'un invalidateSize après affichage
+        setTimeout(() => map.invalidateSize(), 200);
+    },
+
+    placeMarker(map, lat, lng) {
+        if (this._mapMarker) {
+            this._mapMarker.setLatLng([lat, lng]);
+        } else {
+            this._mapMarker = L.marker([lat, lng], { draggable: true }).addTo(map);
+            this._mapMarker.on('dragend', () => {
+                const pos = this._mapMarker.getLatLng();
+                if (!CustomPoints.isInFrance(pos.lat, pos.lng)) {
+                    document.getElementById('modal-error').textContent = 'Ce point est hors de la France métropolitaine';
+                    // Replacer au dernier emplacement valide
+                    this._mapMarker.setLatLng([this._lastValidLat, this._lastValidLng]);
+                    return;
+                }
+                document.getElementById('modal-error').textContent = '';
+                this._lastValidLat = pos.lat;
+                this._lastValidLng = pos.lng;
+                this.updateCoordsDisplay(pos.lat, pos.lng);
+            });
+        }
+        this._lastValidLat = lat;
+        this._lastValidLng = lng;
+        this.updateCoordsDisplay(lat, lng);
+    },
+
+    updateCoordsDisplay(lat, lng) {
+        document.getElementById('modal-coords').textContent = `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`;
+        // Activer/désactiver le bouton
+        const name = document.getElementById('point-name')?.value.trim();
+        document.getElementById('modal-btn-add').disabled = !name;
+    },
+
+    closeAddPointModal() {
+        if (this._mapInstance) {
+            this._mapInstance.remove();
+            this._mapInstance = null;
+        }
+        this._mapMarker = null;
+        document.getElementById('add-point-modal')?.remove();
+    },
+
+    toggleManualGPS() {
+        const fields = document.getElementById('modal-gps-fields');
+        const btn = document.querySelector('.btn-gps-toggle');
+        if (fields.style.display === 'none') {
+            fields.style.display = '';
+            btn.innerHTML = '&#9660; Saisie manuelle GPS';
+        } else {
+            fields.style.display = 'none';
+            btn.innerHTML = '&#9654; Saisie manuelle GPS';
+        }
+    },
+
+    applyManualGPS() {
+        const lat = parseFloat(document.getElementById('point-lat').value);
+        const lon = parseFloat(document.getElementById('point-lon').value);
+        if (isNaN(lat) || isNaN(lon)) {
+            document.getElementById('modal-error').textContent = 'Coordonnées invalides';
+            return;
+        }
+        if (!CustomPoints.isInFrance(lat, lon)) {
+            document.getElementById('modal-error').textContent = 'Ce point est hors de la France métropolitaine';
+            return;
+        }
+        document.getElementById('modal-error').textContent = '';
+        if (this._mapInstance) {
+            this._mapInstance.setView([lat, lon], 10);
+            this.placeMarker(this._mapInstance, lat, lon);
+        }
+    },
+
+    async confirmAddPoint() {
+        const name = document.getElementById('point-name')?.value.trim();
+        if (!name) { document.getElementById('modal-error').textContent = 'Veuillez saisir un nom'; return; }
+        if (!this._mapMarker) { document.getElementById('modal-error').textContent = 'Veuillez placer un point sur la carte'; return; }
+
+        const pos = this._mapMarker.getLatLng();
+        const result = CustomPoints.add(name, pos.lat, pos.lng);
+        if (result.error) {
+            document.getElementById('modal-error').textContent = result.error;
+            return;
+        }
+
+        // Désactiver le bouton pendant le chargement
+        const btn = document.getElementById('modal-btn-add');
+        btn.disabled = true;
+        btn.textContent = 'Chargement...';
+
+        try {
+            await DataService.loadSinglePoint(result.point);
+            this.closeAddPointModal();
+            this.state.currentPoint = result.point.key;
+            this.renderNavigation();
+            this.render();
+        } catch (e) {
+            console.error('Erreur chargement point:', e);
+            document.getElementById('modal-error').textContent = 'Erreur de chargement des données';
+            btn.disabled = false;
+            btn.textContent = 'Ajouter';
+            // Rollback
+            CustomPoints.remove(result.point.key);
+        }
+    },
+
+    confirmDeletePoint(key) {
+        const point = CONFIG.points.find(p => p.key === key);
+        if (!point || !confirm(`Supprimer le point "${point.name}" ?`)) return;
+
+        CustomPoints.remove(key);
+
+        // Si on regarde le point supprimé, basculer sur le premier
+        if (this.state.currentPoint === key) {
+            this.state.currentPoint = CONFIG.points[0].key;
+        }
+
+        this.renderNavigation();
+        this.render();
     },
 
     toggleMore(btn) {

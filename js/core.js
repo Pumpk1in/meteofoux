@@ -18,6 +18,102 @@ const CONFIG = {
     }
 };
 
+// Gestion des points personnalisés (localStorage)
+const CustomPoints = {
+    STORAGE_KEY: 'fmeteo_custom_points',
+    MAX_CUSTOM: 6,
+    COLORS: ['#26b763', '#e67e22', '#1abc9c', '#6c5ce7', '#00b894', '#fdcb6e', '#3498db', '#f39c12'],
+
+    init() {
+        const saved = this.getSaved();
+        let needsSave = false;
+        saved.forEach(p => {
+            p.custom = true;
+            // Migrer les couleurs hors palette (ex: ancien rouge)
+            if (!this.COLORS.includes(p.color)) {
+                p.color = this.nextColor(saved.filter(s => s !== p));
+                needsSave = true;
+            }
+            CONFIG.points.push(p);
+        });
+        if (needsSave) this.save(saved);
+        this.applyOrder();
+    },
+
+    getSaved() {
+        try {
+            return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
+        } catch { return []; }
+    },
+
+    save(points) {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(points));
+    },
+
+    add(name, lat, lon) {
+        if (!this.isInFrance(lat, lon)) return { error: 'Coordonnées hors France métropolitaine' };
+        const saved = this.getSaved();
+        if (saved.length >= this.MAX_CUSTOM) return { error: `Maximum ${this.MAX_CUSTOM} points personnalisés` };
+
+        const key = this.generateKey(name, saved);
+        const color = this.nextColor(saved);
+        const point = { name, lat: parseFloat(lat), lon: parseFloat(lon), key, color, custom: true };
+
+        saved.push(point);
+        this.save(saved);
+        CONFIG.points.push(point);
+        return { point };
+    },
+
+    remove(key) {
+        let saved = this.getSaved();
+        saved = saved.filter(p => p.key !== key);
+        this.save(saved);
+        CONFIG.points = CONFIG.points.filter(p => p.key !== key);
+        delete DataService.state.data[key];
+    },
+
+    generateKey(name, saved) {
+        const base = 'custom-' + name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const allKeys = CONFIG.points.map(p => p.key).concat(saved.map(p => p.key));
+        let key = base;
+        let i = 2;
+        while (allKeys.includes(key)) { key = base + '-' + i; i++; }
+        return key;
+    },
+
+    nextColor(saved) {
+        const usedColors = CONFIG.points.map(p => p.color).concat(saved.map(p => p.color));
+        return this.COLORS.find(c => !usedColors.includes(c)) || this.COLORS[saved.length % this.COLORS.length];
+    },
+
+    isInFrance(lat, lon) {
+        return lat >= 41.3 && lat <= 51.1 && lon >= -5.2 && lon <= 9.6;
+    },
+
+    ORDER_KEY: 'fmeteo_points_order',
+
+    saveOrder(keys) {
+        localStorage.setItem(this.ORDER_KEY, JSON.stringify(keys));
+    },
+
+    applyOrder() {
+        try {
+            const order = JSON.parse(localStorage.getItem(this.ORDER_KEY));
+            if (!Array.isArray(order) || order.length === 0) return;
+            CONFIG.points.sort((a, b) => {
+                const ia = order.indexOf(a.key);
+                const ib = order.indexOf(b.key);
+                if (ia === -1 && ib === -1) return 0;
+                if (ia === -1) return 1;
+                if (ib === -1) return -1;
+                return ia - ib;
+            });
+        } catch {}
+    }
+};
+
 const Utils = {
     // Convertit les degrés en direction cardinale
     windDirection: (deg) => ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(deg / 45) % 8],
@@ -319,6 +415,13 @@ const DataService = {
             index[key] = mapper(data, idx);
         });
         return index;
+    },
+
+    async loadSinglePoint(point, forceRefresh = false) {
+        const now = Date.now();
+        const rawData = await this.fetchPointData(point, forceRefresh);
+        this.state.data[point.key] = this.processPointData(point, rawData, now);
+        return this.state.data[point.key];
     },
 
     refresh() {
