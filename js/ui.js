@@ -354,8 +354,8 @@ const Charts = {
             img.setAttribute('href', `weather/svg/${icon}.svg`);
             img.setAttribute('x', x - 6);
             img.setAttribute('y', y + 4);
-            img.setAttribute('width', 16);
-            img.setAttribute('height', 16);
+            img.setAttribute('width', 18);
+            img.setAttribute('height', 18);
             img.classList.add('weather-icon-annotation');
 
             xaxisGroup.appendChild(img);
