@@ -13,6 +13,7 @@
  * - meteofrance_arome_france_hd : haute résolution 1.5km (température, vent)
  *   → N'a PAS rain/snowfall/weather_code séparés
  * - meteofrance_arome_france : résolution 2.5km avec décomposition rain/snowfall
+ * - meteofrance_arpege_seamless : cloud_cover plus réaliste qu'AROME, fallback pour le reste
  * - meteofrance_seamless : fallback + precipitation_probability (seule source)
  * 
  * Fallback neige/pluie :
@@ -114,7 +115,7 @@ $end_date = gmdate('Y-m-d', strtotime('+7 days'));
 $url_openmeteo = "https://api.open-meteo.com/v1/forecast?" . http_build_query([
     'latitude' => $lat,
     'longitude' => $lon,
-    'models' => 'best_match,meteofrance_arome_france_hd,meteofrance_arome_france,meteofrance_seamless,meteoswiss_icon_seamless',
+    'models' => 'best_match,meteofrance_arome_france_hd,meteofrance_arome_france,meteofrance_arpege_seamless,meteofrance_seamless,meteoswiss_icon_seamless',
     'timezone' => 'GMT',
     'start_date' => $start_date,
     'end_date' => $end_date,
@@ -538,7 +539,7 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
  *
  * @param array $openmeteo Données brutes Open-Meteo
  * @param float $elevation Altitude de la station (depuis Open-Meteo)
- * @param array|null $priorities Priorités personnalisées ['hd' => [...], 'decomp' => [...], 'prob' => [...], 'freezing' => [...]]
+ * @param array|null $priorities Priorités personnalisées ['hd' => [...], 'decomp' => [...], 'prob' => [...], 'freezing' => [...], 'cloud' => [...]]
  */
 function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = null) {
     if (!isset($openmeteo['hourly']['time'])) return null;
@@ -561,6 +562,9 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
 
     // Freezing level (isotherme 0)
     $prio_freezing = $priorities['freezing'] ?? ['best_match'];
+
+    // Cloud cover (ARPEGE prioritaire si défini, sinon fallback sur decomp)
+    $prio_cloud = $priorities['cloud'] ?? $prio_decomp;
 
     $enriched = [
         'time' => [],
@@ -598,7 +602,7 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
         $wind_speed = get_model_value($hourly, 'wind_speed_10m', $i, $prio_hd);
         $wind_dir = get_model_value($hourly, 'wind_direction_10m', $i, $prio_hd);
         $wind_gusts = get_model_value($hourly, 'wind_gusts_10m', $i, $prio_hd);
-        $cloud = get_model_value($hourly, 'cloud_cover', $i, $prio_decomp);
+        $cloud = get_model_value($hourly, 'cloud_cover', $i, $prio_cloud);
 
         // Précipitation totale
         $precip = get_model_value($hourly, 'precipitation', $i, $prio_hd) ?? 0;
@@ -1013,10 +1017,11 @@ if (isset($res_open['hourly'])) {
     // Agrégation AROME (modèles Météo-France uniquement, sans best_match)
     // Chaîne : arome_hd → arome → seamless (pas de fallback meteoswiss)
     $arome_priorities = [
-        'hd' => ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_seamless'],
-        'decomp' => ['meteofrance_arome_france', 'meteofrance_seamless'],
-        'prob' => ['meteofrance_seamless'],
-        'freezing' => ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_seamless']
+        'hd'      => ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_arpege_seamless', 'meteofrance_seamless'],
+        'decomp'  => ['meteofrance_arome_france', 'meteofrance_arpege_seamless', 'meteofrance_seamless'],
+        'prob'    => ['meteofrance_seamless'],
+        'freezing'=> ['meteofrance_arome_france_hd', 'meteofrance_arome_france', 'meteofrance_arpege_seamless', 'meteofrance_seamless'],
+        'cloud'   => ['meteofrance_arpege_seamless', 'meteofrance_arome_france', 'meteofrance_seamless']
     ];
     $hourly_arome = enrich_openmeteo_hourly($res_open, $elevation, $arome_priorities);
     $six_hourly_arome = aggregate_hourly_to_6h($hourly_arome);
@@ -1087,8 +1092,8 @@ $output = [
                 'coverage' => '7 jours'
             ],
             'arome' => [
-                'description' => 'Météo-France AROME (modèles français uniquement)',
-                'priority' => 'arome_hd → arome → seamless',
+                'description' => 'Météo-France AROME + ARPEGE (modèles français uniquement)',
+                'priority' => 'arome_hd → arome → arpege → seamless (cloud: arpege → arome → seamless)',
                 'coverage' => '~4.5 jours (données null après)'
             ],
             'metno' => [

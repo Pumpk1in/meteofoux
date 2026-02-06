@@ -128,13 +128,13 @@
 </nav>
 
 <footer>
-    <div><strong>Sources</strong> :<br> Open-Meteo · AROME Météo-France · MET Norway</div>
+    <div><strong>Sources</strong> :<br> Open-Meteo · AROME/ARPEGE Météo-France · MET Norway</div>
     <details>
         <summary>Comment sont calculées les prévisions ?</summary>
         <p><strong>3 sources disponibles</strong> (toggle en haut à droite) :</p>
         <ul>
             <li><strong>Open-Meteo</strong> : Fusion multi-modèles "best_match" optimisée, 7 jours. Priorité : best_match → AROME HD → Seamless.</li>
-            <li><strong>AROME</strong> : Modèles Météo-France uniquement (sans best_match), ~4-5 jours. Priorité : AROME HD (1.5km) → AROME (2.5km) → Seamless.</li>
+            <li><strong>AROME</strong> : Modèles Météo-France uniquement (sans best_match), ~4-5 jours. Priorité : AROME HD (1.5km) → AROME (2.5km) → ARPEGE → Seamless. La nébulosité utilise ARPEGE en priorité : AROME HD ne fournit pas de cloud_cover, et AROME standard semble moins précis qu'ARPEGE pour la nébulosité comparé aux observations sur place.</li>
             <li><strong>MET.no</strong> : Institut météorologique norvégien, ~10 jours.</li>
         </ul>
         <p><strong>Cohérence</strong> : Si le code météo indique des précipitations sans données associées, fallback automatique sur AROME. Si le code indique ciel clair mais couverture nuageuse ≥ 80%, l'icône est corrigée vers "couvert".</p>
