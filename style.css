@@ -1160,7 +1160,13 @@ footer details p {
     font-weight: 700;
 }
 
-.altitude-btn-custom.active:hover .altitude-btn-delete {
+@media (hover: hover) {
+    .altitude-btn-custom.active:hover .altitude-btn-delete {
+        display: block;
+    }
+}
+
+.altitude-btn-custom.active.show-delete .altitude-btn-delete {
     display: block;
 }
 
@@ -1168,6 +1174,20 @@ footer details p {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     opacity: 0.9;
     transition: none !important;
+}
+
+@keyframes wobble {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-1.5deg); }
+    75% { transform: rotate(1.5deg); }
+}
+
+.altitude-tabs.drag-mode .altitude-btn:not(.dragging):not(.altitude-btn-add) {
+    animation: wobble 0.3s ease-in-out infinite;
+}
+
+.altitude-tabs.drag-mode .altitude-btn:nth-child(even):not(.dragging):not(.altitude-btn-add) {
+    animation-delay: 0.15s;
 }
 
 .altitude-btn-add {

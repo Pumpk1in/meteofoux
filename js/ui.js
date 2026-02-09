@@ -13,7 +13,7 @@ const Charts = {
         if (hasExtendedData) {
             return isDark
                 ? ['#f97316', '#fdba74', '#98dfb6', '#39b36c', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#ea580c', '#f97316', '#16a34a', '#15803d', '#fbbf24', '#0ea5e9', '#2563eb']; // light
+                : ['#ea580c', '#ff933e', '#16a34a', '#6abf70', '#fbbf24', '#0ea5e9', '#2563eb']; // light
         } else {
             return isDark
                 ? ['#f97316', '#98dfb6', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
@@ -37,7 +37,7 @@ const Charts = {
             grid: {
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                 strokeDashArray: 3,
-                padding: { left: -28, right: -64, top: 0, bottom: 0 }
+                padding: { left: -28, right: -70, top: 0, bottom: 0 }
             },
             tooltip: {
                 theme: isDark ? 'dark' : 'light',
@@ -163,7 +163,7 @@ const Charts = {
             labels: {
                 formatter: v => Math.round(v),
                 style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                offsetX: -68
+                offsetX: -73
             },
             seriesName: 'Vent',
             min: 0,
@@ -525,6 +525,20 @@ const App = {
     },
 
     selectPoint(pointKey) {
+        // Mobile : second tap sur un custom point actif → afficher la croix de suppression
+        if (Utils.isMobile() && pointKey === this.state.currentPoint) {
+            const btn = document.querySelector(`.altitude-btn-custom[data-point="${pointKey}"]`);
+            if (btn) {
+                const wasShowing = btn.classList.contains('show-delete');
+                document.querySelectorAll('.altitude-btn-custom.show-delete').forEach(b => b.classList.remove('show-delete'));
+                if (!wasShowing) btn.classList.add('show-delete');
+                return;
+            }
+        }
+
+        // Masquer les croix au changement de point
+        document.querySelectorAll('.altitude-btn-custom.show-delete').forEach(b => b.classList.remove('show-delete'));
+
         this.state.currentPoint = pointKey;
 
         // Mettre à jour les boutons
@@ -870,6 +884,7 @@ const App = {
                 if (!drag) return;
                 drag.active = true;
                 el.classList.add('dragging');
+                container.classList.add('drag-mode');
                 container.style.overflowX = 'hidden';
                 if (navigator.vibrate) navigator.vibrate(30);
             }, 400);
@@ -922,6 +937,7 @@ const App = {
             clearTimeout(timer);
             if (drag?.active) {
                 drag.el.classList.remove('dragging');
+                container.classList.remove('drag-mode');
                 drag.el.style.transform = '';
                 drag.el.style.zIndex = '';
                 container.style.overflowX = '';
