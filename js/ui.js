@@ -21,6 +21,27 @@ const Charts = {
         }
     },
 
+    // Marqueurs de légende : cercle pointillé pour les séries dashed, plein pour les autres
+    getLegendMarkers(colors, strokeDash) {
+        const hasDashed = strokeDash.some(d => d > 0);
+        if (!hasDashed) return { width: 10, height: 10 };
+        return {
+            width: 10,
+            height: 10,
+            fillColors: colors.map(() => 'transparent'),
+            customHTML: strokeDash.map((dash, i) => {
+                if (dash > 0) {
+                    return function() {
+                        return '<span style="display:block;width:10px;height:10px;border-radius:50%;border:1px dashed ' + colors[i] + ';box-sizing:border-box;"></span>';
+                    };
+                }
+                return function() {
+                    return '<span style="display:block;width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';"></span>';
+                };
+            })
+        };
+    },
+
     // Options de base pour tous les graphiques (thème sombre)
     getBaseOptions(isDark = true) {
         return {
@@ -71,20 +92,17 @@ const Charts = {
     // Graphique unifié : Température, Vent, Précipitations, UV
     // hasExtendedData = true pour Open-Meteo (ressenti, rafales), false pour MET.no
     createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}) {
-        // Stocker la métadonnée pour updateTheme
-        this.instanceMeta[containerId] = { hasExtendedData };
-
         // Couleurs selon le thème
         const colors = this.getSeriesColors(isDark, hasExtendedData);
 
         // Séries de base (toujours affichées)
         const series = [
-            { name: 'Temp', type: 'line', data: data.temp },
+            { name: 'Temp.', type: 'line', data: data.temp },
         ];
 
         // Séries étendues (Open-Meteo uniquement)
         if (hasExtendedData) {
-            series.push({ name: 'Ressenti', type: 'line', data: data.feels });
+            series.push({ name: 'T° ressentie', type: 'line', data: data.feels });
         }
 
         series.push({ name: 'Vent', type: 'line', data: data.speed });
@@ -100,8 +118,11 @@ const Charts = {
         );
 
         // Stroke config selon les séries
-        const strokeWidth = hasExtendedData ? [3, 2, 2, 2, 2, 0, 0] : [3, 2, 2, 0, 0];
+        const strokeWidth = hasExtendedData ? [3, 1.5, 2, 1.5, 2, 0, 0] : [3, 2, 2, 0, 0];
         const strokeDash = hasExtendedData ? [0, 4, 0, 4, 0, 0, 0] : [0, 0, 0, 0, 0];
+
+        // Stocker la métadonnée pour updateTheme
+        this.instanceMeta[containerId] = { hasExtendedData, strokeDash };
 
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
@@ -270,7 +291,7 @@ const Charts = {
                 position: 'top',
                 horizontalAlign: 'center',
                 fontSize: '11px',
-                markers: { width: 8, height: 8 },
+                markers: this.getLegendMarkers(colors, strokeDash),
                 itemMargin: { horizontal: 9, vertical: 2 },
                 labels: { colors: isDark ? '#94a3b8' : '#6b7280' },
                 clusterGroupedSeries: false
@@ -310,12 +331,16 @@ const Charts = {
         Object.entries(this.instances).forEach(([containerId, chart]) => {
             const meta = this.instanceMeta[containerId] || { hasExtendedData: true };
             const colors = this.getSeriesColors(isDark, meta.hasExtendedData);
+            const strokeDash = meta.strokeDash || (meta.hasExtendedData ? [0, 4, 0, 4, 0, 0, 0] : [0, 0, 0, 0, 0]);
             chart.updateOptions({
                 theme: { mode: isDark ? 'dark' : 'light' },
                 grid: { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
                 tooltip: { theme: isDark ? 'dark' : 'light' },
                 colors,
-                legend: { labels: { colors: isDark ? '#94a3b8' : '#6b7280' } },
+                legend: {
+                    labels: { colors: isDark ? '#94a3b8' : '#6b7280' },
+                    markers: this.getLegendMarkers(colors, strokeDash)
+                },
                 xaxis: { labels: { style: { colors: isDark ? '#94a3b8' : '#6b7280' } } }
             });
         });
