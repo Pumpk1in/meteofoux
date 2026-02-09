@@ -42,6 +42,11 @@
 /* ============================================
    BASE STYLES
    ============================================ */
+html {
+    scrollbar-gutter: stable;
+    background: var(--bg);
+}
+
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -576,8 +581,6 @@ main {
 
 .chart {
     min-height: 180px;
-    margin-left: -10px;
-    margin-right: -25px;
 }
 
 /* Cacher la toolbar ApexCharts (pan activé par défaut) */
