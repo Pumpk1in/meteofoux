@@ -621,8 +621,10 @@ const App = {
         lucide.createIcons();
 
         try {
-            await DataService.loadAll(true);
+            DataService.state.data = {};
+            await DataService.loadFirst(true, this.state.currentPoint);
             this.render();
+            await DataService.loadRemaining(true);
         } finally {
             btn.classList.remove('refreshing');
         }
