@@ -37,7 +37,7 @@ const Charts = {
             grid: {
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                 strokeDashArray: 3,
-                padding: { left: -20, right: -40, top: 0, bottom: 0 }
+                padding: { left: -28, right: -64, top: 0, bottom: 0 }
             },
             tooltip: {
                 theme: isDark ? 'dark' : 'light',
@@ -130,14 +130,14 @@ const Charts = {
                 title: {
                     text: '°C',
                     rotate: 0,
-                    offsetX: 25,
+                    offsetX: 20,
                     offsetY: titleOffsetY,
                     style: { color: '#f97316', fontSize: '10px' }
                 },
                 labels: {
                     formatter: v => Math.round(v) + '°',
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -25
+                    offsetX: -35
                 },
                 showAlways: true,
                 ...yTempConfig
@@ -163,7 +163,7 @@ const Charts = {
             labels: {
                 formatter: v => Math.round(v),
                 style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                offsetX: -45
+                offsetX: -68
             },
             seriesName: 'Vent',
             min: 0,
@@ -196,7 +196,7 @@ const Charts = {
                 labels: {
                     formatter: v => v.toFixed(0),
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -5
+                    offsetX: -30
                 },
                 seriesName: 'UV',
                 min: 0,
