@@ -435,10 +435,14 @@ const App = {
             const savedSource = localStorage.getItem('fmeteo_source') || 'openmeteo';
             this.state.globalSource = savedSource;
 
-            await DataService.loadAll();
+            // Charger le point initial et afficher immédiatement
+            await DataService.loadFirst();
             this.setupDays();
             this.renderNavigation();
             this.render();
+
+            // Charger les autres points en arrière-plan
+            DataService.loadRemaining();
         } catch (e) {
             console.error("Erreur chargement:", e);
             document.getElementById('content').innerHTML = `
@@ -549,7 +553,7 @@ const App = {
         }
     },
 
-    selectPoint(pointKey) {
+    async selectPoint(pointKey) {
         // Mobile : second tap sur un custom point actif → afficher la croix de suppression
         if (Utils.isMobile() && pointKey === this.state.currentPoint) {
             const btn = document.querySelector(`.altitude-btn-custom[data-point="${pointKey}"]`);
@@ -570,6 +574,14 @@ const App = {
         document.querySelectorAll('.altitude-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.point === pointKey);
         });
+
+        // Si le point n'est pas encore chargé, afficher skeleton et attendre
+        if (!DataService.state.data[pointKey]) {
+            document.getElementById('content').innerHTML = Components.Skeleton();
+            lucide.createIcons();
+            const point = CONFIG.points.find(p => p.key === pointKey);
+            await DataService.loadSinglePoint(point);
+        }
 
         this.render();
     },

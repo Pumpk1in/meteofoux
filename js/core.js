@@ -222,32 +222,65 @@ const DEBUG_MODE = false; // Mettre à false pour utiliser le PHP
 const DataService = {
     state: { data: {} },
 
-    async loadAll(forceRefresh = false) {
+    // Charge un seul point (le premier ou celui spécifié)
+    async loadFirst(forceRefresh = false, pointKey = null) {
         const now = Date.now();
+        const point = pointKey
+            ? CONFIG.points.find(p => p.key === pointKey)
+            : CONFIG.points[0];
 
         if (DEBUG_MODE) {
-            // Mode debug : charger un JSON par point (data-{key}.json)
-            await Promise.all(CONFIG.points.map(async (point) => {
+            try {
+                const resp = await fetch(`debug/data-${point.key}.json`);
+                const rawData = await resp.json();
+                this.state.data[point.key] = this.processPointData(point, rawData, now);
+            } catch (e) {
+                const rawData = await this.fetchDebugData();
+                this.state.data[point.key] = this.processPointData(point, rawData, now);
+            }
+        } else {
+            const rawData = await this.fetchPointData(point, forceRefresh);
+            this.state.data[point.key] = this.processPointData(point, rawData, now);
+        }
+
+        return this.state.data;
+    },
+
+    // Charge les points restants en arrière-plan (ceux pas encore chargés)
+    async loadRemaining(forceRefresh = false, onPointLoaded = null) {
+        const now = Date.now();
+        const remaining = CONFIG.points.filter(p => !this.state.data[p.key]);
+
+        if (DEBUG_MODE) {
+            await Promise.all(remaining.map(async (point) => {
                 try {
                     const resp = await fetch(`debug/data-${point.key}.json`);
                     const rawData = await resp.json();
                     this.state.data[point.key] = this.processPointData(point, rawData, now);
                 } catch (e) {
-                    // Fallback sur data.json si le fichier spécifique n'existe pas
                     const rawData = await this.fetchDebugData();
                     this.state.data[point.key] = this.processPointData(point, rawData, now);
                 }
+                if (onPointLoaded) onPointLoaded(point.key);
             }));
         } else {
-            // Mode normal : appeler le PHP pour chaque point avec délai
-            for (let i = 0; i < CONFIG.points.length; i++) {
-                const point = CONFIG.points[i];
+            for (let i = 0; i < remaining.length; i++) {
+                const point = remaining[i];
                 if (i > 0) await new Promise(r => setTimeout(r, 100));
                 const rawData = await this.fetchPointData(point, forceRefresh);
                 this.state.data[point.key] = this.processPointData(point, rawData, now);
+                if (onPointLoaded) onPointLoaded(point.key);
             }
         }
 
+        return this.state.data;
+    },
+
+    // Charge tous les points (utilisé pour le refresh forcé)
+    async loadAll(forceRefresh = false) {
+        this.state.data = {};
+        await this.loadFirst(forceRefresh);
+        await this.loadRemaining(forceRefresh);
         return this.state.data;
     },
 
