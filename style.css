@@ -18,7 +18,7 @@
 
 /* Thème clair */
 [data-theme="light"] {
-    --bg: #ffffff;
+    --bg: #e6e6e6;
     --bg-secondary: #f2f2f2;
     --card: rgba(255, 255, 255, 1);
     --card-hover: #f8fafc;
@@ -270,15 +270,15 @@ body {
 }
 
 [data-theme="light"][data-source="openmeteo"] body {
-    background: rgba(149, 200, 244, 0.5);
+    background: rgba(115, 179, 235, 0.5);
 }
 
 [data-theme="light"][data-source="arome"] body{
-    background: rgba(184, 153, 233, 0.5);
+    background: rgba(150, 110, 216, 0.5);
 }
 
 [data-theme="light"][data-source="metno"] body {
-    background: rgba(233, 196, 152, 0.5);
+    background: rgba(221, 155, 93, 0.5);
 }
 
 /* ============================================
