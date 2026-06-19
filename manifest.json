@@ -1,0 +1,20 @@
+{
+  "name": "MeteoFoux - La Foux d'Allos",
+  "short_name": "MeteoFoux",
+  "description": "Prévisions météo 7 jours pour La Foux d'Allos et alentours",
+  "lang": "fr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
