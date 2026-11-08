@@ -21,10 +21,19 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
 </head>
 <body>
 
-<!-- Barre fixe en haut : Date + Toggle thème + Toggle source -->
+<!-- Barre fixe en haut : point choisi (ouvre la feuille des points) + date, rafraîchir, thème -->
 <header class="top-bar">
     <div class="top-bar-left">
-        <h1 id="current-date">MeteoFoux</h1>
+        <h1 class="point-title-heading">
+            <button class="point-title" id="point-title" onclick="App.openPointSheet()" aria-haspopup="dialog" aria-expanded="false">
+                <span class="point-title-name">
+                    <span class="point-dot" id="point-title-dot"></span>
+                    <span id="point-title-text">MeteoFoux</span>
+                    <i data-lucide="chevron-down"></i>
+                </span>
+                <span class="point-title-date" id="current-date"></span>
+            </button>
+        </h1>
     </div>
     <div class="top-bar-right">
         <button class="refresh-btn" id="refresh-btn" onclick="App.refreshData()" title="Rafraîchir les données">
@@ -122,9 +131,6 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
 
 <!-- Barre de navigation en bas (mobile) / en haut du contenu (desktop) -->
 <nav class="bottom-nav">
-    <div class="altitude-tabs" id="altitude-tabs">
-        <!-- Tabs altitudes générés dynamiquement -->
-    </div>
     <div class="day-nav" id="day-nav">
         <!-- Navigation jours générée dynamiquement -->
     </div>

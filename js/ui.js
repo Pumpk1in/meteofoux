@@ -420,8 +420,8 @@ const App = {
             this.renderNavigation();
             this.render();
 
-            // Charger les autres points en arrière-plan
-            DataService.loadRemaining();
+            // Charger les autres points en arrière-plan (la feuille des points se complète au fur et à mesure)
+            DataService.loadRemaining(false, () => this.refreshPointSheet());
         } catch (e) {
             console.error("Erreur chargement:", e);
             document.getElementById('content').innerHTML = `
@@ -462,33 +462,10 @@ const App = {
 
         document.getElementById('day-nav').innerHTML = dayNavHtml;
 
-        // Tabs altitudes
-        const altitudeTabsHtml = CONFIG.points.map(point => {
-            const isActive = point.key === this.state.currentPoint;
-            const deleteBtn = point.custom
-                ? `<span class="altitude-btn-delete" onclick="event.stopPropagation(); App.confirmDeletePoint('${point.key}')" title="Supprimer">&times;</span>`
-                : '';
-            return `
-                <button class="altitude-btn ${isActive ? 'active' : ''} ${point.custom ? 'altitude-btn-custom' : ''}"
-                        data-point="${point.key}"
-                        onclick="App.selectPoint('${point.key}')"
-                        style="--point-color: ${point.color}">
-                    ${Utils.escapeHtml(point.name.split(' ')[0])}
-                    ${deleteBtn}
-                </button>
-            `;
-        }).join('');
-
-        const addBtnHtml = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM
-            ? `<button class="altitude-btn altitude-btn-add" onclick="App.openAddPointModal()" title="Ajouter un point">+</button>`
-            : '';
-
-        document.getElementById('altitude-tabs').innerHTML = altitudeTabsHtml + addBtnHtml;
-
         this.updateSourceAttribute();
+        this.updateTopBar();
 
         lucide.createIcons();
-        this.initDragReorder();
     },
 
     // data-source sur <html> : teinte du détail du jour selon le modèle choisi
@@ -496,7 +473,15 @@ const App = {
         document.documentElement.setAttribute('data-source', this.state.globalSource);
     },
 
+    // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date
     updateTopBar() {
+        const point = CONFIG.points.find(p => p.key === this.state.currentPoint);
+        if (point) {
+            const elevation = DataService.state.data[point.key]?.elevation;
+            document.getElementById('point-title-text').textContent =
+                elevation ? `${point.name} · ${Math.round(elevation)} m` : point.name;
+            document.getElementById('point-title-dot').style.setProperty('--point-color', point.color);
+        }
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
             const formatted = Utils.formatDateShort(this.state.currentDay);
@@ -523,26 +508,8 @@ const App = {
     },
 
     async selectPoint(pointKey) {
-        // Mobile : second tap sur un custom point actif → afficher la croix de suppression
-        if (Utils.isMobile() && pointKey === this.state.currentPoint) {
-            const btn = document.querySelector(`.altitude-btn-custom[data-point="${pointKey}"]`);
-            if (btn) {
-                const wasShowing = btn.classList.contains('show-delete');
-                document.querySelectorAll('.altitude-btn-custom.show-delete').forEach(b => b.classList.remove('show-delete'));
-                if (!wasShowing) btn.classList.add('show-delete');
-                return;
-            }
-        }
-
-        // Masquer les croix au changement de point
-        document.querySelectorAll('.altitude-btn-custom.show-delete').forEach(b => b.classList.remove('show-delete'));
-
         this.state.currentPoint = pointKey;
-
-        // Mettre à jour les boutons
-        document.querySelectorAll('.altitude-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.point === pointKey);
-        });
+        this.updateTopBar();
 
         // Si le point n'est pas encore chargé, afficher skeleton et attendre
         if (!DataService.state.data[pointKey]) {
@@ -589,7 +556,7 @@ const App = {
             DataService.state.data = {};
             await DataService.loadFirst(true, this.state.currentPoint);
             this.render();
-            await DataService.loadRemaining(true);
+            await DataService.loadRemaining(true, () => this.refreshPointSheet());
         } finally {
             btn.classList.remove('refreshing');
         }
@@ -806,109 +773,161 @@ const App = {
         }
     },
 
-    // === Drag Reorder Points ===
+    // === Feuille des points (ouverte depuis le titre) ===
+    // Deux groupes : le domaine trié par altitude, puis les points personnels dans leur ordre.
+    // Chaque ligne donne le verdict du jour affiché. Ajout, suppression et ordre se gèrent ici.
 
-    initDragReorder() {
-        const container = document.getElementById('altitude-tabs');
-        if (!container || container._dragInit) return;
-        container._dragInit = true;
+    _pointsEditing: false,
 
-        let drag = null;
-        let timer = null;
+    openPointSheet() {
+        if (document.getElementById('point-sheet')) return;
+        this._pointsEditing = false;
+        const root = document.createElement('div');
+        root.id = 'point-sheet';
+        root.className = 'sheet-root';
+        root.addEventListener('keydown', e => this.onPointSheetKey(e));
+        document.body.appendChild(root);
+        this.renderPointSheet();
+        document.getElementById('point-title').setAttribute('aria-expanded', 'true');
+        (root.querySelector('.sheet-row[aria-current="true"]') || root.querySelector('.sheet-close'))?.focus();
+    },
 
-        const getItems = () => [...container.querySelectorAll('.altitude-btn:not(.altitude-btn-add)')];
+    closePointSheet() {
+        const root = document.getElementById('point-sheet');
+        if (!root) return;
+        root.remove();
+        const title = document.getElementById('point-title');
+        title.setAttribute('aria-expanded', 'false');
+        title.focus();
+    },
 
-        const start = (x, y, target) => {
-            if (target.closest('.altitude-btn-delete')) return;
-            const el = target.closest('.altitude-btn:not(.altitude-btn-add)');
-            if (!el) return;
-            drag = { el, x, y, active: false };
-            timer = setTimeout(() => {
-                if (!drag) return;
-                drag.active = true;
-                el.classList.add('dragging');
-                container.classList.add('drag-mode');
-                container.style.overflowX = 'hidden';
-                if (navigator.vibrate) navigator.vibrate(30);
-            }, 400);
+    // Re-rendu si la feuille est ouverte (un point vient de finir de charger, un point a changé)
+    refreshPointSheet() {
+        if (document.getElementById('point-sheet')) this.renderPointSheet();
+        this.updateTopBar();
+    },
+
+    renderPointSheet() {
+        const root = document.getElementById('point-sheet');
+        const focusedKey = document.activeElement?.closest?.('#point-sheet [data-focus-key]')?.dataset.focusKey;
+        const data = DataService.state.data;
+        const day = this.state.currentDay;
+        const elevationOf = p => data[p.key]?.elevation ?? null;
+
+        // Verdict court du jour pour un point (s'il est chargé)
+        const verdictHtml = point => {
+            const pointData = data[point.key];
+            if (!pointData) return '<span class="sheet-row-verdict is-loading">Chargement…</span>';
+            const summaries = {};
+            for (const key of ['openmeteo', 'arome', 'metno']) {
+                const src = pointData.sources[key];
+                summaries[key] = src ? DataNormalizer.daySummary(day, pointData.series, src) : null;
+            }
+            const verdict = DataNormalizer.computeVerdict(summaries, pointData.elevation);
+            if (!verdict) return '<span class="sheet-row-verdict">—</span>';
+            const { value, unit } = Components.verdictValue(verdict);
+            const icon = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' }[verdict.mode];
+            return `<span class="sheet-row-verdict is-${verdict.mode}"><i data-lucide="${icon}"></i>${value} ${unit}</span>`;
         };
 
-        const move = (x, y, e) => {
-            if (!drag) return;
-            if (!drag.active) {
-                if (Math.abs(x - drag.x) > 8 || Math.abs(y - drag.y) > 8) {
-                    clearTimeout(timer);
-                    drag = null;
-                }
-                return;
-            }
+        const row = point => {
+            const elevation = elevationOf(point);
+            const current = point.key === this.state.currentPoint;
+            return `
+                <button class="sheet-row" data-focus-key="row-${point.key}" aria-current="${current}" onclick="App.choosePoint('${point.key}')">
+                    <span class="point-dot" style="--point-color: ${point.color}"></span>
+                    <span class="sheet-row-name">${Utils.escapeHtml(point.name)}</span>
+                    <span class="sheet-row-alt">${elevation ? `${Math.round(elevation)} m` : ''}</span>
+                    ${verdictHtml(point)}
+                </button>`;
+        };
+
+        const customs = CONFIG.points.filter(p => p.custom);
+        const editRow = (point, i) => `
+            <div class="sheet-row sheet-row-edit">
+                <span class="point-dot" style="--point-color: ${point.color}"></span>
+                <span class="sheet-row-name">${Utils.escapeHtml(point.name)}</span>
+                <span class="sheet-row-actions">
+                    <button class="sheet-icon-btn" data-focus-key="up-${point.key}" onclick="App.movePoint('${point.key}', -1)" aria-label="Monter ${Utils.escapeHtml(point.name)}" ${i === 0 ? 'disabled' : ''}><i data-lucide="arrow-up"></i></button>
+                    <button class="sheet-icon-btn" data-focus-key="down-${point.key}" onclick="App.movePoint('${point.key}', 1)" aria-label="Descendre ${Utils.escapeHtml(point.name)}" ${i === customs.length - 1 ? 'disabled' : ''}><i data-lucide="arrow-down"></i></button>
+                    <button class="sheet-icon-btn is-danger" onclick="App.confirmDeletePoint('${point.key}')" aria-label="Supprimer ${Utils.escapeHtml(point.name)}"><i data-lucide="trash-2"></i></button>
+                </span>
+            </div>`;
+
+        // Domaine : du plus bas au plus haut (altitude inconnue tant que le point charge : à la fin)
+        const domain = CONFIG.points.filter(p => !p.custom)
+            .sort((a, b) => (elevationOf(a) ?? Infinity) - (elevationOf(b) ?? Infinity));
+        const canAdd = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM;
+        const dayLabel = Utils.formatDateShort(day);
+
+        root.innerHTML = `
+            <div class="sheet-backdrop" onclick="App.closePointSheet()"></div>
+            <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+                <div class="sheet-header">
+                    <h2 id="sheet-title">Choisir un point</h2>
+                    <span class="sheet-day">${dayLabel}</span>
+                    <button class="sheet-close" data-focus-key="close" onclick="App.closePointSheet()" aria-label="Fermer"><i data-lucide="x"></i></button>
+                </div>
+                <section class="sheet-group" aria-labelledby="sheet-domain">
+                    <h3 id="sheet-domain">La Foux d’Allos</h3>
+                    ${domain.map(row).join('')}
+                </section>
+                <section class="sheet-group" aria-labelledby="sheet-mine">
+                    <div class="sheet-group-head">
+                        <h3 id="sheet-mine">Mes points</h3>
+                        ${customs.length ? `<button class="sheet-edit" data-focus-key="edit" onclick="App.togglePointsEdit()">${this._pointsEditing ? 'Terminé' : 'Modifier'}</button>` : ''}
+                    </div>
+                    ${this._pointsEditing ? customs.map(editRow).join('') : customs.map(row).join('')}
+                    ${!customs.length ? '<p class="sheet-empty">Ajoutez un endroit qui vous intéresse, même hors de la station.</p>' : ''}
+                    ${canAdd ? `<button class="sheet-add" data-focus-key="add" onclick="App.addPointFromSheet()"><i data-lucide="plus"></i>Ajouter un point</button>` : ''}
+                </section>
+            </div>`;
+        lucide.createIcons();
+        if (focusedKey) root.querySelector(`[data-focus-key="${focusedKey}"]`)?.focus();
+    },
+
+    // Échap ferme ; Tab reste dans la feuille
+    onPointSheetKey(e) {
+        if (e.key === 'Escape') {
             e.preventDefault();
+            this.closePointSheet();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const focusables = [...document.querySelectorAll('#point-sheet .sheet button:not([disabled])')];
+        if (!focusables.length) return;
+        const first = focusables[0], last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    },
 
-            const dx = x - drag.x;
-            drag.el.style.transform = `translateX(${dx}px) scale(1.05)`;
-            drag.el.style.zIndex = '10';
+    async choosePoint(key) {
+        this.closePointSheet();
+        if (key !== this.state.currentPoint) await this.selectPoint(key);
+    },
 
-            const items = getItems();
-            const idx = items.indexOf(drag.el);
-            const rect = drag.el.getBoundingClientRect();
-            const center = rect.left + rect.width / 2;
+    togglePointsEdit() {
+        this._pointsEditing = !this._pointsEditing;
+        this.renderPointSheet();
+    },
 
-            // Swap avec le voisin de droite
-            if (idx < items.length - 1) {
-                const next = items[idx + 1];
-                const nc = next.getBoundingClientRect();
-                if (center > nc.left + nc.width / 2) {
-                    next.after(drag.el);
-                    drag.x = x;
-                    drag.el.style.transform = 'scale(1.05)';
-                    return;
-                }
-            }
-            // Swap avec le voisin de gauche
-            if (idx > 0) {
-                const prev = items[idx - 1];
-                const pc = prev.getBoundingClientRect();
-                if (center < pc.left + pc.width / 2) {
-                    prev.before(drag.el);
-                    drag.x = x;
-                    drag.el.style.transform = 'scale(1.05)';
-                }
-            }
-        };
+    // Déplace un point personnel d'un cran parmi les points personnels
+    movePoint(key, direction) {
+        const customs = CONFIG.points.filter(p => p.custom);
+        const i = customs.findIndex(p => p.key === key);
+        const j = i + direction;
+        if (i < 0 || j < 0 || j >= customs.length) return;
+        // Échange sur place : la position des points du domaine (et donc le point affiché au
+        // démarrage, le premier de la liste) ne bouge pas
+        const a = CONFIG.points.indexOf(customs[i]), b = CONFIG.points.indexOf(customs[j]);
+        [CONFIG.points[a], CONFIG.points[b]] = [CONFIG.points[b], CONFIG.points[a]];
+        CustomPoints.saveOrder(CONFIG.points.map(p => p.key));
+        this.renderPointSheet();
+    },
 
-        const end = () => {
-            clearTimeout(timer);
-            if (drag?.active) {
-                drag.el.classList.remove('dragging');
-                container.classList.remove('drag-mode');
-                drag.el.style.transform = '';
-                drag.el.style.zIndex = '';
-                container.style.overflowX = '';
-
-                // Sauvegarder le nouvel ordre
-                const order = getItems().map(b => b.dataset.point);
-                CustomPoints.saveOrder(order);
-                const orderMap = {};
-                order.forEach((k, i) => orderMap[k] = i);
-                CONFIG.points.sort((a, b) => (orderMap[a.key] ?? 999) - (orderMap[b.key] ?? 999));
-            }
-            drag = null;
-        };
-
-        // Touch
-        container.addEventListener('touchstart', e => {
-            start(e.touches[0].clientX, e.touches[0].clientY, e.target);
-        }, { passive: true });
-        container.addEventListener('touchmove', e => {
-            if (drag) move(e.touches[0].clientX, e.touches[0].clientY, e);
-        }, { passive: false });
-        container.addEventListener('touchend', end);
-        container.addEventListener('touchcancel', end);
-
-        // Souris
-        container.addEventListener('mousedown', e => start(e.clientX, e.clientY, e.target));
-        document.addEventListener('mousemove', e => { if (drag) move(e.clientX, e.clientY, e); });
-        document.addEventListener('mouseup', end);
+    addPointFromSheet() {
+        this.closePointSheet();
+        this.openAddPointModal();
     },
 
     // === Custom Points Modal ===
@@ -1146,6 +1165,7 @@ const App = {
 
         this.renderNavigation();
         this.render();
+        this.refreshPointSheet();
     },
 
     toggleMore(btn) {
@@ -1241,6 +1261,20 @@ const Components = {
         `;
     },
 
+    // Le gros chiffre du verdict : fourchette entre modèles de la grandeur qui décide de la journée
+    // (cm de neige arrondis, mm de pluie au dixième, températures un jour sec)
+    verdictValue(verdict) {
+        const deg = n => String(Math.round(n)).replace('-', '−');
+        const { mode, range, basis } = verdict;
+        if (mode === 'dry') return { value: `${deg(range.lo)} à ${deg(range.hi)}`, unit: '°C' };
+        const fmt = mode === 'snow' ? v => String(Math.round(v)) : v => v.toFixed(1).replace('.', ',');
+        const lo = fmt(range.lo), hi = fmt(range.hi);
+        return {
+            value: basis.length === 1 || lo === hi ? hi : `${lo} à ${hi}`,
+            unit: mode === 'snow' ? 'cm' : 'mm'
+        };
+    },
+
     // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,
     // puis une case par modèle (preuve du verdict et choix du modèle affiché en détail).
     // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null }
@@ -1254,18 +1288,13 @@ const Components = {
             return `${isEnd && h === 0 ? 24 : h}h`;
         };
         const { mode, range, basis } = verdict;
+        const { value, unit } = this.verdictValue(verdict);
 
-        let value, unit, what;
+        let what;
         if (mode === 'dry') {
-            value = `${deg(range.lo)} à ${deg(range.hi)}`;
-            unit = '°C';
             const cc = verdict.cloudCover;
             what = cc === null ? 'Sec' : `Sec, ${cc < 35 ? 'ensoleillé' : cc < 70 ? 'avec des éclaircies' : 'plutôt nuageux'}`;
         } else {
-            const fmt = mode === 'snow' ? v => String(Math.round(v)) : dec;
-            const lo = fmt(range.lo), hi = fmt(range.hi);
-            value = basis.length === 1 || lo === hi ? hi : `${lo} à ${hi}`;
-            unit = mode === 'snow' ? 'cm' : 'mm';
             const quality = { wet: ' humide', dry: ' sèche' }[verdict.snowQuality] || '';
             what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
         }
