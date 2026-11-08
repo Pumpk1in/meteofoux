@@ -1,0 +1,8 @@
+services:
+  meteofoux:
+    image: php:8.3-apache
+    container_name: meteofoux
+    ports:
+      - "8123:80"
+    volumes:
+      - .:/var/www/html

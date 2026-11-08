@@ -135,14 +135,15 @@ const Utils = {
     // Formate une heure
     formatTimeLabel: (date) => date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
 
-    // Formate heure courte (ex: "14h")
-    formatHourShort: (date) => date.getHours() + 'h',
-
     // Label pour période 6h
     periodLabel: (hour) => ['Nuit', 'Matin', 'Midi', 'Soir'][hour / 6],
 
-    // Nombre de cartes visibles selon l'écran
-    visibleCardCount: () => window.innerWidth >= 1024 ? 4 : 4,
+    // Nombre de cartes visibles avant le bouton "Voir heures suivantes"
+    visibleCardCount: () => 4,
+
+    // Échappe le texte destiné à être injecté en HTML (noms de points saisis par l'utilisateur)
+    escapeHtml: (str) => String(str).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
 
     // Parse un timestamp GMT (ajoute Z si nécessaire pour interprétation UTC)
     parseTime: (timeStr) => new Date(timeStr.endsWith('Z') ? timeStr : timeStr + 'Z'),
@@ -215,62 +216,32 @@ const Utils = {
     }
 };
 
-// === MODE DEBUG : Charger data.json au lieu du PHP ===
-const DEBUG_MODE = false; // Mettre à false pour utiliser le PHP
-
 // Service de fetch des data
 const DataService = {
     state: { data: {} },
 
     // Charge un seul point (le premier ou celui spécifié)
     async loadFirst(forceRefresh = false, pointKey = null) {
-        const now = Date.now();
         const point = pointKey
             ? CONFIG.points.find(p => p.key === pointKey)
             : CONFIG.points[0];
 
-        if (DEBUG_MODE) {
-            try {
-                const resp = await fetch(`debug/data-${point.key}.json`);
-                const rawData = await resp.json();
-                this.state.data[point.key] = this.processPointData(point, rawData, now);
-            } catch (e) {
-                const rawData = await this.fetchDebugData();
-                this.state.data[point.key] = this.processPointData(point, rawData, now);
-            }
-        } else {
-            const rawData = await this.fetchPointData(point, forceRefresh);
-            this.state.data[point.key] = this.processPointData(point, rawData, now);
-        }
+        const rawData = await this.fetchPointData(point, forceRefresh);
+        this.state.data[point.key] = this.processPointData(point, rawData);
 
         return this.state.data;
     },
 
     // Charge les points restants en arrière-plan (ceux pas encore chargés)
     async loadRemaining(forceRefresh = false, onPointLoaded = null) {
-        const now = Date.now();
         const remaining = CONFIG.points.filter(p => !this.state.data[p.key]);
 
-        if (DEBUG_MODE) {
-            await Promise.all(remaining.map(async (point) => {
-                try {
-                    const resp = await fetch(`debug/data-${point.key}.json`);
-                    const rawData = await resp.json();
-                    this.state.data[point.key] = this.processPointData(point, rawData, now);
-                } catch (e) {
-                    const rawData = await this.fetchDebugData();
-                    this.state.data[point.key] = this.processPointData(point, rawData, now);
-                }
-                if (onPointLoaded) onPointLoaded(point.key);
-            }));
-        } else {
-            for (let i = 0; i < remaining.length; i++) {
-                const point = remaining[i];
-                if (i > 0) await new Promise(r => setTimeout(r, 100));
-                const rawData = await this.fetchPointData(point, forceRefresh);
-                this.state.data[point.key] = this.processPointData(point, rawData, now);
-                if (onPointLoaded) onPointLoaded(point.key);
-            }
+        for (let i = 0; i < remaining.length; i++) {
+            const point = remaining[i];
+            if (i > 0) await new Promise(r => setTimeout(r, 100));
+            const rawData = await this.fetchPointData(point, forceRefresh);
+            this.state.data[point.key] = this.processPointData(point, rawData);
+            if (onPointLoaded) onPointLoaded(point.key);
         }
 
         return this.state.data;
@@ -284,15 +255,10 @@ const DataService = {
         return this.state.data;
     },
 
-    async fetchDebugData() {
-        const resp = await fetch('data.json');
-        return await resp.json();
-    },
-
     async fetchPointData(point, forceRefresh = false, retryCount = 0) {
-        const url = `https://lafoux.igloo.ovh/meteo-proxy.php?lat=${point.lat}&lon=${point.lon}${forceRefresh ? '&refresh=1' : ''}`;
+        const url = `/meteo-proxy.php?lat=${point.lat}&lon=${point.lon}${forceRefresh ? '&refresh=1' : ''}`;
 
-        // Timeout de 45 secondes (le PHP peut être lent si cache expiré)
+        // Timeout de 35 secondes (le PHP peut être lent si cache expiré)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 35000);
 
@@ -322,13 +288,13 @@ const DataService = {
             }
 
             if (error.name === 'AbortError') {
-                throw new Error(`Timeout loading ${point.key} (45s)`);
+                throw new Error(`Timeout loading ${point.key} (35s)`);
             }
             throw error;
         }
     },
 
-    processPointData(point, rawData, now) {
+    processPointData(point, rawData) {
         const omAgg = rawData.openmeteo_aggregated;
         const aromeAgg = rawData.arome_aggregated;
         const omRaw = rawData.openmeteo?.hourly; // Données brutes pour UV (pas encore dans agrégé)
@@ -467,7 +433,7 @@ const DataNormalizer = {
     // Seuil minimum pour afficher les précipitations
     MIN_PRECIP: 0.5,
 
-    toCardData(entry, isHourlyView) {
+    toCardData(entry) {
         if (entry.om) {
             return {
                 icon: entry.om.icon || 'clearsky_day',
@@ -512,11 +478,7 @@ const DataNormalizer = {
     prepareEntry(entry, isToday, source) {
         const prepared = { time: entry.time };
 
-        // source peut être 'openmeteo', 'arome', ou 'metno'
-        // Pour compatibilité, true = 'openmeteo', false = 'metno'
-        if (source === true) source = 'openmeteo';
-        if (source === false) source = 'metno';
-
+        // source : 'openmeteo', 'arome', ou 'metno'
         if (source === 'openmeteo' || source === 'arome') {
             // Sélectionner les bonnes données selon la source
             const hourlyData = source === 'arome' ? entry.arome : entry.om;
@@ -615,7 +577,7 @@ const DataNormalizer = {
             });
     },
 
-    computeTotals(entries, isHourlyView) {
+    computeTotals(entries) {
         let snow = 0, rain = 0;
         const temps = [];
 

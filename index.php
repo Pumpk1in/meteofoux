@@ -1,3 +1,8 @@
+<?php
+// Cache-busting automatique : l'URL des assets change dès que le fichier change.
+// Aucun numéro de version à maintenir à la main (ni ici, ni dans sw.js).
+$v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
+?>
 <!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
@@ -10,7 +15,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Meteo 7 jours - La Foux d'Allos et +</title>
-    <link rel="stylesheet" href="style.css?v=3.75">
+    <link rel="stylesheet" href="style.css<?= $v('style.css') ?>">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
@@ -150,8 +155,8 @@
 </footer>
 
 <!-- Scripts JS séparés -->
-<script src="js/core.js?v=2.5"></script>
-<script src="js/ui.js?v=2.17"></script>
+<script src="js/core.js<?= $v('js/core.js') ?>"></script>
+<script src="js/ui.js<?= $v('js/ui.js') ?>"></script>
 
 <script>
     if ('serviceWorker' in navigator) {

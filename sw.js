@@ -1,17 +1,16 @@
 // MeteoFoux Service Worker
 // Stratégie : cache du "shell" statique, données météo toujours via le réseau.
-// Bump CACHE_VERSION à chaque déploiement pour invalider l'ancien cache.
+//
+// Les js/css ne sont PAS listés ici : index.php leur ajoute un ?v=<filemtime>,
+// donc chaque nouvelle version porte une URL différente et le cache runtime
+// (handler fetch ci-dessous) s'en occupe tout seul. Rien à bumper à la main.
+// CACHE_VERSION ne change que si la stratégie de ce fichier change.
 
-const CACHE_VERSION = 'meteofoux-v3';
+const CACHE_VERSION = 'meteofoux-v5';
 
-// Fichiers du shell mis en cache à l'installation.
-// Les versions (?v=) doivent rester alignées avec index.html.
+// Précaché à l'installation : uniquement ce qui n'est pas versionné par URL.
 const SHELL_ASSETS = [
   '/',
-  '/index.html',
-  '/style.css?v=3.75',
-  '/js/core.js?v=2.5',
-  '/js/ui.js?v=2.17',
   '/favicon.png',
   '/manifest.json'
 ];
@@ -48,7 +47,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Shell statique : cache d'abord, réseau en repli (et on met à jour le cache).
+  // Document HTML : réseau d'abord, cache en repli hors-ligne.
+  // Indispensable : c'est index.php qui porte les ?v= des assets. Le servir
+  // depuis le cache figerait les anciennes versions de js/css.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          // Stocké sous '/' pour couvrir aussi le start_url '/?source=pwa'.
+          caches.open(CACHE_VERSION).then((cache) => cache.put('/', copy));
+          return res;
+        })
+        .catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // Assets versionnés : cache d'abord, réseau en repli (et on met à jour le cache).
   event.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req).then((res) => {

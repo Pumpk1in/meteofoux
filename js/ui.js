@@ -228,18 +228,10 @@ const Charts = {
             { show: false, min: 0, max: rainMax, showAlways: true }  // Axe Pluie
         );
 
-        // Calculer min/max des timestamps pour l'axe X
+        // Étendue de l'axe X : toute la plage de données du jour
         const timestamps = data.temp.map(d => d[0]);
-        const xMin = Math.min(...timestamps);
-        const xMax = Math.max(...timestamps);
-
-        // Sur mobile : afficher 10h de données à partir de maintenant
-        const isMobile = Utils.isMobile();
-        const visibleRange = 10 * 60 * 60 * 1000; // 10 heures en ms
-        const now = Date.now();
-        // Commencer à l'heure actuelle (ou au début si maintenant est avant les données)
-        const xMinVisible = xMin; // 30 min avant maintenant
-        const xMaxVisible = xMax;
+        const xMinVisible = Math.min(...timestamps);
+        const xMaxVisible = Math.max(...timestamps);
 
         const options = {
             ...this.getBaseOptions(isDark),
@@ -494,7 +486,7 @@ const App = {
                         data-point="${point.key}"
                         onclick="App.selectPoint('${point.key}')"
                         style="--point-color: ${point.color}">
-                    ${point.name.split(' ')[0]}
+                    ${Utils.escapeHtml(point.name.split(' ')[0])}
                     ${deleteBtn}
                 </button>
             `;
@@ -587,12 +579,9 @@ const App = {
     },
 
     toggleGlobalSource() {
-        const data = DataService.state.data;
-        const omAvailableDays = Object.values(data)[0].omAvailableDays;
-        const canToggle = omAvailableDays.has(this.state.currentDay);
-
-        if (!canToggle) return;
-
+        // Toujours autorisé : le rendu dégrade seul si la source choisie n'a pas
+        // de données pour le jour courant (render() recalcule useOMData par jour,
+        // et renderDayContent() affiche un message dédié pour AROME).
         // Cycle : openmeteo → arome → metno → openmeteo
         const sources = ['openmeteo', 'arome', 'metno'];
         const currentIndex = sources.indexOf(this.state.globalSource);
@@ -637,9 +626,9 @@ const App = {
         const source = this.state.globalSource;
         const sourceData = this.getSourceData(pointData);
         const availableDays = sourceData.availableDays;
-        const canToggle = availableDays.has(this.state.currentDay);
         // useOMData = true si on utilise des données Open-Meteo ou AROME (pas MET.no)
-        const useOMData = (source === 'openmeteo' || source === 'arome') && canToggle;
+        const useOMData = (source === 'openmeteo' || source === 'arome')
+            && availableDays.has(this.state.currentDay);
 
         this.updateTopBar();
 
@@ -649,14 +638,13 @@ const App = {
         // Sur mobile : afficher uniquement le jour sélectionné
         // Sur desktop : afficher tous les jours en scroll
         if (Utils.isMobile()) {
-            const html = this.renderDayContent(this.state.currentDay, pointData, isToday, useOMData, canToggle, source, sourceData);
+            const html = this.renderDayContent(this.state.currentDay, pointData, isToday, useOMData, source, sourceData);
             document.getElementById('content').innerHTML = html;
         } else {
             const html = this.state.days.map(day => {
                 const isDayToday = Utils.isToday(day);
-                const dayCanToggle = availableDays.has(day);
-                const dayUseOM = (source === 'openmeteo' || source === 'arome') && dayCanToggle;
-                return this.renderDayContent(day, pointData, isDayToday, dayUseOM, dayCanToggle, source, sourceData);
+                const dayUseOM = (source === 'openmeteo' || source === 'arome') && availableDays.has(day);
+                return this.renderDayContent(day, pointData, isDayToday, dayUseOM, source, sourceData);
             }).join('');
             document.getElementById('content').innerHTML = html;
         }
@@ -695,10 +683,18 @@ const App = {
         requestAnimationFrame(() => this.renderCharts());
     },
 
-    renderDayContent(day, pointData, isToday, useOMData, canToggle, source, sourceData) {
+    renderDayContent(day, pointData, isToday, useOMData, source, sourceData) {
         const { point, series, elevation } = pointData;
         const hourlyData = sourceData?.hourly || pointData.omHourly;
         const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
+
+        const dayHeaderHtml = `
+            <h2 class="day-header">
+                <span class="day-label">${Utils.formatDateLabel(day)}</span>
+                <span class="point-badge" style="--point-color: ${point.color}">
+                    ${Utils.escapeHtml(point.name)} ${elevation ? `(${Math.round(elevation)}m)` : ''}
+                </span>
+            </h2>`;
 
         // Pour AROME : vérifier si on a des données valides (non-null) pour ce jour
         if (source === 'arome' && hourlyData) {
@@ -710,12 +706,7 @@ const App = {
                 // Pas de données AROME pour ce jour
                 return `
                     <section class="day-section day-section-no-data" data-day="${day}" id="day-${day}">
-                        <h2 class="day-header">
-                            <span class="day-label">${Utils.formatDateLabel(day)}</span>
-                            <span class="point-badge" style="--point-color: ${CONFIG.points.find(p => p.key === this.state.currentPoint).color}">
-                                ${CONFIG.points.find(p => p.key === this.state.currentPoint).name} ${elevation ? `(${Math.round(elevation)}m)` : ''}
-                            </span>
-                        </h2>
+                        ${dayHeaderHtml}
                         <div class="no-data-message">
                             <p>Données AROME non disponibles pour ce jour</p>
                             <small>AROME couvre ~4-5 jours. Utilisez Open-Meteo ou MET.no pour les prévisions à plus long terme.</small>
@@ -784,7 +775,7 @@ const App = {
                 .filter(e => e.metno?.data?.next_1_hours || e.metno?.data?.next_6_hours)
                 .map(e => DataNormalizer.prepareEntry(e, true, 'metno'));
         }
-        const totals = DataNormalizer.computeTotals(summaryEntries, true);
+        const totals = DataNormalizer.computeTotals(summaryEntries);
 
         // Calculer l'isotherme 0°C
         let freezing = { min: null, max: null };
@@ -828,12 +819,7 @@ const App = {
 
         return `
             <section class="day-section" data-day="${day}" id="day-${day}">
-                <h2 class="day-header">
-                    <span class="day-label">${Utils.formatDateLabel(day)}</span>
-                    <span class="point-badge" style="--point-color: ${CONFIG.points.find(p => p.key === this.state.currentPoint).color}">
-                        ${CONFIG.points.find(p => p.key === this.state.currentPoint).name} ${elevation ? `(${Math.round(elevation)}m)` : ''}
-                    </span>
-                </h2>
+                ${dayHeaderHtml}
                 ${summaryHtml}
                 ${contentHtml}
             </section>
@@ -1390,7 +1376,7 @@ const Components = {
         const cardsHtml = entries.map((entry, index) => {
             const d = Utils.parseTime(entry.time);
             const label = isToday ? Utils.formatTimeLabel(d) : Utils.periodLabel(d.getUTCHours());
-            const cardData = DataNormalizer.toCardData(entry, isToday);
+            const cardData = DataNormalizer.toCardData(entry);
             const extraClass = (isToday && index >= visibleCount) ? 'hidden-card' : '';
             return this.WeatherCard(label, cardData, extraClass);
         }).join('');
@@ -1417,7 +1403,7 @@ const Components = {
         const periodCardsHtml = periodEntries.map(entry => {
             const d = Utils.parseTime(entry.time);
             const label = Utils.periodLabel(d.getUTCHours());
-            const cardData = DataNormalizer.toCardData(entry, false);
+            const cardData = DataNormalizer.toCardData(entry);
             return this.WeatherCard(label, cardData, '');
         }).join('');
 
@@ -1425,7 +1411,7 @@ const Components = {
         const hourlyCardsHtml = hourlyEntries.map(entry => {
             const d = Utils.parseTime(entry.time);
             const label = Utils.formatTimeLabel(d);
-            const cardData = DataNormalizer.toCardData(entry, true);
+            const cardData = DataNormalizer.toCardData(entry);
             return this.WeatherCard(label, cardData, '');
         }).join('');
 

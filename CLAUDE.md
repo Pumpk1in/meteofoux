@@ -10,27 +10,67 @@ MeteoFoux is a weather forecasting application for La Foux d'Allos ski resort (F
 
 This is a static web application with a PHP backend proxy. No build step required.
 
-**Local development:** Serve with any PHP-enabled web server (Apache, nginx+php-fpm, or `php -S localhost:8000`).
+**Local development:**
+
+```bash
+docker compose up -d     # php:8.3-apache, projet monté sur /var/www/html
+```
+
+Then open http://localhost:8123. The frontend calls `/meteo-proxy.php` with a
+root-relative URL, so local and production behave identically.
 
 **Force cache refresh:** Add `?refresh=1` to the proxy URL or use the refresh button in the UI.
+Note that `?refresh=1` and the cached path are **different code paths** — test both after
+touching the proxy.
 
-**Debug mode:** Set `DEBUG_MODE = true` in `js/core.js` to use local test data from `debug/` folder instead of API calls.
+**Tests:**
+
+```bash
+docker compose exec -T meteofoux php tests/weather-test.php
+```
+
+Run this after any change to `lib/weather.php`. It combines unit assertions on edge cases
+with a **golden-master**: the pipeline is replayed on two fixtures and the output must match
+byte-for-byte what is stored. Any behavioural change fails the suite — which is the point,
+so `lib/weather.php` can be refactored safely.
+
+Two fixtures, because they cover different things:
+- `openmeteo-station.json` — a real proxy capture (August, 10-25°C). Locks the multi-model
+  fusion on production data, but crosses **no snow branch at all**.
+- `openmeteo-winter.json` — deterministically derived from the former (see
+  `tests/make-winter-fixture.php`): 72/216 snow hours, 90 distinct SLR values. This is the
+  one that covers Roebber, snow/rain classification and snow icons.
+
+Only regenerate the winter fixture (and re-inspect the diff) when a behaviour change is
+**intended** — regenerating it to make a red suite green defeats its purpose.
+
+**Asset versioning:** `index.php` appends `?v=<filemtime>` to `style.css`, `js/core.js` and
+`js/ui.js`. There is **no version number to bump by hand** — editing a file changes its URL.
+`sw.js` therefore lists only unversioned assets in `SHELL_ASSETS`, and its `CACHE_VERSION`
+only changes when the service worker's own strategy changes.
 
 ## Directory Structure
 
 ```
 METEOFOUX/
-├── index.html              # SPA entry point (HTML structure only)
-├── meteo-proxy.php         # PHP API proxy, data fusion, caching
+├── index.php               # SPA entry point (HTML + filemtime asset versioning)
+├── meteo-proxy.php         # HTTP plumbing: params, cache, cURL, output
+├── lib/
+│   └── weather.php         # All weather logic (pure, no I/O) — the testable core
+├── tests/
+│   ├── weather-test.php    # Test suite (CLI only) — run it after touching lib/
+│   ├── make-winter-fixture.php  # Regenerates the winter fixture
+│   └── fixtures/           # Golden-master fixtures (versioned)
 ├── style.css               # Responsive CSS with dark/light themes
-├── config.php              # Optional HTTP proxy settings
-├── .htaccess               # Apache config
+├── sw.js                   # Service worker (PWA offline shell)
+├── manifest.json           # PWA manifest
+├── docker-compose.yml      # Local dev server (php:8.3-apache, port 8123)
+├── .htaccess               # Apache config (DirectoryIndex, no listing)
 ├── favicon.png
 ├── js/
 │   ├── core.js             # CONFIG, CustomPoints, Utils, DataService, DataNormalizer
 │   └── ui.js               # Charts, Components, App
 ├── cache/                  # 15-minute cached JSON responses (auto-generated)
-├── debug/                  # Test data (data-station.json, etc.)
 ├── weather/
 │   ├── png/                # PNG weather icons (MET.no)
 │   ├── svg/                # SVG weather icons (MET.no)
@@ -45,23 +85,24 @@ METEOFOUX/
 ### Data Flow
 
 ```
-Browser (index.html)
+Browser (index.php)
   └─ App.init()
      ├─ Load custom points from localStorage
      ├─ Restore theme & source from localStorage
-     └─ DataService.loadAll()
-        └─ For each CONFIG.point:
-           └─ fetch(meteo-proxy.php?lat=&lon=&refresh=)
-              └─ PHP:
-                 ├─ MET.no API → timeseries (hourly 0-48h, then 6h)
-                 └─ Open-Meteo API → hourly + daily (7 days)
-              └─ PHP enriches & fuses:
-                 ├─ Roebber SLR for snowfall calculation
-                 ├─ Weather icon determination (WMO codes)
-                 ├─ Freezing level correction (inversion handling)
-                 └─ MET.no timeseries merging with cache
-              └─ Returns JSON: {metno, openmeteo, openmeteo_aggregated, arome_aggregated, meta}
-           └─ processPointData() → indexes by time, creates series
+     ├─ DataService.loadFirst()      → 1st point, rendered immediately
+     │  └─ fetch(/meteo-proxy.php?lat=&lon=&refresh=)
+     │     └─ PHP:
+     │        ├─ MET.no API → timeseries (hourly 0-48h, then 6h)
+     │        └─ Open-Meteo API → hourly + daily (7 days)
+     │     └─ PHP enriches & fuses:
+     │        ├─ Roebber SLR for snowfall calculation
+     │        ├─ Weather icon determination (WMO codes)
+     │        ├─ Freezing level correction (inversion handling)
+     │        └─ MET.no timeseries merging with cache
+     │     └─ Returns JSON: {metno, openmeteo, openmeteo_aggregated,
+     │                       arome_aggregated, elevation, meta}
+     │  └─ processPointData() → indexes by time, creates series
+     └─ DataService.loadRemaining()  → other points, in background (100ms apart)
      └─ setupDays() + renderNavigation() + render()
         ├─ DataNormalizer → prepareEntry(), toCardData(), toChartData()
         ├─ Components → Summary(), CardsGrid(), WeatherCard()
@@ -72,16 +113,22 @@ Browser (index.html)
 
 | File | Purpose |
 |------|---------|
-| `meteo-proxy.php` | API proxy, data fusion, snow/rain classification, caching |
+| `lib/weather.php` | **All weather logic**: model fusion, snow/rain classification, Roebber SLR, icons, 6h aggregation, MET.no merge. Pure — no I/O, no `$_GET`, no network. This is what the tests cover |
+| `meteo-proxy.php` | HTTP plumbing only: params, cache read/write, cURL, response validation, JSON output |
+| `tests/weather-test.php` | Test suite for `lib/weather.php` (CLI only) |
 | `js/core.js` | CONFIG, CustomPoints, Utils, DataService, DataNormalizer |
 | `js/ui.js` | Charts (ApexCharts), Components (HTML generators), App (state & rendering) |
-| `index.html` | SPA HTML structure, external lib imports |
+| `index.php` | SPA HTML structure, external lib imports, `filemtime` asset versioning |
 | `style.css` | Responsive styles with CSS custom properties for dark/light themes |
-| `config.php` | Optional HTTP proxy settings (for API calls through a corporate proxy) |
+| `sw.js` | Service worker: network-first for the HTML document, cache-first for versioned assets |
 
 ---
 
-## Backend — meteo-proxy.php
+## Backend — lib/weather.php
+
+All functions below live in `lib/weather.php` and are covered by `tests/weather-test.php`.
+`meteo-proxy.php` only wires them together. **Add new weather logic here, not in the proxy** —
+anything placed in the proxy becomes untestable.
 
 ### Constants
 
@@ -128,7 +175,12 @@ Browser (index.html)
 #### Data Enrichment
 - **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — Multi-model fusion for Open-Meteo. Implements priority chains (best_match → AROME HD → seamless → AROME). Corrects weather_code ↔ precipitation inconsistencies. Applies Roebber SLR. Converts wind km/h → m/s. Returns enriched hourly array with 23+ keys
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation
-- **`enrich_metno_timeseries($metno)`** — Enriches MET.no data with dew point calculation and Roebber classification for next_1_hours and next_6_hours periods
+- **`enrich_metno_timeseries($metno)`** — Enriches MET.no data with dew point calculation and Roebber classification for next_1_hours and next_6_hours periods. Idempotent (recomputes from untouched source fields), which the golden-master relies on
+
+#### Model Priorities & History
+
+- **`arome_priorities()`** — The Météo-France-only priority chain (no best_match). Single definition shared by the proxy and the tests — don't inline a copy
+- **`merge_metno_timeseries($cached, $new, $cutoff_ts)`** — Merges cached MET.no entries with fresh ones (new value wins at equal `time`), sorts chronologically, drops anything below `$cutoff_ts`. Without this merge, hours already elapsed today would vanish from the UI. The cutoff is a **parameter**, not an internal `strtotime()`, so the function stays deterministic and testable
 
 ### Model Priority Chain
 
@@ -138,18 +190,27 @@ Browser (index.html)
 
 ### Output Format
 
-The proxy returns JSON with 5 keys:
+The proxy returns JSON with 6 keys:
 - `metno` — Raw MET.no data + enriched timeseries
 - `openmeteo` — Raw Open-Meteo data
 - `openmeteo_aggregated` — Enriched best_match data (hourly + 6-hourly)
 - `arome_aggregated` — AROME-only data (hourly + 6-hourly)
-- `meta` — Metadata: sources, methods, timestamps
+- `elevation` — Station altitude in metres (from Open-Meteo)
+- `meta` — Metadata: sources, methods, timestamps, `http_metno` / `http_openmeteo` status codes
 
 ### Caching
 
 - JSON files in `cache/` with 15-minute TTL
 - Validated by minimum 50KB file size
 - MET.no timeseries are merged with existing cache (keeps old entries, updates/adds new)
+
+**Failure handling** — the cache also holds the accumulated MET.no history, so a partial
+response must never overwrite it:
+
+- Each API response is validated structurally (`properties.timeseries` / `hourly`)
+- The cache is written **only if both sources answered**
+- If both fail and a cache file exists, it is served with `meta.stale = true`
+- If both fail with no cache, the proxy returns HTTP 502 with the two HTTP status codes
 
 ---
 
@@ -192,7 +253,6 @@ Formatting and calculation helpers.
 - **`formatDateLabel(dateStr)`** — Full French date (e.g., "mercredi 12 février")
 - **`formatDateShort(dateStr)`** — Short French date (e.g., "mer. 12 février")
 - **`formatTimeLabel(date)`** — Time HH:MM
-- **`formatHourShort(date)`** — Hour only (e.g., "14h")
 - **`periodLabel(hour)`** — Maps hour → period: Nuit (0–5), Matin (6–11), Midi (12–17), Soir (18–23)
 - **`visibleCardCount()`** — Returns 4 (number of cards shown initially)
 - **`parseTime(timeStr)`** — Parse GMT timestamp, appends Z if needed
@@ -200,6 +260,7 @@ Formatting and calculation helpers.
 - **`getDayOfWeek(dateStr)`** — 0=Sunday
 - **`isToday(dateStr)`** — Boolean check
 - **`isMobile()`** — `window.innerWidth < 768`
+- **`escapeHtml(str)`** — Escapes `& < > " '`. Apply to any user-supplied text injected into HTML (custom point names)
 - **`getChartDataAvailability(day, omHourly, omSixHourly, series, useOpenMeteo)`** — Returns `{type: 'hourly'|'sixhourly'|'none', count}`
 
 ### DataService Module
@@ -207,9 +268,11 @@ Formatting and calculation helpers.
 API calls and data processing. Stores state per point key.
 
 - **`state`** — `{data[pointKey]: {point, series, elevation, omHourly, omSixHourly, omAvailableDays, aromeHourly, aromeSixHourly, aromeAvailableDays}}`
-- **`loadAll(forceRefresh)`** — Sequential load of all CONFIG.points (100ms delay between calls). Uses debug JSON if `DEBUG_MODE = true`
-- **`fetchPointData(point, forceRefresh, retryCount)`** — Calls meteo-proxy.php with 35s timeout, 1 retry on error
-- **`processPointData(point, rawData, now)`** — Processes raw response: creates omHourly/omSixHourly indexed by `YYYY-MM-DDTHH:MM`, builds series with merged metno + openmeteo data
+- **`loadFirst(forceRefresh, pointKey)`** — Loads a single point (the first, or the one given) so the UI can render as early as possible. Main entry path.
+- **`loadRemaining(forceRefresh, onPointLoaded)`** — Loads the not-yet-loaded points sequentially in the background (100ms apart)
+- **`loadAll(forceRefresh)`** — Resets state then chains `loadFirst()` + `loadRemaining()`
+- **`fetchPointData(point, forceRefresh, retryCount)`** — Calls `/meteo-proxy.php` with 35s timeout, 1 retry on error
+- **`processPointData(point, rawData)`** — Processes raw response: creates omHourly/omSixHourly indexed by `YYYY-MM-DDTHH:MM`, builds series with merged metno + openmeteo data
 - **`indexByTime(data, mapper)`** — Array → object indexed by `time.substring(0,16)`
 - **`loadSinglePoint(point, forceRefresh)`** — Load one point (used for custom points)
 
@@ -218,10 +281,10 @@ API calls and data processing. Stores state per point key.
 Formats raw data for UI consumption.
 
 - **`MIN_PRECIP`** — 0.5 (minimum displayable precipitation)
-- **`toCardData(entry, isHourlyView)`** — Formats entry → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Prefers `entry.om` (Open-Meteo) over `entry.metno`
+- **`toCardData(entry)`** — Formats entry → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Prefers `entry.om` (Open-Meteo) over `entry.metno`
 - **`prepareEntry(entry, isToday, source)`** — Selects hourly (today) vs 6-hourly (future) data per source (`'openmeteo'|'arome'|'metno'`)
 - **`toChartData(day, sourceData, pointData, useOMData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`
-- **`computeTotals(entries, isHourlyView)`** — Sums snow/rain, finds min/max temps across entries
+- **`computeTotals(entries)`** — Sums snow/rain, finds min/max temps across entries
 
 ---
 
@@ -288,11 +351,11 @@ Main application state & logic.
 - **`updateTopBar()`** — Updates header date display
 
 #### Data Source & Theme
-- **`toggleGlobalSource()`** — Cycles: openmeteo → arome → metno → openmeteo, saves to localStorage
+- **`toggleGlobalSource()`** — Cycles: openmeteo → arome → metno → openmeteo, saves to localStorage. Always allowed — rendering degrades on its own when the chosen source has no data for the current day
 - **`toggleTheme()`** — Switches dark ↔ light, updates charts, saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday, useOMData, canToggle, source, sourceData)`** — Generates day section HTML: header, summary bar, chart div, cards grid, toggle buttons
+- **`renderDayContent(day, pointData, isToday, useOMData, source, sourceData)`** — Generates day section HTML: header, summary bar, chart div, cards grid, toggle buttons
 - **`renderCharts()`** — Iterates days, calls renderChartForDay
 - **`renderChartForDay(day, pointData, useOMData, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart
 
@@ -423,7 +486,7 @@ Icons in `weather/` are from MET.no (Norwegian Meteorological Institute). Availa
 
 | Key | Content |
 |-----|---------|
-| `meteo-theme` | `'dark'` or `'light'` |
-| `meteo-source` | `'openmeteo'`, `'arome'`, or `'metno'` |
-| `meteo-custom-points` | JSON array of custom geographic points |
-| `meteo-points-order` | JSON array of point keys (drag-reorder) |
+| `fmeteo_theme` | `'dark'` or `'light'` |
+| `fmeteo_source` | `'openmeteo'`, `'arome'`, or `'metno'` |
+| `fmeteo_custom_points` | JSON array of custom geographic points |
+| `fmeteo_points_order` | JSON array of point keys (drag-reorder) |
