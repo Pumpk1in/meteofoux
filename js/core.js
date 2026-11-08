@@ -504,6 +504,16 @@ const DataNormalizer = {
         };
     },
 
+    // Résumés de chaque source et verdict d'un jour pour un point (pointData = DataService.state.data[key])
+    dayVerdict(pointData, day) {
+        const summaries = {};
+        for (const key of ['openmeteo', 'arome', 'metno']) {
+            const src = pointData.sources[key];
+            summaries[key] = src ? this.daySummary(day, pointData.series, src) : null;
+        }
+        return { summaries, verdict: this.computeVerdict(summaries, pointData.elevation) };
+    },
+
     // Verdict d'un jour selon les modèles disponibles. summaries = { source: daySummary | null }.
     // mode : 'snow' | 'rain' | 'dry' (la grandeur qui décide de la journée), range : fourchette de
     // cette grandeur entre modèles (températures pour un jour sec), diverge : null s'il n'y a

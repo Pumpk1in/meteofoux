@@ -441,30 +441,54 @@ const App = {
 
         const allDays = [...new Set(Object.values(data)[0].series.map(s => Utils.getLocalDay(s.time)))];
         this.state.days = allDays.filter(day => day >= todayStr).slice(0, 7);
-        this.state.currentDay = this.state.days[0];
+        // Le soir, on regarde surtout demain : après 18 h, ouvrir sur le lendemain
+        this.state.currentDay = now.getHours() >= 18 && this.state.days.length > 1
+            ? this.state.days[1]
+            : this.state.days[0];
     },
 
     renderNavigation() {
-        // Navigation des jours
-        const dayNavHtml = this.state.days.map((day, index) => {
-            const dayOfWeek = Utils.getDayOfWeek(day);
-            const label = CONFIG.dayLabels[dayOfWeek];
-            const isActive = day === this.state.currentDay;
-            const isToday = index === 0;
-
-            return `
-                <button class="day-btn ${isActive ? 'active' : ''}" data-day="${day}" onclick="App.selectDay('${day}')">
-                    ${isToday ? '<i data-lucide="calendar-check" class="today-icon"></i>' : label}
-                    <span class="day-dot"></span>
-                </button>
-            `;
-        }).join('');
-
-        document.getElementById('day-nav').innerHTML = dayNavHtml;
-
+        this.renderDayNav();
         this.updateSourceAttribute();
         this.updateTopBar();
 
+        lucide.createIcons();
+    },
+
+    // Barre des jours : "AUJ." puis les jours de la semaine, chacun avec l'indicateur du verdict
+    // pour le point affiché (flocon + cm, goutte + mm, soleil + max). À refaire quand le point change.
+    renderDayNav() {
+        const pointData = DataService.state.data[this.state.currentPoint];
+        const deg = n => String(Math.round(n)).replace('-', '−');
+        const ICONS = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' };
+        const SPOKEN = { snow: ' de neige', rain: ' de pluie', dry: ', sec' };
+
+        document.getElementById('day-nav').innerHTML = this.state.days.map((day, index) => {
+            const isActive = day === this.state.currentDay;
+            const label = index === 0 ? 'AUJ.' : CONFIG.dayLabels[Utils.getDayOfWeek(day)];
+            const verdict = pointData ? DataNormalizer.dayVerdict(pointData, day).verdict : null;
+
+            let indicatorHtml = '', spoken = '';
+            if (verdict) {
+                const { value, unit } = Components.verdictValue(verdict);
+                spoken = ` : ${value} ${unit}${SPOKEN[verdict.mode]}`;
+                let short;
+                if (verdict.mode === 'dry') {
+                    short = `${deg(verdict.tempMax)}°`;
+                } else {
+                    const lo = Math.round(verdict.range.lo), hi = Math.round(verdict.range.hi);
+                    short = verdict.basis.length === 1 || lo === hi ? `${hi}` : `${lo}–${hi}`;
+                }
+                indicatorHtml = `<span class="day-indicator is-${verdict.mode}"><i data-lucide="${ICONS[verdict.mode]}"></i>${short}</span>`;
+            }
+
+            return `
+                <button class="day-btn ${isActive ? 'active' : ''}" data-day="${day}" aria-current="${isActive}"
+                        aria-label="${Utils.formatDateLabel(day)}${spoken}" onclick="App.selectDay('${day}')">
+                    <span class="day-label">${label}</span>
+                    ${indicatorHtml}
+                </button>`;
+        }).join('');
         lucide.createIcons();
     },
 
@@ -495,6 +519,7 @@ const App = {
         // Mettre à jour les boutons
         document.querySelectorAll('.day-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.day === day);
+            btn.setAttribute('aria-current', btn.dataset.day === day);
         });
 
         this.updateTopBar();
@@ -519,6 +544,7 @@ const App = {
             await DataService.loadSinglePoint(point);
         }
 
+        this.renderDayNav();
         this.render();
     },
 
@@ -555,6 +581,7 @@ const App = {
         try {
             DataService.state.data = {};
             await DataService.loadFirst(true, this.state.currentPoint);
+            this.renderDayNav();
             this.render();
             await DataService.loadRemaining(true, () => this.refreshPointSheet());
         } finally {
@@ -634,12 +661,7 @@ const App = {
             </h2>`;
 
         // Verdict du jour selon tous les modèles disponibles (bloc en tête du jour)
-        const summaries = {};
-        for (const key of ['openmeteo', 'arome', 'metno']) {
-            const src = pointData.sources[key];
-            summaries[key] = src ? DataNormalizer.daySummary(day, series, src) : null;
-        }
-        const verdict = DataNormalizer.computeVerdict(summaries, elevation);
+        const { summaries, verdict } = DataNormalizer.dayVerdict(pointData, day);
         const verdictHtml = Components.Verdict(verdict, summaries, source);
 
         // Créneaux du jour (chronologie commune), avec les données de la source choisie
@@ -818,12 +840,7 @@ const App = {
         const verdictHtml = point => {
             const pointData = data[point.key];
             if (!pointData) return '<span class="sheet-row-verdict is-loading">Chargement…</span>';
-            const summaries = {};
-            for (const key of ['openmeteo', 'arome', 'metno']) {
-                const src = pointData.sources[key];
-                summaries[key] = src ? DataNormalizer.daySummary(day, pointData.series, src) : null;
-            }
-            const verdict = DataNormalizer.computeVerdict(summaries, pointData.elevation);
+            const { verdict } = DataNormalizer.dayVerdict(pointData, day);
             if (!verdict) return '<span class="sheet-row-verdict">—</span>';
             const { value, unit } = Components.verdictValue(verdict);
             const icon = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' }[verdict.mode];
