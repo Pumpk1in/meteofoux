@@ -140,22 +140,28 @@ function get_curl_handle($url, $proxy_host, $proxy_port, $proxy_user, $proxy_pas
 
 // ================= EXEC (séquentiel pour éviter saturation proxy) =================
 
+// Appel Open-Meteo (en premier : son altitude sert à MET.no)
+$ch_open = get_curl_handle($url_openmeteo, $proxy_host, $proxy_port, $proxy_user, $proxy_pass);
+$res_open_raw = curl_exec($ch_open);
+$http_open = curl_getinfo($ch_open, CURLINFO_HTTP_CODE);
+$res_open = json_decode($res_open_raw, true);
+curl_close($ch_open);
+
+// Sans altitude, MET.no utilise son propre relief : 2475 m au lieu de 2590 à
+// l'Observatoire, soit ~0,7 °C trop chaud. On lui passe celle d'Open-Meteo.
+if (isset($res_open['elevation'])) {
+    $url_metno .= '&altitude=' . (int) round($res_open['elevation']);
+}
+
+// Petit délai entre les deux APIs
+usleep(100000); // 100ms
+
 // Appel MET.no
 $ch_metno = get_curl_handle($url_metno, $proxy_host, $proxy_port, $proxy_user, $proxy_pass);
 $res_metno_raw = curl_exec($ch_metno);
 $http_metno = curl_getinfo($ch_metno, CURLINFO_HTTP_CODE);
 $res_metno = json_decode($res_metno_raw, true);
 curl_close($ch_metno);
-
-// Petit délai entre les deux APIs
-usleep(100000); // 100ms
-
-// Appel Open-Meteo
-$ch_open = get_curl_handle($url_openmeteo, $proxy_host, $proxy_port, $proxy_user, $proxy_pass);
-$res_open_raw = curl_exec($ch_open);
-$http_open = curl_getinfo($ch_open, CURLINFO_HTTP_CODE);
-$res_open = json_decode($res_open_raw, true);
-curl_close($ch_open);
 
 // ================= VALIDATION DES RÉPONSES =================
 // Une réponse absente ou tronquée (timeout, throttle 429, erreur 5xx) ne doit
