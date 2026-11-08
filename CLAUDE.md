@@ -106,7 +106,8 @@ Browser (index.php)
      │        └─ MET.no timeseries merging with cache
      │     └─ Returns JSON: {metno, openmeteo, openmeteo_aggregated,
      │                       arome_aggregated, forecasts, elevation, meta}
-     │  └─ processPointData() → indexes by time, creates series
+     │  └─ processPointData() → reads `forecasts`: one {hourly, sixHourly} per source,
+     │     plus a common timeline (series) built from all sources
      └─ DataService.loadRemaining()  → other points, in background (100ms apart)
      └─ setupDays() + renderNavigation() + render()
         ├─ DataNormalizer → prepareEntry(), toCardData(), toChartData()
@@ -210,7 +211,7 @@ The proxy returns JSON with 7 keys:
 - `openmeteo` — Raw Open-Meteo data
 - `openmeteo_aggregated` — Enriched best_match data (hourly + 6-hourly)
 - `arome_aggregated` — AROME-only data (hourly + 6-hourly)
-- `forecasts` — **All three sources in the common format** (`openmeteo`, `arome`, `metno`, each `{hourly, six_hourly}`), from `build_forecasts`. `openmeteo_aggregated` and `arome_aggregated` are extracted from it. The frontend does not read it yet: the legacy keys go away once it does
+- `forecasts` — **All three sources in the common format** (`openmeteo`, `arome`, `metno`, each `{hourly, six_hourly}`), from `build_forecasts`. `openmeteo_aggregated` and `arome_aggregated` are extracted from it. **It is the only key the frontend reads**; the legacy keys are no longer used and are due for removal. A cache file written before this key existed gets it rebuilt from its raw data when served
 - `elevation` — Station altitude in metres (from Open-Meteo)
 - `meta` — Metadata: sources, methods, timestamps, `http_metno` / `http_openmeteo` status codes
 
@@ -279,18 +280,18 @@ Formatting and calculation helpers.
 - **`isToday(dateStr)`** — Boolean check
 - **`isMobile()`** — `window.innerWidth < 768`
 - **`escapeHtml(str)`** — Escapes `& < > " '`. Apply to any user-supplied text injected into HTML (custom point names)
-- **`getChartDataAvailability(day, omHourly, omSixHourly, series, useOpenMeteo)`** — Returns `{type: 'hourly'|'sixhourly'|'none', count}`
+- **`getChartDataAvailability(day, hourly, sixHourly)`** — Returns `{type: 'hourly'|'sixhourly'|'none', count}` for the chosen source: hourly if ≥ 12 hours, else 6-hourly if ≥ 3 steps, else a short hourly chart if ≥ 2 hours (MET.no in the evening: its past hours are unknown)
 
 ### DataService Module
 
 API calls and data processing. Stores state per point key.
 
-- **`state`** — `{data[pointKey]: {point, series, elevation, omHourly, omSixHourly, omAvailableDays, aromeHourly, aromeSixHourly, aromeAvailableDays}}`
+- **`state`** — `{data[pointKey]: {point, series, elevation, sources}}` with `sources[openmeteo|arome|metno] = {hourly, sixHourly, extended}` (indexed by `YYYY-MM-DDTHH:MM`; `extended` = the source provides apparent temperature and gusts, MET.no does not) and `series` = `[{time}]`, the common timeline of all sources
 - **`loadFirst(forceRefresh, pointKey)`** — Loads a single point (the first, or the one given) so the UI can render as early as possible. Main entry path.
 - **`loadRemaining(forceRefresh, onPointLoaded)`** — Loads the not-yet-loaded points sequentially in the background (100ms apart)
 - **`loadAll(forceRefresh)`** — Resets state then chains `loadFirst()` + `loadRemaining()`
 - **`fetchPointData(point, forceRefresh, retryCount)`** — Calls `/meteo-proxy.php` with 35s timeout, 1 retry on error
-- **`processPointData(point, rawData)`** — Processes raw response: creates omHourly/omSixHourly indexed by `YYYY-MM-DDTHH:MM`, builds series with merged metno + openmeteo data
+- **`processPointData(point, rawData)`** — Reads the proxy's `forecasts` key: indexes each source's hourly / six-hourly arrays by time, and builds the common timeline. Nothing depends on MET.no any more: the app renders even if a source is missing
 - **`indexByTime(data, mapper)`** — Array → object indexed by `time.substring(0,16)`
 - **`loadSinglePoint(point, forceRefresh)`** — Load one point (used for custom points)
 
@@ -299,10 +300,10 @@ API calls and data processing. Stores state per point key.
 Formats raw data for UI consumption.
 
 - **`MIN_PRECIP`** — 0.5 (minimum displayable precipitation)
-- **`toCardData(entry)`** — Formats entry → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Prefers `entry.om` (Open-Meteo) over `entry.metno`
-- **`prepareEntry(entry, isToday, source)`** — Selects hourly (today) vs 6-hourly (future) data per source (`'openmeteo'|'arome'|'metno'`)
-- **`toChartData(day, sourceData, pointData, useOMData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`
-- **`computeTotals(entries)`** — Sums snow/rain, finds min/max temps across entries. Also returns `period` `{from, to}` (ms) when the entries cover less than 23 h of the day (MET.no has no past hours, AROME stops mid-day), `null` otherwise. A MET.no 6h step counts for 6 hours
+- **`toCardData(entry)`** — Formats a prepared entry (`entry.data`) → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Same for every source
+- **`prepareEntry(entry, isToday)`** — `entry = {time, hourly, sixHourly}` (chosen source). Returns `{time, data}`: the hour (today, or the "all hours" view), else the 6h step (temperature = max of the step)
+- **`toChartData(day, sourceData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`. Same for every source
+- **`computeTotals(entries)`** — `entries = [{time, data, hours}]` (an hour, or a 6h step where the source has no hours: MET.no beyond D+2). Sums snow/rain, finds min/max temps (a 6h step brings its min and max). Also returns `period` `{from, to}` (ms) when the entries cover less than 23 h of the day (MET.no has no past hours, AROME stops mid-day), `null` otherwise. A MET.no 6h step counts for 6 hours
 
 ---
 
@@ -373,9 +374,9 @@ Main application state & logic.
 - **`toggleTheme()`** — Switches dark ↔ light, updates charts, saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday, useOMData, source, sourceData)`** — Generates day section HTML: header, summary bar, chart div, cards grid, toggle buttons
+- **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Generates day section HTML: header, summary bar, chart div, cards grid, toggle buttons. One path for all sources; shows "Données <source> non disponibles" when the source has nothing for that day
 - **`renderCharts()`** — Iterates days, calls renderChartForDay
-- **`renderChartForDay(day, pointData, useOMData, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart
+- **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`)
 
 #### Custom Points (Leaflet Map)
 - **`loadLeaflet()`** — Dynamically loads Leaflet CSS/JS

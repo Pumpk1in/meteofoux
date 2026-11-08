@@ -72,6 +72,8 @@ if (!$force_refresh && file_exists($cache_file)) {
         // Cache valide, le retourner directement
         $cached_data = json_decode(file_get_contents($cache_file), true);
         if ($cached_data) {
+            // Cache écrit par une version antérieure à la clé "forecasts" : on la reconstruit
+            $cached_data['forecasts'] ??= build_forecasts($cached_data['openmeteo'] ?? null, $cached_data['metno'] ?? null, $cached_data['elevation'] ?? null);
             $cached_data['meta']['from_cache'] = true;
             $cached_data['meta']['cache_age'] = $cache_age;
             echo json_encode($cached_data);
@@ -175,6 +177,7 @@ if (!$metno_ok && !$open_ok) {
     if (file_exists($cache_file) && filesize($cache_file) > $min_size) {
         $stale = json_decode(file_get_contents($cache_file), true);
         if ($stale) {
+            $stale['forecasts'] ??= build_forecasts($stale['openmeteo'] ?? null, $stale['metno'] ?? null, $stale['elevation'] ?? null);
             $stale['meta']['from_cache'] = true;
             $stale['meta']['stale'] = true;
             $stale['meta']['cache_age'] = time() - filemtime($cache_file);

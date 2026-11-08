@@ -165,51 +165,26 @@ const Utils = {
     /**
      * Analyse les données disponibles pour un jour donné et retourne le type de graphique possible
      * @param {string} day - Date au format YYYY-MM-DD
-     * @param {object} omHourly - Données horaires Open-Meteo indexées
-     * @param {object} omSixHourly - Données 6h Open-Meteo indexées
-     * @param {array} series - Série MET.no
-     * @param {boolean} useOpenMeteo - Si on utilise Open-Meteo ou MET.no
+     * @param {object} hourly - Données horaires de la source, indexées par heure
+     * @param {object} sixHourly - Données 6h de la source, indexées par heure
      * @returns {{ type: 'hourly'|'sixhourly'|'none', count: number }}
      */
-    getChartDataAvailability(day, omHourly, omSixHourly, series, useOpenMeteo) {
-        if (useOpenMeteo) {
-            // Compter les données hourly Open-Meteo
-            const hourlyCount = omHourly
-                ? Object.keys(omHourly).filter(t => this.getLocalDay(t) === day).length
-                : 0;
+    getChartDataAvailability(day, hourly, sixHourly) {
+        const hourlyCount = Object.keys(hourly || {}).filter(t => this.getLocalDay(t) === day).length;
+        if (hourlyCount >= CONFIG.charts.minHourlyPoints) {
+            return { type: 'hourly', count: hourlyCount };
+        }
 
-            if (hourlyCount >= CONFIG.charts.minHourlyPoints) {
-                return { type: 'hourly', count: hourlyCount };
-            }
+        // Fallback sur six_hourly
+        const sixHourlyCount = Object.keys(sixHourly || {}).filter(t => this.getLocalDay(t) === day).length;
+        if (sixHourlyCount >= CONFIG.charts.minSixHourlyPoints) {
+            return { type: 'sixhourly', count: sixHourlyCount };
+        }
 
-            // Fallback sur six_hourly
-            const sixHourlyCount = omSixHourly
-                ? Object.keys(omSixHourly).filter(t => this.getLocalDay(t) === day).length
-                : 0;
-
-            if (sixHourlyCount >= CONFIG.charts.minSixHourlyPoints) {
-                return { type: 'sixhourly', count: sixHourlyCount };
-            }
-        } else {
-            // MET.no : compter next_1_hours
-            const hourlyCount = series.filter(e => {
-                if (!e.metno?.data?.next_1_hours) return false;
-                return this.getLocalDay(e.time) === day;
-            }).length;
-
-            if (hourlyCount >= CONFIG.charts.minHourlyPoints) {
-                return { type: 'hourly', count: hourlyCount };
-            }
-
-            // Fallback sur next_6_hours
-            const sixHourlyCount = series.filter(e => {
-                if (!e.metno?.data?.next_6_hours) return false;
-                return this.getLocalDay(e.time) === day;
-            }).length;
-
-            if (sixHourlyCount >= CONFIG.charts.minSixHourlyPoints) {
-                return { type: 'sixhourly', count: sixHourlyCount };
-            }
+        // Ni assez d'heures ni assez de pas de 6 h : un graphique horaire court plutôt que rien
+        // (MET.no le soir : ses heures déjà passées ne sont pas connues)
+        if (hourlyCount >= 2) {
+            return { type: 'hourly', count: hourlyCount };
         }
 
         return { type: 'none', count: 0 };
@@ -295,9 +270,8 @@ const DataService = {
     },
 
     processPointData(point, rawData) {
-        const omAgg = rawData.openmeteo_aggregated;
-        const aromeAgg = rawData.arome_aggregated;
-        const omRaw = rawData.openmeteo?.hourly; // Données brutes pour UV (pas encore dans agrégé)
+        const forecasts = rawData.forecasts || {};
+        const omRaw = rawData.openmeteo?.hourly; // Données brutes pour UV (repli)
         const elevation = rawData.elevation || rawData.openmeteo?.elevation || null;
 
         // Index des données brutes par temps pour lookup UV
@@ -351,54 +325,27 @@ const DataService = {
             };
         });
 
-        // Fonction pour calculer les jours disponibles (au moins 4 créneaux 6h)
-        const calculateAvailableDays = (agg) => {
-            const dayCounts = {};
-            if (agg?.six_hourly?.time) {
-                agg.six_hourly.time.forEach(t => {
-                    const day = Utils.getLocalDay(t);
-                    dayCounts[day] = (dayCounts[day] || 0) + 1;
-                });
-            }
-            return new Set(
-                Object.entries(dayCounts)
-                    .filter(([_, count]) => count >= 4)
-                    .map(([day]) => day)
-            );
-        };
-
-        // Données Open-Meteo (best_match)
-        const omHourly = createHourlyData(omAgg);
-        const omSixHourly = createSixHourlyData(omAgg);
-        const omAvailableDays = calculateAvailableDays(omAgg);
-
-        // Données AROME (Météo-France uniquement)
-        const aromeHourly = createHourlyData(aromeAgg);
-        const aromeSixHourly = createSixHourlyData(aromeAgg);
-        const aromeAvailableDays = calculateAvailableDays(aromeAgg);
-
-        const metnoSeries = rawData.metno?.properties?.timeseries || [];
-        const series = metnoSeries.map(entry => {
-            const timeKey = entry.time.substring(0, 16);
-            const dayStr = Utils.getLocalDay(entry.time);
-            const isWithinOM = omAvailableDays.has(dayStr);
-            const isWithinArome = aromeAvailableDays.has(dayStr);
-
-            return {
-                time: entry.time,
-                metno: entry,
-                om: isWithinOM ? omHourly[timeKey] || null : null,
-                om6h: isWithinOM ? omSixHourly[timeKey] || null : null,
-                arome: isWithinArome ? aromeHourly[timeKey] || null : null,
-                arome6h: isWithinArome ? aromeSixHourly[timeKey] || null : null
+        // Chaque source au même format (clé "forecasts" du proxy)
+        const sources = {};
+        for (const [key, agg] of Object.entries(forecasts)) {
+            sources[key] = {
+                hourly: createHourlyData(agg),
+                sixHourly: createSixHourlyData(agg),
+                // Ressenti et rafales : MET.no ne les fournit pas, son graphique s'en passe
+                extended: (agg?.hourly?.apparent_temperature || []).some(v => v !== null)
             };
-        });
+        }
 
-        return {
-            point, series, elevation,
-            omHourly, omSixHourly, omAvailableDays,
-            aromeHourly, aromeSixHourly, aromeAvailableDays
-        };
+        // Chronologie commune : toutes les heures et tous les pas de 6 h connus, toutes sources
+        // confondues. Elle ne dépend plus de MET.no : l'app s'affiche même si une source manque.
+        const times = new Set();
+        Object.values(sources).forEach(src => {
+            Object.keys(src.hourly).forEach(t => times.add(t));
+            Object.keys(src.sixHourly).forEach(t => times.add(t));
+        });
+        const series = [...times].sort().map(time => ({ time }));
+
+        return { point, series, elevation, sources };
     },
 
     indexByTime(data, mapper) {
@@ -430,149 +377,81 @@ const DataNormalizer = {
     MIN_PRECIP: 0.5,
 
     toCardData(entry) {
-        if (entry.om) {
-            return {
-                icon: entry.om.icon || 'clearsky_day',
-                temp: entry.om.temp,
-                windDir: entry.om.windDir,
-                windSpeed: entry.om.windSpeed,
-                snow: entry.om.snow || 0,
-                rain: entry.om.rain || 0,
-                precipProb: entry.om.precipProb,
-                freezingPoint: entry.om.freezingPoint,
-                snowQuality: entry.om.snowQuality,
-                isDay: entry.om.isDay,
-                cloudCover: entry.om.cloudCover
-            };
-        }
+        const d = entry.data;
+        if (!d) return null;
 
-        if (entry.metno) {
-            const details = entry.metno.data.instant.details;
-            // Utiliser next_1_hours si dispo, sinon fallback sur next_6_hours
-            const forecast = entry.metno.data.next_1_hours || entry.metno.data.next_6_hours;
-
-            const hour = Utils.parseTime(entry.metno.time).getUTCHours();
-            const isDay = hour >= 7 && hour < 17;
-
-            return {
-                icon: forecast?.summary?.symbol_code || 'clearsky_day',
-                temp: details.air_temperature,
-                windDir: details.wind_from_direction,
-                windSpeed: details.wind_speed,
-                snow: forecast?.details?.snowfall || 0,
-                rain: forecast?.details?.rain || 0,
-                precipProb: 0,
-                snowQuality: forecast?.details?.snow_quality || null,
-                isDay: isDay,
-                cloudCover: details.cloud_area_fraction ?? null
-            };
-        }
-
-        return null;
+        return {
+            icon: d.icon || 'clearsky_day',
+            temp: d.temp,
+            windDir: d.windDir,
+            windSpeed: d.windSpeed,
+            snow: d.snow || 0,
+            rain: d.rain || 0,
+            precipProb: d.precipProb,
+            freezingPoint: d.freezingPoint,
+            snowQuality: d.snowQuality,
+            isDay: d.isDay,
+            cloudCover: d.cloudCover
+        };
     },
 
-    prepareEntry(entry, isToday, source) {
-        const prepared = { time: entry.time };
+    // Données d'un créneau pour une carte : l'heure (aujourd'hui, ou vue "toutes les heures"),
+    // sinon le pas de 6 h. entry = { time, hourly, sixHourly } (données de la source choisie)
+    prepareEntry(entry, isToday) {
+        if (isToday) {
+            return { time: entry.time, data: entry.hourly };
+        }
 
-        // source : 'openmeteo', 'arome', ou 'metno'
-        if (source === 'openmeteo' || source === 'arome') {
-            // Sélectionner les bonnes données selon la source
-            const hourlyData = source === 'arome' ? entry.arome : entry.om;
-            const sixHourlyData = source === 'arome' ? entry.arome6h : entry.om6h;
-
-            if (isToday && hourlyData) {
-                prepared.om = hourlyData;
-            } else if (!isToday && sixHourlyData) {
-                const hour = Utils.parseTime(entry.time).getUTCHours();
-                const isDay = hour >= 6 && hour < 18;
-
-                prepared.om = {
-                    temp: sixHourlyData.tempMax,
-                    windSpeed: sixHourlyData.windSpeed,
-                    windDir: sixHourlyData.windDir,
-                    snow: sixHourlyData.snow,
-                    rain: sixHourlyData.rain,
-                    precipProb: sixHourlyData.precipProb,
-                    freezingPoint: sixHourlyData.freezingPoint,
-                    icon: sixHourlyData.icon,
-                    snowQuality: sixHourlyData.snowQuality,
-                    dewPoint: null,
-                    isDay: isDay,
-                    cloudCover: sixHourlyData.cloudCover
-                };
-            } else {
-                prepared.metno = entry.metno;
+        const six = entry.sixHourly;
+        const hour = Utils.parseTime(entry.time).getUTCHours();
+        return {
+            time: entry.time,
+            data: {
+                temp: six.tempMax,
+                windSpeed: six.windSpeed,
+                windDir: six.windDir,
+                snow: six.snow,
+                rain: six.rain,
+                precipProb: six.precipProb,
+                freezingPoint: six.freezingPoint,
+                icon: six.icon,
+                snowQuality: six.snowQuality,
+                dewPoint: null,
+                isDay: hour >= 6 && hour < 18,
+                cloudCover: six.cloudCover
             }
-        } else {
-            prepared.metno = entry.metno;
-        }
-
-        return prepared;
+        };
     },
 
-    // Normalise les données d'un jour en tableau prêt pour les charts,
-    // quelle que soit la source (Open-Meteo, AROME, MET.no)
-    toChartData(day, sourceData, pointData, useOMData, dataType) {
-        const hourlyData = sourceData?.hourly || pointData.omHourly;
-        const sixHourlyData = sourceData?.sixHourly || pointData.omSixHourly;
+    // Normalise les données d'un jour en tableau prêt pour les charts, quelle que soit la source
+    toChartData(day, sourceData, dataType) {
         const isHourly = dataType === 'hourly';
+        const dataSource = isHourly ? sourceData.hourly : sourceData.sixHourly;
+        if (!dataSource) return [];
 
-        if (useOMData) {
-            const dataSource = isHourly ? hourlyData : sixHourlyData;
-            if (!dataSource) return [];
-
-            return Object.keys(dataSource)
-                .filter(time => Utils.getLocalDay(time) === day)
-                .sort()
-                .map(time => {
-                    const d = dataSource[time];
-                    if (d.temp === null && d.tempMax === null) return null;
-                    const timestamp = new Date(time.endsWith('Z') ? time : time + ':00Z').getTime();
-                    return {
-                        time: timestamp,
-                        temp: isHourly ? d.temp : d.tempMax,
-                        apparent_temperature: isHourly ? (d.apparent_temperature || d.temp) : d.tempMax,
-                        windSpeed: d.windSpeed,
-                        wind_gusts: isHourly ? (d.wind_gusts || d.windSpeed) : d.windSpeed,
-                        snow: d.snow || 0,
-                        rain: d.rain || 0,
-                        uv_index: isHourly ? (d.uv_index || 0) : 0,
-                        icon: d.icon || 'clearsky_day'
-                    };
-                })
-                .filter(d => d !== null);
-        }
-
-        // MET.no
-        const { series } = pointData;
-        return series
-            .filter(entry => {
-                if (!entry.metno) return false;
-                if (Utils.getLocalDay(entry.time) !== day) return false;
-                return isHourly
-                    ? !!entry.metno.data?.next_1_hours
-                    : !!entry.metno.data?.next_6_hours;
-            })
-            .map(entry => {
-                const m = entry.metno;
-                const details = m.data?.instant?.details || {};
-                const forecastObj = isHourly ? m.data?.next_1_hours : m.data?.next_6_hours;
-                const forecast = forecastObj?.details || {};
-                const timestamp = Utils.parseTime(m.time).getTime();
+        return Object.keys(dataSource)
+            .filter(time => Utils.getLocalDay(time) === day)
+            .sort()
+            .map(time => {
+                const d = dataSource[time];
+                if (d.temp === null && d.tempMax === null) return null;
+                const timestamp = new Date(time.endsWith('Z') ? time : time + ':00Z').getTime();
                 return {
                     time: timestamp,
-                    temp: details.air_temperature ?? null,
-                    apparent_temperature: details.air_temperature ?? null,
-                    windSpeed: details.wind_speed ?? null,
-                    wind_gusts: details.wind_speed_of_gust ?? details.wind_speed ?? null,
-                    snow: forecast.snowfall || 0,
-                    rain: forecast.rain || 0,
-                    uv_index: details.ultraviolet_index_clear_sky ?? 0,
-                    icon: forecastObj?.summary?.symbol_code || 'clearsky_day'
+                    temp: isHourly ? d.temp : d.tempMax,
+                    apparent_temperature: isHourly ? (d.apparent_temperature || d.temp) : d.tempMax,
+                    windSpeed: d.windSpeed,
+                    wind_gusts: isHourly ? (d.wind_gusts || d.windSpeed) : d.windSpeed,
+                    snow: d.snow || 0,
+                    rain: d.rain || 0,
+                    uv_index: isHourly ? (d.uv_index || 0) : 0,
+                    icon: d.icon || 'clearsky_day'
                 };
-            });
+            })
+            .filter(d => d !== null);
     },
 
+    // entries = [{ time, data, hours }] : une heure (hours 1) ou un pas de 6 h (hours 6)
     computeTotals(entries) {
         let snow = 0, rain = 0;
         const temps = [];
@@ -588,27 +467,16 @@ const DataNormalizer = {
             hours += duration;
         };
 
-        entries.forEach(entry => {
-            if (entry.om) {
-                snow += entry.om.snow || 0;
-                rain += entry.om.rain || 0;
-                if (entry.om.temp !== null) {
-                    temps.push(entry.om.temp);
-                    cover(entry.time, 1);
-                }
-            } else if (entry.metno) {
-                const details = entry.metno.data?.instant?.details;
-                // Utiliser next_1_hours si dispo, sinon fallback sur next_6_hours
-                const forecast = entry.metno.data.next_1_hours || entry.metno.data.next_6_hours;
+        entries.forEach(({ time, data, hours: duration }) => {
+            snow += data.snow || 0;
+            rain += data.rain || 0;
 
-                if (details) {
-                    temps.push(details.air_temperature);
-                }
-
-                // Utiliser les valeurs enrichies par le PHP (en cm avec méthode Roebber)
-                snow += forecast?.details?.snowfall || 0;
-                rain += forecast?.details?.rain || 0;
-                if (forecast) cover(entry.metno.time, entry.metno.data.next_1_hours ? 1 : 6);
+            // Un pas de 6 h apporte son minimum et son maximum, une heure sa température
+            const values = (duration === 6 ? [data.tempMin, data.tempMax] : [data.temp])
+                .filter(v => v !== null && v !== undefined);
+            if (values.length) {
+                temps.push(...values);
+                cover(time, duration);
             }
         });
 
