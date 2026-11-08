@@ -195,6 +195,49 @@ check('conditions pluie : rain', $c['rain'], 5);
 check('conditions pluie : snowfall a 0', $c['snowfall'], 0);
 check('conditions pluie : roebber a 0', $c['snowfall_roebber'], 0);
 
+section('enrich_openmeteo_hourly : notre regle decide du type, Roebber de la quantite');
+// Une heure Open-Meteo minimale : seuls les champs utiles au classement sont fournis
+function one_hour_openmeteo($temp, $dew, $precip, $rain, $snowfall) {
+    return ['hourly' => [
+        'time' => ['2026-11-09T06:00'],
+        'temperature_2m_best_match' => [$temp],
+        'dew_point_2m_best_match' => [$dew],
+        'relative_humidity_2m_best_match' => [100],
+        'precipitation_best_match' => [$precip],
+        'rain_best_match' => [$rain],
+        'snowfall_best_match' => [$snowfall],
+        'weather_code_best_match' => [61],
+        'wind_speed_10m_best_match' => [10.8],
+        'cloud_cover_best_match' => [100],
+        'is_day_best_match' => [1],
+    ]];
+}
+// Cas Observatoire : best_match annonce de la pluie en air sature a +0.5C (Tw 0.5)
+// Roebber : SLR 7.4, soit 2.2 cm -> "neige" ; l'ancien 1:1 donnait 3 cm -> "neige forte"
+$h = enrich_openmeteo_hourly(one_hour_openmeteo(0.5, 0.5, 3.0, 3.0, 0), 2590);
+$roebber = classify_precipitation(3.0, 0.5, 0.5, 100, 3.0)['snowfall_roebber'];
+check('pluie du modele a +0.5C : rain a 0', $h['rain'][0] == 0, true);
+check('pluie du modele a +0.5C : neige = Roebber (pas mm a 1:1)', $h['snowfall'][0], $roebber);
+check('pluie du modele a +0.5C : intensite d icone sur Roebber', $h['symbol_code'][0], determine_symbol($roebber, 0, 61, true));
+check('pluie du modele a +0.5C : pas de neige forte', str_contains($h['symbol_code'][0], 'heavy'), false);
+// Le modele annonce de la neige, mais la temperature humide est nettement positive
+$h = enrich_openmeteo_hourly(one_hour_openmeteo(3.0, 2.0, 1.0, 0, 0.7), 2590);
+check('neige du modele a Tw 2.4C : rain', $h['rain'][0], 1.0);
+check('neige du modele a Tw 2.4C : snowfall a 0', $h['snowfall'][0] == 0, true);
+// weather_code de pluie, pluie du modele a 0.1 mais precipitation totale nulle (melange
+// AROME-HD / AROME 2.5 km) : l'incoherence se juge sur le total, pas d'icone de pluie a sec
+$h = enrich_openmeteo_hourly(one_hour_openmeteo(1.0, 1.0, 0, 0.1, 0), 2590);
+check('code pluie sans precipitation totale : corrige par la couverture nuageuse', $h['symbol_code'][0], 'cloudy');
+// Sur une vraie journee de neige, la neige affichee est partout celle de Roebber
+$obs = json_decode(file_get_contents(__DIR__ . '/fixtures/openmeteo-observatoire.json'), true);
+foreach (['best_match' => null, 'AROME' => arome_priorities()] as $nom => $prio) {
+    $h = enrich_openmeteo_hourly($obs['openmeteo'], $obs['elevation'], $prio);
+    check("[observatoire $nom] snowfall = snowfall_roebber a chaque heure", $h['snowfall'], $h['snowfall_roebber']);
+    // Pluie et neige se partagent un seul total : averses incluses, plus de melange entre modeles
+    $pluie_attendue = array_map(fn($p, $s) => $s > 0 ? 0 : $p, $h['precipitation'], $h['snowfall']);
+    check("[observatoire $nom] pluie = precipitation totale hors neige", array_map('floatval', $h['rain']), array_map('floatval', $pluie_attendue));
+}
+
 section('correct_freezing_level (4 branches)');
 // Note : correct_freezing_level renvoie round(), donc un float — d'ou les 1500.0
 $r = correct_freezing_level(1500, null, -3, 1794);

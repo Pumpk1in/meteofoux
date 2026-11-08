@@ -16,10 +16,10 @@
  * - meteofrance_arpege_seamless : cloud_cover plus réaliste qu'AROME, fallback pour le reste
  * - meteofrance_seamless : fallback + precipitation_probability (seule source)
  * 
- * Fallback neige/pluie :
- * - Si précipitation > 0 mais rain/snowfall absents ou à 0
- * - On utilise température + point de rosée pour déduire le type
+ * Neige/pluie (même règle pour Open-Meteo, AROME et MET.no) :
  * - Neige si : température humide <= 1.0°C (calculée depuis T et Td)
+ * - Quantité de neige : précipitation × SLR Roebber
+ * - La décomposition rain/snowfall des modèles n'est pas utilisée pour le type
  */
 
 // CORS headers

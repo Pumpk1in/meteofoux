@@ -178,7 +178,7 @@ anything placed in the proxy becomes untestable.
 - **`determine_symbol($snowfall, $rain, $wmo_code, $is_day)`** — Selects weather icon with priority: WMO sleet codes (56,57,66,67,68,69) → rain+snowfall sleet → snowfall only → rain only → WMO fallback → cloud cover codes
 
 #### Data Enrichment
-- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — Multi-model fusion for Open-Meteo. Implements priority chains (best_match → AROME HD → seamless → AROME). Corrects weather_code ↔ precipitation inconsistencies. Applies Roebber SLR. Converts wind km/h → m/s. Returns enriched hourly array with 23+ keys
+- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — Multi-model fusion for Open-Meteo. Implements priority chains (best_match → AROME HD → seamless → AROME). Corrects weather_code ↔ precipitation inconsistencies. Rain/snow is decided by `classify_precipitation` (wet-bulb rule) and `snowfall` is the Roebber value — the same as for MET.no; the models' own rain/snowfall split is not used, and weather_code inconsistencies are judged on the same total precipitation. Converts wind km/h → m/s. Returns enriched hourly array with 23+ keys
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation
 - **`enrich_metno_timeseries($metno)`** — Enriches MET.no data with dew point calculation and Roebber classification for next_1_hours and next_6_hours periods. Idempotent (recomputes from untouched source fields), which the golden-master relies on
 
@@ -446,6 +446,10 @@ Day sections also get subtle background tint per source via `data-source` attrib
 2. **Snow quality:** dry if temp ≤ -2°C OR dew_point ≤ -3°C, otherwise wet
 3. **Roebber SLR:** base 14:1 × temp_adj × humidity_adj × wind_adj, clamped 5–25
 4. **Snowfall conversion:** `precip_mm × SLR / 10 = snowfall_cm`
+
+The same rule applies to Open-Meteo, AROME and MET.no: the models' own rain/snowfall split is
+ignored (best_match was seen forecasting rain at -1.5°C at 2590 m). `snowfall` and
+`snowfall_roebber` therefore hold the same value; the frontend reads `snowfall`.
 
 ### Weather Icon Selection (WMO Priority)
 

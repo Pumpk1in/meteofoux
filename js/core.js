@@ -311,8 +311,6 @@ const DataService = {
         // Fonction commune pour créer les données horaires
         const createHourlyData = (agg) => this.indexByTime(agg?.hourly, (data, idx) => {
             const timeKey = data.time[idx].substring(0, 16);
-            const snowOM = data.snowfall[idx] || 0;
-            const snowRoebber = data.snowfall_roebber?.[idx] || 0;
 
             return {
                 temp: data.temperature[idx],
@@ -322,7 +320,7 @@ const DataService = {
                 windSpeed: data.wind_speed[idx],
                 wind_gusts: data.wind_gusts?.[idx] ?? data.wind_speed[idx],
                 windDir: data.wind_direction[idx],
-                snow: Math.max(snowOM, snowRoebber),
+                snow: data.snowfall[idx] || 0,
                 rain: data.rain[idx] || 0,
                 precipProb: data.precipitation_probability[idx] || 0,
                 freezingPoint: data.freezing_point[idx],
@@ -337,14 +335,12 @@ const DataService = {
 
         // Fonction commune pour créer les données 6h
         const createSixHourlyData = (agg) => this.indexByTime(agg?.six_hourly, (data, idx) => {
-            const snowOM = data.snowfall[idx] || 0;
-            const snowRoebber = data.snowfall_roebber?.[idx] || 0;
             return {
                 tempMin: data.temperature_min[idx],
                 tempMax: data.temperature_max[idx],
                 windSpeed: data.wind_speed_max[idx],
                 windDir: data.wind_direction[idx],
-                snow: Math.max(snowOM, snowRoebber),
+                snow: data.snowfall[idx] || 0,
                 rain: data.rain[idx] || 0,
                 precipProb: data.precipitation_probability[idx] || 0,
                 freezingPoint: data.freezing_point[idx],

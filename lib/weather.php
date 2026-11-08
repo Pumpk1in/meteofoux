@@ -513,22 +513,19 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
         $freezing_point = $freezing_correction['value'];
         $freezing_corrected = $freezing_correction['corrected'];
         
-        // Rain/Snowfall décomposés
-        $rain = get_model_value($hourly, 'rain', $i, $prio_decomp);
-        $snowfall = get_model_value($hourly, 'snowfall', $i, $prio_decomp);
-        
         // Weather code - IMPORTANT pour determine_symbol quand pas de précipitations
         $weather_code = get_model_value($hourly, 'weather_code', $i, $prio_decomp);
 
         // ============================================================
         // CORRECTION INCOHÉRENCE WEATHER_CODE / PRÉCIPITATIONS
         // Open-Meteo "best_match" peut mixer des modèles incohérents :
-        // weather_code=61 (pluie) mais rain=0.
+        // weather_code=61 (pluie) mais précipitation totale nulle. On juge sur
+        // le total, celui-là même que classe classify_precipitation plus bas.
         //
         // Stratégie : fallback sur meteofrance_arome_france si incohérent,
         // puis correction basée sur cloud_cover en dernier recours.
         // ============================================================
-        $has_precip_data = ($rain > 0 || $snowfall > 0 || $precip > 0);
+        $has_precip_data = $precip > 0;
 
         if (in_array($weather_code, $precip_codes) && !$has_precip_data) {
             // Incohérence détectée : essayer meteofrance_arome_france
@@ -545,8 +542,6 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
             if ($arome_weather_code !== null && ($arome_is_precip_code === $arome_has_precip)) {
                 // Utiliser les données AROME (cohérentes)
                 $weather_code = $arome_weather_code;
-                $rain = $arome_rain;
-                $snowfall = $arome_snowfall;
                 $precip = $arome_precip;
             } else {
                 // AROME aussi incohérent ou indisponible → correction basée sur cloud_cover
@@ -573,55 +568,20 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
         }
 
         // ============================================================
-        // FALLBACK INTELLIGENT NEIGE/PLUIE
-        // Si on a des précipitations mais pas de décomposition rain/snowfall,
-        // on utilise la température et le point de rosée pour déduire le type.
-        // Note: $rain et $snowfall sont déjà récupérés plus haut pour la
-        // correction du weather_code.
+        // CLASSIFICATION NEIGE/PLUIE : la même règle pour toutes les sources
+        // Le type est décidé par la température humide (is_snow_conditions) et
+        // la quantité de neige par Roebber, exactement comme pour MET.no.
+        // La décomposition rain/snowfall des modèles n'est pas utilisée :
+        // best_match annonce par exemple de la pluie à -1.5°C à 2590 m.
+        // (Seul le contrôle de cohérence AROME ci-dessus lit celle d'AROME.)
         // ============================================================
-        if ($rain === null && $snowfall === null) {
-            if ($precip > 0 && $temp !== null) {
-                if (is_snow_conditions($temp, $dew)) {
-                    $snowfall = $precip;
-                    $rain = 0;
-                } else {
-                    $rain = $precip;
-                    $snowfall = 0;
-                }
-            } else {
-                $rain = 0;
-                $snowfall = 0;
-            }
-        } elseif (($rain == 0 && $snowfall == 0) && $precip > 0) {
-            // Cas 2: rain/snowfall à 0 mais précipitation > 0
-            if (is_snow_conditions($temp, $dew)) {
-                $snowfall = $precip;
-                $rain = 0;
-            } else {
-                $rain = $precip;
-                $snowfall = 0;
-            }
-        }
-        
-        // Assurer que rain/snowfall ne sont jamais null
-        $rain = $rain ?? 0;
-        $snowfall = $snowfall ?? 0;
-
-        // Calcul Roebber (calibré Alpes) via classify_precipitation
         // Note: wind_speed est en km/h ici, on convertit en m/s pour Roebber
         $wind_ms_for_slr = $wind_speed !== null ? $wind_speed / 3.6 : null;
         $classified = classify_precipitation($precip, $temp, $dew, $humidity, $wind_ms_for_slr);
+        $rain = $classified['rain'];
+        $snowfall = $classified['snowfall_roebber'];
         $roebber_slr = $classified['roebber_slr'];
         $snowfall_roebber = $classified['snowfall_roebber'];
-
-        // ============================================================
-        // CORRECTION HYBRIDE : si Open-Meteo dit "pluie" mais que les
-        // conditions locales indiquent de la neige, on corrige
-        // ============================================================
-        if ($rain > 0 && is_snow_conditions($temp, $dew)) {
-            $snowfall += $rain;  // mm → cm (ratio ~1:10, simplifié 1:1 car neige humide)
-            $rain = 0;
-        }
         
         // UV index (préférer uv_index, fallback sur uv_index_clear_sky)
         $uv = get_model_value($hourly, 'uv_index', $i, $prio_hd);
