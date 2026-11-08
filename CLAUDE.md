@@ -48,6 +48,21 @@ Only regenerate the winter fixture (and re-inspect the diff) when a behaviour ch
 (`station`, `observatoire`) are regenerated with
 `docker compose exec -T meteofoux php tests/regen-capture-fixture.php <name>`, under the same rule.
 
+**Frontend checks:** the frontend has no unit tests. Before and after a frontend change, take a
+headless-Edge snapshot of every summary, card (folded ones included) and chart series, for the
+4 points × 3 sources × 7 days, then diff them:
+
+```bash
+node tests/ui-snapshot.js <replay_dir> before.json   # replay_dir outside the repo, e.g. a temp dir
+# ... change the frontend ...
+node tests/ui-snapshot.js <replay_dir> after.json    # same replay_dir
+node tests/ui-snapshot-diff.js before.json after.json
+```
+
+The first run records the local proxy's responses in `replay_dir`; both runs then replay them
+with a frozen clock, so any difference comes from the code. It uses a throwaway Edge profile
+(override the binary with `EDGE=...`). Every remaining difference must be explained.
+
 **Asset versioning:** `index.php` appends `?v=<filemtime>` to `style.css`, `js/core.js` and
 `js/ui.js`. There is **no version number to bump by hand** — editing a file changes its URL.
 `sw.js` therefore lists only unversioned assets in `SHELL_ASSETS`, and its `CACHE_VERSION`
@@ -65,6 +80,8 @@ METEOFOUX/
 │   ├── weather-test.php    # Test suite (CLI only) — run it after touching lib/
 │   ├── make-winter-fixture.php  # Regenerates the winter fixture
 │   ├── regen-capture-fixture.php # Recomputes expected outputs of a real capture fixture
+│   ├── ui-snapshot.js           # Headless-Edge snapshot of the whole UI (frontend checks)
+│   ├── ui-snapshot-diff.js      # Diffs two UI snapshots
 │   └── fixtures/           # Golden-master fixtures (versioned)
 ├── style.css               # Responsive CSS with dark/light themes
 ├── sw.js                   # Service worker (PWA offline shell)
