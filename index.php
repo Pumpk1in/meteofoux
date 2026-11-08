@@ -34,10 +34,6 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
             <i data-lucide="sun" class="icon-light"></i>
             <i data-lucide="moon" class="icon-dark"></i>
         </button>
-        <button class="source-toggle" id="global-source-toggle" onclick="App.toggleGlobalSource()" title="Changer la source météo">
-            <span class="source-label">Open<br>Meteo</span>
-            <i data-lucide="arrow-left-right" class="lucide"></i>
-        </button>
     </div>
 </header>
 

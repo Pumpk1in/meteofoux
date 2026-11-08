@@ -485,25 +485,15 @@ const App = {
 
         document.getElementById('altitude-tabs').innerHTML = altitudeTabsHtml + addBtnHtml;
 
-        // Mettre à jour le toggle source global
-        this.updateSourceToggle();
+        this.updateSourceAttribute();
 
         lucide.createIcons();
         this.initDragReorder();
     },
 
-    updateSourceToggle() {
-        const toggle = document.getElementById('global-source-toggle');
-        const source = this.state.globalSource;
-        toggle.className = `source-toggle is-${source}`;
-        const labels = {
-            'openmeteo': 'Open<br>Meteo',
-            'arome': 'AROME<br>MF',
-            'metno': 'Met<br>.no'
-        };
-        toggle.querySelector('.source-label').innerHTML = labels[source] || labels['openmeteo'];
-        // Mettre à jour l'attribut data-source sur le HTML pour le style du header
-        document.documentElement.setAttribute('data-source', source);
+    // data-source sur <html> : teinte du détail du jour selon le modèle choisi
+    updateSourceAttribute() {
+        document.documentElement.setAttribute('data-source', this.state.globalSource);
     },
 
     updateTopBar() {
@@ -565,16 +555,16 @@ const App = {
         this.render();
     },
 
-    toggleGlobalSource() {
-        // Toujours autorisé : le rendu dégrade seul si la source choisie n'a pas
-        // de données pour le jour courant (renderDayContent() affiche alors un message).
-        // Cycle : openmeteo → arome → metno → openmeteo
-        const sources = ['openmeteo', 'arome', 'metno'];
-        const currentIndex = sources.indexOf(this.state.globalSource);
-        this.state.globalSource = sources[(currentIndex + 1) % sources.length];
-        localStorage.setItem('fmeteo_source', this.state.globalSource);
-        this.updateSourceToggle();
+    // Modèle affiché en détail (cases du bloc verdict). Mémorisé, valable pour tous les jours.
+    // Le rendu garde la position de défilement : seul le détail change.
+    selectSource(source) {
+        if (source === this.state.globalSource) return;
+        this.state.globalSource = source;
+        localStorage.setItem('fmeteo_source', source);
+        this.updateSourceAttribute();
+        const scrollY = window.scrollY;
         this.render();
+        window.scrollTo(0, scrollY);
     },
 
     toggleTheme() {
@@ -676,24 +666,33 @@ const App = {
                 </span>
             </h2>`;
 
+        // Verdict du jour selon tous les modèles disponibles (bloc en tête du jour)
+        const summaries = {};
+        for (const key of ['openmeteo', 'arome', 'metno']) {
+            const src = pointData.sources[key];
+            summaries[key] = src ? DataNormalizer.daySummary(day, series, src) : null;
+        }
+        const verdict = DataNormalizer.computeVerdict(summaries, elevation);
+        const verdictHtml = Components.Verdict(verdict, summaries, source);
+
         // Créneaux du jour (chronologie commune), avec les données de la source choisie
         const dayEntries = series
             .filter(e => Utils.getLocalDay(e.time) === day)
             .map(e => ({ time: e.time, hourly: hourlyData[e.time] || null, sixHourly: sixHourlyData[e.time] || null }));
 
         // Pas de données de cette source pour ce jour (AROME couvre ~4-5 jours, source indisponible)
-        const hasData = dayEntries.some(e => (e.hourly && e.hourly.temp !== null) || (e.sixHourly && e.sixHourly.tempMax !== null));
-        if (!hasData) {
+        if (!summaries[source]) {
             const label = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' }[source];
-            const hint = source === 'arome'
-                ? '<small>AROME couvre ~4-5 jours. Utilisez Open-Meteo ou MET.no pour les prévisions à plus long terme.</small>'
-                : '';
+            const hint = source === 'arome' ? 'AROME ne prévoit qu’à 4 ou 5 jours. ' : '';
             return `
-                <section class="day-section day-section-no-data" data-day="${day}" id="day-${day}">
+                <section class="day-section" data-day="${day}" id="day-${day}">
                     ${dayHeaderHtml}
-                    <div class="no-data-message">
-                        <p>Données ${label} non disponibles pour ce jour</p>
-                        ${hint}
+                    ${verdictHtml}
+                    <div class="day-detail">
+                        <div class="no-data-message">
+                            <p>${label} n’a pas de prévision pour ce jour</p>
+                            <small>${hint}Choisissez un autre modèle ci-dessus.</small>
+                        </div>
                     </div>
                 </section>
             `;
@@ -719,12 +718,6 @@ const App = {
 
         const preparedEntries = displayEntries.map(e => DataNormalizer.prepareEntry(e, isToday));
         const preparedHourlyEntries = hourlyEntries.map(e => DataNormalizer.prepareEntry(e, true));
-
-        // Résumé sur TOUTE la journée (totaux et isotherme 0 °C)
-        const summary = DataNormalizer.daySummary(day, series, sourceData);
-
-        // Construire le HTML
-        const summaryHtml = Components.Summary(summary, summary.freezing, elevation);
 
         // Déterminer si on peut afficher un graphique pour ce jour
         const dayIndex = this.state.days.indexOf(day);
@@ -752,8 +745,8 @@ const App = {
         return `
             <section class="day-section" data-day="${day}" id="day-${day}">
                 ${dayHeaderHtml}
-                ${summaryHtml}
-                ${contentHtml}
+                ${verdictHtml}
+                <div class="day-detail">${contentHtml}</div>
             </section>
         `;
     },
@@ -1248,55 +1241,92 @@ const Components = {
         `;
     },
 
-    Summary(totals, freezing, elevation) {
-        const tempHtml = `
-            <span class="summary-item" title="Température min/max">
-                <i data-lucide="thermometer"></i>
-                <span>${Math.round(totals.tempMin)}° / ${Math.round(totals.tempMax)}°</span>
-            </span>
-        `;
-
-        // Un cumul qui s'arrondit à 0.0 s'affiche "--" (résidus de la répartition neige/pluie)
-        const snowHtml = totals.snow >= 0.05
-            ? `<span class="summary-item snow" title="Neige cumulée">
-                <i data-lucide="snowflake"></i>
-                <span>${totals.snow.toFixed(1)} cm</span>
-               </span>`
-            : `<span class="summary-item muted"><i data-lucide="snowflake"></i> --</span>`;
-
-        const rainHtml = totals.rain >= 0.05
-            ? `<span class="summary-item rain" title="Pluie cumulée">
-                <i data-lucide="cloud-rain-wind"></i>
-                <span>${totals.rain.toFixed(1)} mm</span>
-               </span>`
-            : `<span class="summary-item muted"><i data-lucide="cloud-rain-wind"></i> --</span>`;
-
-        // Cumuls partiels : afficher la période couverte, sinon les sources ne sont pas comparables
+    // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,
+    // puis une case par modèle (preuve du verdict et choix du modèle affiché en détail).
+    // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null }
+    Verdict(verdict, summaries, selected) {
+        if (!verdict) return '';
+        const LABELS = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' };
+        const dec = n => n.toFixed(1).replace('.', ',');
+        const deg = n => String(Math.round(n)).replace('-', '−');
         const hourLabel = (ms, isEnd) => {
             const h = new Date(ms).getHours();
             return `${isEnd && h === 0 ? 24 : h}h`;
         };
-        const periodHtml = totals.period
-            ? `<span class="summary-item muted" title="Cumuls calculés sur cette période seulement : la source ne couvre pas toute la journée">
-                <i data-lucide="clock"></i>
-                <span>${hourLabel(totals.period.from, false)}–${hourLabel(totals.period.to, true)}</span>
-               </span>`
-            : '';
+        const { mode, range, basis } = verdict;
 
-        const freezingHtml = (freezing.min && freezing.max && freezing.min > 100)
-            ? `<span class="summary-item" title="Isotherme 0°C">
-                <i data-lucide="thermometer-snowflake"></i>
-                <span class="biline"><span>${Math.round(freezing.min)}m</span><span>${Math.round(freezing.max)}m</span></span>
-               </span>`
-            : '';
+        let value, unit, what;
+        if (mode === 'dry') {
+            value = `${deg(range.lo)} à ${deg(range.hi)}`;
+            unit = '°C';
+            const cc = verdict.cloudCover;
+            what = cc === null ? 'Sec' : `Sec, ${cc < 35 ? 'ensoleillé' : cc < 70 ? 'avec des éclaircies' : 'plutôt nuageux'}`;
+        } else {
+            const fmt = mode === 'snow' ? v => String(Math.round(v)) : dec;
+            const lo = fmt(range.lo), hi = fmt(range.hi);
+            value = basis.length === 1 || lo === hi ? hi : `${lo} à ${hi}`;
+            unit = mode === 'snow' ? 'cm' : 'mm';
+            const quality = { wet: ' humide', dry: ' sèche' }[verdict.snowQuality] || '';
+            what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
+        }
+        const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
+        const agreeHtml = verdict.diverge === null ? ''
+            : verdict.diverge
+                ? '<span class="verdict-agree"><i data-lucide="split"></i>Les modèles divergent</span>'
+                : '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>';
+
+        const facts = [];
+        if (mode !== 'dry' && verdict.tempMin !== null) {
+            facts.push(['thermometer', `${deg(verdict.tempMin)} à ${deg(verdict.tempMax)} °C`]);
+        }
+        if (mode === 'dry' && verdict.nightMin !== null) {
+            facts.push(['moon', verdict.nightMin < 0 ? `Regel la nuit, jusqu’à ${deg(verdict.nightMin)} °C` : 'Pas de regel la nuit']);
+        }
+        if (mode === 'dry' && verdict.windMax !== null) {
+            const kmh = Utils.msToKmh(verdict.windMax);
+            facts.push(['wind', `Vent ${kmh < 20 ? 'faible' : kmh < 40 ? 'modéré' : 'fort'}, ${kmh} km/h au plus`]);
+        }
+        if (verdict.freezing.position) {
+            const pos = { above: 'au-dessus du point', below: 'sous le point', around: 'autour du point' }[verdict.freezing.position];
+            const r10 = v => Math.round(v / 10) * 10;
+            facts.push(['thermometer-snowflake', `Iso 0 °C entre ${r10(verdict.freezing.min)} et ${r10(verdict.freezing.max)} m, ${pos}`]);
+        }
+
+        const cells = Object.keys(LABELS).map(key => {
+            const s = summaries[key];
+            if (!s) {
+                return `
+                    <button class="model-cell is-${key}" disabled>
+                        <span class="model-name">${LABELS[key]}</span>
+                        <span class="model-value">—</span>
+                        <span class="model-sub">${key === 'arome' ? 'Ne prévoit pas si loin' : 'Pas de données'}</span>
+                    </button>`;
+            }
+            const amount = mode === 'snow' ? s.snow : s.rain;
+            const valueHtml = mode === 'snow' ? `${dec(s.snow)} cm`
+                : mode === 'rain' ? `${dec(s.rain)} mm`
+                : `${deg(s.tempMin)} / ${deg(s.tempMax)}°`;
+            const barHtml = mode === 'dry' ? ''
+                : `<span class="model-bar"><span style="width: ${range.hi > 0 ? Math.max(3, Math.round(amount / range.hi * 100)) : 3}%"></span></span>`;
+            const sub = s.period ? `${hourLabel(s.period.from, false)}–${hourLabel(s.period.to, true)} seulement`
+                : s.sixHourly ? 'Par pas de 6 h'
+                : mode === 'dry' ? (s.nightMin !== null ? `Nuit ${deg(s.nightMin)}°` : '')
+                : `${deg(s.tempMin)} / ${deg(s.tempMax)}°`;
+            return `
+                <button class="model-cell is-${key}" aria-pressed="${key === selected}" onclick="App.selectSource('${key}')">
+                    <span class="model-name">${LABELS[key]}</span>
+                    <span class="model-value">${valueHtml}</span>
+                    ${barHtml}
+                    <span class="model-sub">${sub}</span>
+                </button>`;
+        }).join('');
 
         return `
-            <div class="summary-bar">
-                ${tempHtml}
-                ${snowHtml}
-                ${rainHtml}
-                ${periodHtml}
-                ${freezingHtml}
+            <div class="verdict" data-mode="${mode}">
+                <p class="verdict-main"><span class="verdict-value">${value}</span><span class="verdict-unit">${unit}</span></p>
+                <p class="verdict-sub"><span>${what}, ${by}</span>${agreeHtml}</p>
+                ${facts.length ? `<ul class="verdict-facts">${facts.map(([icon, text]) => `<li><i data-lucide="${icon}"></i>${text}</li>`).join('')}</ul>` : ''}
+                <div class="verdict-models" role="group" aria-label="Modèle affiché en détail">${cells}</div>
             </div>
         `;
     },

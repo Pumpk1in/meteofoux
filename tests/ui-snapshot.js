@@ -92,7 +92,7 @@ let proc = null;
         globalThis.Date = FrozenDate;
     })();` });
     await send('Page.navigate', { url: 'http://localhost:8123/' });
-    if (!await waitFor(`typeof App !== 'undefined' && document.querySelectorAll('.summary-bar').length > 0`)) throw new Error('page non chargée');
+    if (!await waitFor(`typeof App !== 'undefined' && document.querySelectorAll('.verdict').length > 0`)) throw new Error('page non chargée');
     await waitFor(`Object.keys(DataService.state.data).length >= 4`);
 
     const snapshot = { frozen: new Date(FROZEN).toISOString(), views: {} };
@@ -100,7 +100,7 @@ let proc = null;
         await evaluate(`App.selectPoint('${point}')`);
         await waitFor(`App.state.currentPoint === '${point}'`);
         for (const source of ['openmeteo', 'arome', 'metno']) {
-            for (let k = 0; k < 3 && (await evaluate('App.state.globalSource')) !== source; k++) await evaluate('App.toggleGlobalSource()');
+            await evaluate(`App.selectSource('${source}')`);
             await sleep(1200);
             snapshot.views[`${point}/${source}`] = await evaluate(`(() => {
                 const norm = s => (s || '').replace(/\\s+/g, ' ').trim();
@@ -114,7 +114,7 @@ let proc = null;
                             norm(c.textContent) + ' [' + (c.querySelector('img.icon')?.getAttribute('src') || '').replace('weather/svg/', '') + ']');
                     });
                     days[sec.dataset.day] = {
-                        resume: norm(sec.querySelector('.summary-bar')?.textContent),
+                        resume: norm(sec.querySelector('.verdict')?.textContent),
                         sans_donnees: norm(sec.querySelector('.no-data-message')?.textContent) || null,
                         cartes: grids,
                     };

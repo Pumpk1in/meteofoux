@@ -512,7 +512,12 @@ const DataNormalizer = {
         const T = this.VERDICT;
         const sources = Object.keys(summaries).filter(k => summaries[k]);
         if (!sources.length) return null;
-        const list = sources.map(k => summaries[k]);
+        // Une source qui ne couvre qu'une partie de la journée (MET.no le soir) fausserait la
+        // fourchette : ses 0 cm sur 4 h passeraient pour un désaccord. Elle ne compte que si
+        // aucune source ne couvre toute la journée.
+        const full = sources.filter(k => !summaries[k].period);
+        const basis = full.length ? full : sources;
+        const list = basis.map(k => summaries[k]);
         const spread = values => Math.max(...values) - Math.min(...values);
 
         const snow = list.map(s => s.snow), rain = list.map(s => s.rain);
@@ -553,6 +558,7 @@ const DataNormalizer = {
         return {
             mode,
             sources,
+            basis,  // sources retenues pour la fourchette et l'accord
             range,
             diverge,
             tempMin,
