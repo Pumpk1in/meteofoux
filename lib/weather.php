@@ -13,9 +13,9 @@
 // ================= CONSTANTES MÉTÉO =================
 
 
-// Seuils de détection neige (fallback quand rain/snowfall absents)
-const SNOW_TEMP_THRESHOLD = 1.5;       // °C - Neige si temp <= cette valeur
-const SNOW_DEW_POINT_THRESHOLD = 0.5;  // °C - ET dew_point <= cette valeur
+// Seuil de détection neige, sur la température humide (wet-bulb) : elle tient compte
+// du refroidissement par évaporation, et vaut T en air saturé
+const SNOW_WET_BULB_THRESHOLD = 1.0;   // °C - Neige si température humide <= cette valeur
 
 // Seuils qualité de neige (sèche vs humide)
 const DRY_SNOW_TEMP_THRESHOLD = -2;       // °C - Neige sèche si temp <= cette valeur
@@ -54,16 +54,22 @@ function get_model_value($data, $key, $index, $models_priority) {
 }
 
 /**
- * Détermine si c'est de la neige basé sur température et point de rosée
- * Utilisé comme fallback quand rain/snowfall ne sont pas disponibles
- * 
+ * Détermine si les précipitations tombent sous forme de neige
+ * Critère : température humide <= SNOW_WET_BULB_THRESHOLD.
+ *
+ * Un double seuil sur T et Td ne fonctionne pas : pendant les précipitations l'air est
+ * saturé (T == Td), et "T <= 1.5 ET Td <= 0.5" revenait alors à "T <= 0.5".
+ * La température humide reste juste en air saturé, et capte la neige par évaporation
+ * en air sec au-dessus de 0°C.
+ *
  * @param float|null $temp Température en °C
- * @param float|null $dew_point Point de rosée en °C
+ * @param float|null $dew_point Point de rosée en °C (null : air supposé saturé)
  * @return bool True si les conditions indiquent de la neige
  */
 function is_snow_conditions($temp, $dew_point) {
     if ($temp === null) return false;
-    return $temp <= SNOW_TEMP_THRESHOLD && ($dew_point === null || $dew_point <= SNOW_DEW_POINT_THRESHOLD);
+    $wet_bulb = $dew_point === null ? $temp : calculate_wet_bulb($temp, $dew_point);
+    return $wet_bulb <= SNOW_WET_BULB_THRESHOLD;
 }
 
 /**
@@ -205,6 +211,36 @@ function calculate_dew_point($temp, $humidity) {
     $alpha = (($a * $temp) / ($b + $temp)) + log($humidity / 100);
     
     return round(($b * $alpha) / ($a - $alpha), 1);
+}
+
+/**
+ * Calcule la température humide (wet-bulb) à partir de la température et du point de rosée
+ * Formule de Stull (2011), l'humidité relative étant déduite de T et Td par Magnus-Tetens.
+ * Écart mesuré face au calcul psychrométrique exact à 750 hPa (~2500 m) : -0.4 à 0°C,
+ * biais moyen -0.2°C. Bornée entre Td et T, comme l'impose la physique.
+ *
+ * @param float|null $temp Température en °C
+ * @param float|null $dew_point Point de rosée en °C
+ * @return float|null Température humide en °C
+ */
+function calculate_wet_bulb($temp, $dew_point) {
+    if ($temp === null || $dew_point === null) {
+        return null;
+    }
+    if ($dew_point >= $temp) {
+        return round($temp, 1);  // Air saturé
+    }
+
+    $a = 17.27;
+    $b = 237.7;
+    $rh = 100 * exp(($a * $dew_point) / ($b + $dew_point) - ($a * $temp) / ($b + $temp));
+
+    $wet_bulb = $temp * atan(0.151977 * sqrt($rh + 8.313659))
+        + atan($temp + $rh) - atan($rh - 1.676331)
+        + 0.00391838 * pow($rh, 1.5) * atan(0.023101 * $rh)
+        - 4.686035;
+
+    return round(max($dew_point, min($temp, $wet_bulb)), 1);
 }
 
 /**

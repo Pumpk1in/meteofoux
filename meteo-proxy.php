@@ -19,7 +19,7 @@
  * Fallback neige/pluie :
  * - Si précipitation > 0 mais rain/snowfall absents ou à 0
  * - On utilise température + point de rosée pour déduire le type
- * - Neige si : temp <= 1.5°C ET dew_point <= 0.5°C
+ * - Neige si : température humide <= 1.0°C (calculée depuis T et Td)
  */
 
 // CORS headers
@@ -265,7 +265,7 @@ $output = [
             ]
         ],
         'slr_method' => 'Roebber simplifié (base ' . ROEBBER_BASE_SLR . ', calibré Alpes) - facteurs: temp, humidity, wind',
-        'snow_detection' => 'temp <= ' . SNOW_TEMP_THRESHOLD . '°C AND dew_point <= ' . SNOW_DEW_POINT_THRESHOLD . '°C',
+        'snow_detection' => 'wet-bulb temperature <= ' . SNOW_WET_BULB_THRESHOLD . '°C (Stull, from temp and dew_point)',
         'snow_quality' => 'wet if temp > ' . DRY_SNOW_TEMP_THRESHOLD . '°C AND dew_point > ' . DRY_SNOW_DEW_POINT_THRESHOLD . '°C, else dry',
         'freezing_level_correction' => 'corrected=true when API value > elevation AND temp <= 0°C',
         'http_metno' => $http_metno,

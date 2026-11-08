@@ -44,7 +44,9 @@ Three fixtures, because they cover different things:
   2590 m): real snow with temperatures around 0°C, i.e. the borderline rain/snow cases.
 
 Only regenerate the winter fixture (and re-inspect the diff) when a behaviour change is
-**intended** — regenerating it to make a red suite green defeats its purpose.
+**intended** — regenerating it to make a red suite green defeats its purpose. Real captures
+(`station`, `observatoire`) are regenerated with
+`docker compose exec -T meteofoux php tests/regen-capture-fixture.php <name>`, under the same rule.
 
 **Asset versioning:** `index.php` appends `?v=<filemtime>` to `style.css`, `js/core.js` and
 `js/ui.js`. There is **no version number to bump by hand** — editing a file changes its URL.
@@ -62,6 +64,7 @@ METEOFOUX/
 ├── tests/
 │   ├── weather-test.php    # Test suite (CLI only) — run it after touching lib/
 │   ├── make-winter-fixture.php  # Regenerates the winter fixture
+│   ├── regen-capture-fixture.php # Recomputes expected outputs of a real capture fixture
 │   └── fixtures/           # Golden-master fixtures (versioned)
 ├── style.css               # Responsive CSS with dark/light themes
 ├── sw.js                   # Service worker (PWA offline shell)
@@ -136,8 +139,7 @@ anything placed in the proxy becomes untestable.
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `SNOW_TEMP_THRESHOLD` | 1.5°C | Max temp for snow classification |
-| `SNOW_DEW_POINT_THRESHOLD` | 0.5°C | Max dew point for snow classification |
+| `SNOW_WET_BULB_THRESHOLD` | 1.0°C | Max wet-bulb temperature for snow classification |
 | `DRY_SNOW_TEMP_THRESHOLD` | -2°C | Dry snow temp limit |
 | `DRY_SNOW_DEW_POINT_THRESHOLD` | -3°C | Dry snow dew point limit |
 | `ROEBBER_BASE_SLR` | 14.0 | Base snow-to-liquid ratio (alpine) |
@@ -160,7 +162,7 @@ anything placed in the proxy becomes untestable.
 - **`get_curl_handle($url, $proxy_host, $proxy_port, $proxy_user, $proxy_pass)`** — Creates CURL handle with optional HTTP proxy support
 
 #### Snow/Precipitation Detection
-- **`is_snow_conditions($temp, $dew_point)`** — Returns true if temp ≤ 1.5°C AND dew_point ≤ 0.5°C
+- **`is_snow_conditions($temp, $dew_point)`** — Returns true if the wet-bulb temperature ≤ 1.0°C. A null dew point means saturated air (wet-bulb = temp). Replaces the former "temp ≤ 1.5°C AND dew_point ≤ 0.5°C", which collapsed to "temp ≤ 0.5°C" in saturated air (T == Td during precipitation)
 - **`get_snow_quality($snowfall, $temp, $dew_point)`** — Returns `'dry'`, `'wet'`, or `null`
 - **`calculate_roebber_slr($temp, $humidity, $wind_speed)`** — Snow-to-Liquid Ratio (Roebber method, alpine calibration). Base 14:1, adjusted by temp (2x above -2°C), humidity (>90% = denser), wind (>3 m/s = compaction). Returns 5.0–25.0
 - **`calculate_snowfall_from_slr($precipitation, $slr)`** — Converts precipitation mm to snowfall cm using SLR
@@ -168,6 +170,7 @@ anything placed in the proxy becomes untestable.
 
 #### Calculations
 - **`calculate_dew_point($temp, $humidity)`** — Magnus-Tetens formula (±0.4°C, range -40°C to +50°C)
+- **`calculate_wet_bulb($temp, $dew_point)`** — Stull (2011) formula, relative humidity derived from T and Td. Within 0.4°C of the exact psychrometric value at 2500 m (mean bias -0.2°C). Clamped between Td and T
 - **`correct_freezing_level($freezing_level, $freezing_level_fallback, $temp, $elevation)`** — Handles temperature inversions. Validates freezing_level vs elevation+temp coherence. Falls back to meteoswiss_icon_seamless. Returns `{value, corrected, source}`
 
 #### Weather Icon Resolution
@@ -439,7 +442,7 @@ Day sections also get subtle background tint per source via `data-source` attrib
 
 ### Snow Detection & Classification
 
-1. **Snow conditions:** temp ≤ 1.5°C AND dew_point ≤ 0.5°C → SNOW
+1. **Snow conditions:** wet-bulb temperature ≤ 1.0°C → SNOW
 2. **Snow quality:** dry if temp ≤ -2°C OR dew_point ≤ -3°C, otherwise wet
 3. **Roebber SLR:** base 14:1 × temp_adj × humidity_adj × wind_adj, clamped 5–25
 4. **Snowfall conversion:** `precip_mm × SLR / 10 = snowfall_cm`

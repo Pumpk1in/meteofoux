@@ -136,13 +136,24 @@ check('0C / 100%', calculate_dew_point(0, 100), 0.0);
 check('temp null', calculate_dew_point(null, 80), null);
 check('humidite nulle', calculate_dew_point(10, 0), null);
 
-section('is_snow_conditions (seuils 1.5C / 0.5C)');
-check('sous les deux seuils', is_snow_conditions(0, -1), true);
-check('pile sur les seuils', is_snow_conditions(1.5, 0.5), true);
-check('temp au-dessus', is_snow_conditions(1.6, 0.5), false);
-check('dew point au-dessus', is_snow_conditions(1.5, 0.6), false);
+section('calculate_wet_bulb (Stull, bornee entre Td et T)');
+check('exemple de Stull : 20C / 50%', calculate_wet_bulb(20, 9.3), 13.7);
+check('air sature : Tw = T', calculate_wet_bulb(0.7, 0.7), 0.7);
+check('air sec : refroidissement par evaporation', calculate_wet_bulb(3, -6), -0.8);
+check('temp null', calculate_wet_bulb(null, -5), null);
+check('dew point null', calculate_wet_bulb(3, null), null);
+
+section('is_snow_conditions (temperature humide <= 1.0C)');
+check('froid', is_snow_conditions(0, -1), true);
+// En air sature T == Td : l'ancienne regle (T <= 1.5 ET Td <= 0.5) revenait a T <= 0.5
+check('air sature a +0.7C (cas Observatoire 9/11)', is_snow_conditions(0.7, 0.7), true);
+check('air sature a +1.2C', is_snow_conditions(1.2, 1.2), false);
+check('air sec a +3C : neige par evaporation', is_snow_conditions(3, -6), true);
+check('pile sur le seuil (Tw = 1.0)', is_snow_conditions(4, -2), true);
+check('air sec a +5C', is_snow_conditions(5, -3), false);
 check('temp null', is_snow_conditions(null, -5), false);
-check('dew point null tolere', is_snow_conditions(0, null), true);
+check('dew point null : air suppose sature', is_snow_conditions(0.8, null), true);
+check('dew point null au-dessus du seuil', is_snow_conditions(1.2, null), false);
 
 section('get_snow_quality (seuils -2C / -3C)');
 check('froid = seche', get_snow_quality(5, -5, -8), 'dry');
