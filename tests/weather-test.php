@@ -338,6 +338,26 @@ check('pas seul : le reste en neige', $six['snowfall'][0] > 0, true);
 $cold = split_precipitation_by_temperature_range(6.0, -4.0, -1.0, 0, 100, 2);
 check('pas seul et froid : tout en neige', $cold['rain'] == 0 && $cold['snowfall'] > 0, true);
 
+section('Intensite d une icone 6 h : debit horaire moyen du pas');
+// 6 heures de 0.5 mm de pluie : 3 mm sur le pas, soit 0.5 mm/h -> pluie legere
+$rain_hours = ['time' => [], 'temperature' => [], 'dew_point' => [], 'wind_speed' => [], 'wind_direction' => [],
+    'precipitation' => [], 'rain' => [], 'snowfall' => [], 'snowfall_roebber' => [], 'precipitation_probability' => [],
+    'uv_index' => [], 'cloud_cover' => [], 'freezing_point' => [], 'freezing_point_corrected' => [], 'weather_code' => [], 'symbol_code' => []];
+for ($k = 0; $k < 6; $k++) {
+    foreach (['temperature' => 10, 'dew_point' => 9, 'wind_speed' => 2, 'wind_direction' => 180, 'precipitation' => 0.5, 'rain' => 0.5,
+              'snowfall' => 0, 'snowfall_roebber' => 0, 'precipitation_probability' => 80, 'uv_index' => 1, 'cloud_cover' => 100,
+              'freezing_point' => 2500, 'freezing_point_corrected' => false, 'weather_code' => 61, 'symbol_code' => 'lightrain'] as $key => $v) {
+        $rain_hours[$key][] = $v;
+    }
+    $rain_hours['time'][] = sprintf('2026-11-10T%02d:00', 6 + $k);
+}
+check('Open-Meteo : 3 mm en 6 h -> pluie legere', aggregate_hourly_to_6h($rain_hours)['symbol_code'][0], 'lightrain');
+$warm_step = ['properties' => ['timeseries' => [['time' => '2026-11-14T12:00:00Z', 'data' => [
+    'instant' => ['details' => ['air_temperature' => 8.0, 'relative_humidity' => 90, 'dew_point_temperature' => 6.5, 'wind_speed' => 2]],
+    'next_6_hours' => ['summary' => ['symbol_code' => 'rain'], 'details' => ['precipitation_amount' => 3.0, 'air_temperature_min' => 7.0, 'air_temperature_max' => 9.0]],
+]]]]];
+check('MET.no : 3 mm sur un pas de 6 h -> pluie legere', metno_six_hourly($warm_step)['symbol_code'][0], 'lightrain');
+
 section('get_model_value (chaine de priorites)');
 $data = [
     'temp_a' => [null, 1],

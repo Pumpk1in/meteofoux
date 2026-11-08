@@ -879,8 +879,10 @@ function aggregate_hourly_to_6h($hourly) {
             $dominant_wmo = max($weather_codes);
         }
         
-        // Déterminer l'icône basée sur les précipitations cumulées + weather_code dominant
-        $symbol = determine_symbol($snowfall_sum, $rain_sum, $dominant_wmo, $is_day_dominant);
+        // Déterminer l'icône basée sur les précipitations cumulées + weather_code dominant.
+        // Intensité sur le débit horaire moyen du pas : les seuils sont horaires (3 mm en 6 h
+        // est une pluie légère, pas une pluie)
+        $symbol = determine_symbol($snowfall_sum / 6, $rain_sum / 6, $dominant_wmo, $is_day_dominant);
         
         // Si pas de précipitations, utiliser l'icône la plus fréquente de la tranche
         if ($snowfall_sum == 0 && $rain_sum == 0) {
@@ -1063,7 +1065,8 @@ function metno_six_hourly($metno) {
         $derived['snow_quality'][$n] = $snow_quality;
         $derived['symbol_code'][$n] = ($snowfall <= 0 && $rain <= 0)
             ? $row['symbol_code']
-            : determine_symbol($snowfall, $rain, null, (bool)$row['is_day'], $row['showers'], $row['thunder']);
+            // Intensité sur le débit horaire moyen du pas, comme aggregate_hourly_to_6h
+            : determine_symbol($snowfall / 6, $rain / 6, null, (bool)$row['is_day'], $row['showers'], $row['thunder']);
     }
 
     return [
