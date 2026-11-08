@@ -29,6 +29,16 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/lib/weather.php';
 
+/**
+ * Ce que reçoit le front : les prévisions au format commun, l'altitude et les métadonnées.
+ * Le fichier de cache garde en plus les réponses brutes d'Open-Meteo et de MET.no
+ * (historique MET.no, reconstruction de "forecasts" pour un cache antérieur), dont le front
+ * n'a pas besoin.
+ */
+function client_payload(array $data) {
+    return array_intersect_key($data, array_flip(['forecasts', 'elevation', 'meta']));
+}
+
 // ================= CACHE =================
 
 const CACHE_DURATION = 15 * 60;        // 15 minutes en secondes
@@ -76,7 +86,7 @@ if (!$force_refresh && file_exists($cache_file)) {
             $cached_data['forecasts'] ??= build_forecasts($cached_data['openmeteo'] ?? null, $cached_data['metno'] ?? null, $cached_data['elevation'] ?? null);
             $cached_data['meta']['from_cache'] = true;
             $cached_data['meta']['cache_age'] = $cache_age;
-            echo json_encode($cached_data);
+            echo json_encode(client_payload($cached_data));
             exit;
         }
     }
@@ -181,7 +191,7 @@ if (!$metno_ok && !$open_ok) {
             $stale['meta']['from_cache'] = true;
             $stale['meta']['stale'] = true;
             $stale['meta']['cache_age'] = time() - filemtime($cache_file);
-            echo json_encode($stale);
+            echo json_encode(client_payload($stale));
             exit;
         }
     }
@@ -192,13 +202,6 @@ if (!$metno_ok && !$open_ok) {
         'http_openmeteo' => $http_open
     ]);
     exit;
-}
-
-// ================= ENRICHISSEMENT =================
-
-// Enrichir MET.no avec snow/rain décomposés et snow_quality
-if ($res_metno) {
-    enrich_metno_timeseries($res_metno);
 }
 
 // ================= OUTPUT =================
@@ -222,17 +225,12 @@ if ($res_metno && file_exists($cache_file)) {
     }
 }
 
-// Toutes les sources au format commun (adaptateurs + pipeline commun, voir lib/weather.php).
-// Les anciennes clés en sont extraites, en attendant que le front passe sur "forecasts".
+// Toutes les sources au format commun (adaptateurs + pipeline commun, voir lib/weather.php)
 $forecasts = build_forecasts($res_open, $metno_merged, $elevation);
-$aggregated = $forecasts['openmeteo'] ?? null;
-$arome_aggregated = $forecasts['arome'] ?? null;
 
 $output = [
     'metno' => $metno_merged,
     'openmeteo' => $res_open,
-    'openmeteo_aggregated' => $aggregated,
-    'arome_aggregated' => $arome_aggregated,
     'forecasts' => $forecasts,
     'elevation' => $elevation,
     'meta' => [
@@ -269,5 +267,5 @@ if ($metno_ok && $open_ok) {
     file_put_contents($cache_file, json_encode($output));
 }
 
-echo json_encode($output);
+echo json_encode(client_payload($output));
 

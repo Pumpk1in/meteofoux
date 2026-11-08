@@ -31,8 +31,8 @@ docker compose exec -T meteofoux php tests/weather-test.php
 
 Run this after any change to `lib/weather.php`. It combines unit assertions on edge cases
 with a **golden-master**: the pipeline is replayed on the fixtures and the output must match
-byte-for-byte what is stored — the `forecasts` key (all three sources, what the frontend reads)
-and the legacy keys. Any behavioural change fails the suite — which is the point,
+byte-for-byte what is stored — the `forecasts` key (all three sources, what the frontend
+reads). Any behavioural change fails the suite — which is the point,
 so `lib/weather.php` can be refactored safely.
 
 Three fixtures, because they cover different things:
@@ -60,7 +60,8 @@ node tests/ui-snapshot.js <replay_dir> after.json    # same replay_dir
 node tests/ui-snapshot-diff.js before.json after.json
 ```
 
-The first run records the local proxy's responses in `replay_dir`; both runs then replay them
+The first run calls the local proxy for the 4 points and records their **cache files** in
+`replay_dir` (they hold the raw responses too, which `rebuild-replay.php` needs); both runs then replay them
 with a frozen clock, so any difference comes from the code. It uses a throwaway Edge profile
 (override the binary with `EDGE=...`). Every remaining difference must be explained.
 
@@ -133,8 +134,8 @@ Browser (index.php)
      │        ├─ Weather icon determination (WMO codes)
      │        ├─ Freezing level correction (inversion handling)
      │        └─ MET.no timeseries merging with cache
-     │     └─ Returns JSON: {metno, openmeteo, openmeteo_aggregated,
-     │                       arome_aggregated, forecasts, elevation, meta}
+     │     └─ Returns JSON: {forecasts, elevation, meta}
+     │        (the cache file also keeps the raw responses)
      │  └─ processPointData() → reads `forecasts`: one {hourly, sixHourly} per source,
      │     plus a common timeline (series) built from all sources
      └─ DataService.loadRemaining()  → other points, in background (100ms apart)
@@ -213,15 +214,14 @@ Every source is turned into **hourly rows in a common format** by its adapter, t
 through the **same pipeline** (`derive_hourly`). Source-specific corrections stay in the
 adapter. Adding a source means writing an adapter that returns those rows.
 
-- **`openmeteo_rows($openmeteo, $elevation, $priorities)`** — Open-Meteo adapter, for one priority chain (best_match by default, or `arome_priorities()`). Holds the Open-Meteo corrections: weather_code ↔ total precipitation inconsistency (AROME fallback, then cloud cover), weather_code ↔ cloud cover, freezing level (inversions), UV and is_day fallbacks. Wind km/h → m/s (unrounded)
+- **`openmeteo_rows($openmeteo, $elevation, $priorities)`** — Open-Meteo adapter, for one priority chain (best_match by default, or `arome_priorities()`). Holds the Open-Meteo corrections: weather_code ↔ total precipitation inconsistency (AROME fallback, then cloud cover), weather_code ↔ cloud cover, freezing level (inversions), UV and is_day fallbacks. Météo-France models have no UV: the AROME chain takes best_match's. Wind km/h → m/s (unrounded)
 - **`metno_rows($metno, $period)`** — MET.no adapter, one row per hour (`next_1_hours`) or per 6h step aligned on 0/6/12/18 UTC (`next_6_hours`). Instant values at the start of the period. From MET.no's own icon only the shape (showers, thunder, day/night) is used; see `derive_hourly`. Its `apparent_air_temperature` is **not** used (it reads ~4°C above the air temperature at -2°C with no wind)
 - **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` from **our** amounts (a source's own icon — MET.no — is kept only when nothing falls; otherwise only its showers/thunder shape is borrowed, so icon and figures agree), snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
-- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`. Kept for the legacy keys and the golden master
+- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`, used by `build_forecasts` for each priority chain
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation. Icon intensity uses the block's **mean hourly rate** (total / 6), since the thresholds are hourly: 3 mm in 6 h is light rain (same for MET.no 6h steps)
 - **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Rain and snow of a step = **the sum of its 6 hours** when MET.no provides them (each classified with its own temperature), else `split_precipitation_by_temperature_range`. One icon, built from both amounts (sleet when both). Wind, clouds, UV are the values at the start of the step
 - **`split_precipitation_by_temperature_range($precip, $temp_min, $temp_max, $dew_depression, $humidity, $wind_speed)`** — For a 6h step known only by its min/max temperature: the share of the step whose wet-bulb temperature is under the threshold (temperature assumed linear from min to max) falls as snow, the rest as rain. On 43 steps whose hours were known: 7.6 cm / 9.4 mm total error, vs 25.4 cm / 29.6 mm with the temperature at the start of the step and 10.1 cm / 13.9 mm with the mean temperature
 - **`build_forecasts($openmeteo, $metno, $elevation)`** — All available sources in the common format: `['openmeteo' | 'arome' | 'metno' => {hourly, six_hourly}]`
-- **`enrich_metno_timeseries($metno)`** — Legacy: enriches the raw MET.no timeseries in place (dew point, Roebber classification of next_1_hours / next_6_hours). Idempotent (recomputes from untouched source fields), which the golden-master relies on. The tests check that `build_forecasts` finds the same values
 
 #### Model Priorities & History
 
@@ -236,14 +236,15 @@ adapter. Adding a source means writing an adapter that returns those rows.
 
 ### Output Format
 
-The proxy returns JSON with 7 keys:
-- `metno` — Raw MET.no data + enriched timeseries
-- `openmeteo` — Raw Open-Meteo data
-- `openmeteo_aggregated` — Enriched best_match data (hourly + 6-hourly)
-- `arome_aggregated` — AROME-only data (hourly + 6-hourly)
-- `forecasts` — **All three sources in the common format** (`openmeteo`, `arome`, `metno`, each `{hourly, six_hourly}`), from `build_forecasts`. `openmeteo_aggregated` and `arome_aggregated` are extracted from it. **It is the only key the frontend reads**; the legacy keys are no longer used and are due for removal. A cache file written before this key existed gets it rebuilt from its raw data when served
+The proxy sends the frontend 3 keys (`client_payload()` in the proxy, ~65 KB per point):
+- `forecasts` — **All three sources in the common format** (`openmeteo`, `arome`, `metno`, each `{hourly, six_hourly}`), from `build_forecasts`. The only weather data the frontend reads
 - `elevation` — Station altitude in metres (from Open-Meteo)
 - `meta` — Metadata: sources, methods, timestamps, `http_metno` / `http_openmeteo` status codes
+
+The cache file also keeps the raw responses, which the frontend does not need: `metno` (the
+merged MET.no timeseries, i.e. the history of the day) and `openmeteo`. A cache file written
+before the `forecasts` key existed gets it rebuilt from them when served; its legacy keys
+(`openmeteo_aggregated`, `arome_aggregated`) are not sent.
 
 ### Caching
 

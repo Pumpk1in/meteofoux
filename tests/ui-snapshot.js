@@ -30,7 +30,10 @@ let proc = null;
         for (const [lat, lon] of POINTS) {
             const r = await fetch(`http://localhost:8123/meteo-proxy.php?lat=${lat}&lon=${lon}`);
             if (!r.ok) throw new Error(`proxy local : HTTP ${r.status} pour ${lat},${lon}`);
-            fs.writeFileSync(path.join(replayDir, `${lat}_${lon}.json`), Buffer.from(await r.arrayBuffer()));
+            // On enregistre le fichier de cache que cet appel vient d'écrire ou de servir, et non la
+            // réponse : elle ne contient que "forecasts", le cache garde aussi les réponses brutes
+            // dont tests/rebuild-replay.php a besoin
+            fs.copyFileSync(path.join(__dirname, '..', 'cache', `meteo_${lat}_${lon}.json`), path.join(replayDir, `${lat}_${lon}.json`));
         }
         console.log(`réponses du proxy enregistrées dans ${replayDir}`);
     }

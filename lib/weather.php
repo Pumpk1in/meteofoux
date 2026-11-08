@@ -564,6 +564,11 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
         if ($uv === null) {
             $uv = get_model_value($hourly, 'uv_index_clear_sky', $i, $prio_hd);
         }
+        // Les modèles Météo-France ne fournissent pas l'UV : la chaîne AROME prend celui de
+        // best_match (le front le faisait en douce avant le format commun)
+        if ($uv === null) {
+            $uv = $hourly['uv_index_best_match'][$i] ?? null;
+        }
 
         // is_day
         $is_day = get_model_value($hourly, 'is_day', $i, $prio_hd);
@@ -752,7 +757,7 @@ function derive_hourly(array $rows) {
 }
 
 /**
- * Enrichit les données hourly d'Open-Meteo : adaptateur Open-Meteo + pipeline commun.
+ * Données horaires d'Open-Meteo pour une chaîne de priorités : adaptateur + pipeline commun.
  *
  * @param array $openmeteo Données brutes Open-Meteo
  * @param float $elevation Altitude de la station (depuis Open-Meteo)
@@ -927,44 +932,6 @@ function aggregate_hourly_to_6h($hourly) {
 }
 
 /**
- * Enrichit les données MET.no avec les mêmes calculs que Open-Meteo
- * Ajoute snow_quality et harmonise la déduction neige/pluie
- * Utilise la méthode Roebber pour le calcul du SLR
- */
-function enrich_metno_timeseries(&$metno) {
-    if (!isset($metno['properties']['timeseries'])) return;
-
-    foreach ($metno['properties']['timeseries'] as &$entry) {
-        $details = $entry['data']['instant']['details'] ?? null;
-        if (!$details) continue;
-
-        $temp = $details['air_temperature'] ?? null;
-        $humidity = $details['relative_humidity'] ?? null;
-        $wind_speed = $details['wind_speed'] ?? null;  // MET.no fournit le vent en m/s
-
-        // MET.no fournit dew_point directement, sinon on le calcule
-        $dew = $details['dew_point_temperature'] ?? calculate_dew_point($temp, $humidity);
-
-        // Ajouter le dew_point aux details si calculé
-        if ($dew !== null && !isset($details['dew_point_temperature'])) {
-            $entry['data']['instant']['details']['dew_point_temperature'] = $dew;
-        }
-
-        // Enrichir next_1_hours et next_6_hours avec la même logique
-        foreach (['next_1_hours', 'next_6_hours'] as $period) {
-            if (!isset($entry['data'][$period])) continue;
-
-            $precip = $entry['data'][$period]['details']['precipitation_amount'] ?? 0;
-            $classified = classify_precipitation($precip, $temp, $dew, $humidity, $wind_speed);
-
-            $entry['data'][$period]['details']['snowfall'] = $classified['snowfall_roebber'];
-            $entry['data'][$period]['details']['rain'] = $classified['rain'];
-            $entry['data'][$period]['details']['snow_quality'] = $classified['snow_quality'];
-        }
-    }
-}
-
-/**
  * Répartit la précipitation d'un pas de 6 h entre neige et pluie, quand on ne connaît que
  * sa température minimale et maximale (MET.no au-delà de ~J+2).
  *
@@ -1091,9 +1058,8 @@ function metno_six_hourly($metno) {
 }
 
 /**
- * Toutes les sources au format commun ({hourly, six_hourly} chacune). C'est ce que le
- * front consommera ; les anciennes clés (openmeteo_aggregated, arome_aggregated, metno)
- * restent produites en parallèle jusqu'à sa migration.
+ * Toutes les sources au format commun ({hourly, six_hourly} chacune) : la clé "forecasts",
+ * seule donnée météo envoyée au front.
  *
  * @param array|null $openmeteo Données brutes Open-Meteo
  * @param array|null $metno Réponse MET.no (historique fusionné)

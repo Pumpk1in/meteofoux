@@ -108,25 +108,6 @@ foreach ($fixtures as $name => $desc) {
     $raw = $fixture['openmeteo'];
     $elevation = $fixture['elevation'];
 
-    // Chaîne par défaut (best_match) → doit reproduire openmeteo_aggregated
-    $hourly = enrich_openmeteo_hourly($raw, $elevation);
-    check_deep("[$name] enrich_openmeteo_hourly (best_match)", $hourly, $fixture['openmeteo_aggregated']['hourly']);
-    check_deep("[$name] aggregate_hourly_to_6h (best_match)", aggregate_hourly_to_6h($hourly), $fixture['openmeteo_aggregated']['six_hourly']);
-
-    // Chaîne AROME → doit reproduire arome_aggregated
-    $hourly_arome = enrich_openmeteo_hourly($raw, $elevation, arome_priorities());
-    check_deep("[$name] enrich_openmeteo_hourly (AROME)", $hourly_arome, $fixture['arome_aggregated']['hourly']);
-    check_deep("[$name] aggregate_hourly_to_6h (AROME)", aggregate_hourly_to_6h($hourly_arome), $fixture['arome_aggregated']['six_hourly']);
-
-    // L'enrichissement MET.no est idempotent : il recalcule depuis instant.details
-    // et precipitation_amount, que l'enrichissement ne modifie pas.
-    if (isset($fixture['metno'])) {
-        $metno = $fixture['metno'];
-        $before = json_encode($metno);
-        enrich_metno_timeseries($metno);
-        check("[$name] enrich_metno_timeseries idempotent", json_encode($metno), $before);
-    }
-
     // Golden-master du pipeline commun : la clé "forecasts" (3 sources), la seule lue par le front.
     // Figée quand elle était encore vérifiée identique aux anciennes clés, MET.no compris.
     check_deep("[$name] build_forecasts (golden master)", build_forecasts($raw, $fixture['metno'] ?? null, $elevation), $fixture['forecasts']);

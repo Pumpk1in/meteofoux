@@ -271,20 +271,10 @@ const DataService = {
 
     processPointData(point, rawData) {
         const forecasts = rawData.forecasts || {};
-        const omRaw = rawData.openmeteo?.hourly; // Données brutes pour UV (repli)
-        const elevation = rawData.elevation || rawData.openmeteo?.elevation || null;
-
-        // Index des données brutes par temps pour lookup UV
-        const rawUvIndex = {};
-        if (omRaw?.time && omRaw?.uv_index_best_match) {
-            omRaw.time.forEach((t, i) => {
-                rawUvIndex[t.substring(0, 16)] = omRaw.uv_index_best_match[i] ?? 0;
-            });
-        }
+        const elevation = rawData.elevation || null;
 
         // Fonction commune pour créer les données horaires
         const createHourlyData = (agg) => this.indexByTime(agg?.hourly, (data, idx) => {
-            const timeKey = data.time[idx].substring(0, 16);
 
             return {
                 temp: data.temperature[idx],
@@ -302,7 +292,7 @@ const DataService = {
                 icon: data.symbol_code[idx],
                 snowQuality: data.snow_quality[idx],
                 isDay: data.is_day[idx],
-                uv_index: data.uv_index?.[idx] ?? rawUvIndex[timeKey] ?? 0,
+                uv_index: data.uv_index?.[idx] ?? 0,
                 cloudCover: data.cloud_cover?.[idx] ?? null
             };
         });
