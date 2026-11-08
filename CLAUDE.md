@@ -105,7 +105,7 @@ Browser (index.php)
      │        ├─ Freezing level correction (inversion handling)
      │        └─ MET.no timeseries merging with cache
      │     └─ Returns JSON: {metno, openmeteo, openmeteo_aggregated,
-     │                       arome_aggregated, elevation, meta}
+     │                       arome_aggregated, forecasts, elevation, meta}
      │  └─ processPointData() → indexes by time, creates series
      └─ DataService.loadRemaining()  → other points, in background (100ms apart)
      └─ setupDays() + renderNavigation() + render()
@@ -177,10 +177,20 @@ anything placed in the proxy becomes untestable.
 - **`resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix)`** — Maps precipitation type → MET.no icon code. Handles thunder/showers variants. Accounts for known MET.no typos (`lightssleet...`, `lightssnow...`)
 - **`determine_symbol($snowfall, $rain, $wmo_code, $is_day)`** — Selects weather icon with priority: WMO sleet codes (56,57,66,67,68,69) → rain+snowfall sleet → snowfall only → rain only → WMO fallback → cloud cover codes
 
-#### Data Enrichment
-- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — Multi-model fusion for Open-Meteo. Implements priority chains (best_match → AROME HD → seamless → AROME). Corrects weather_code ↔ precipitation inconsistencies. Rain/snow is decided by `classify_precipitation` (wet-bulb rule) and `snowfall` is the Roebber value — the same as for MET.no; the models' own rain/snowfall split is not used, and weather_code inconsistencies are judged on the same total precipitation. Converts wind km/h → m/s. Returns enriched hourly array with 23+ keys
+#### Data Enrichment — adapters + common pipeline
+
+Every source is turned into **hourly rows in a common format** by its adapter, then goes
+through the **same pipeline** (`derive_hourly`). Source-specific corrections stay in the
+adapter. Adding a source means writing an adapter that returns those rows.
+
+- **`openmeteo_rows($openmeteo, $elevation, $priorities)`** — Open-Meteo adapter, for one priority chain (best_match by default, or `arome_priorities()`). Holds the Open-Meteo corrections: weather_code ↔ total precipitation inconsistency (AROME fallback, then cloud cover), weather_code ↔ cloud cover, freezing level (inversions), UV and is_day fallbacks. Wind km/h → m/s (unrounded)
+- **`metno_rows($metno, $period)`** — MET.no adapter, one row per hour (`next_1_hours`) or per 6h step aligned on 0/6/12/18 UTC (`next_6_hours`). Instant values at the start of the period; MET.no's own icon is kept. Its `apparent_air_temperature` is **not** used (it reads ~4°C above the air temperature at -2°C with no wind)
+- **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` unless the source provides one, snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
+- **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`. Kept for the legacy keys and the golden master
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation
-- **`enrich_metno_timeseries($metno)`** — Enriches MET.no data with dew point calculation and Roebber classification for next_1_hours and next_6_hours periods. Idempotent (recomputes from untouched source fields), which the golden-master relies on
+- **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Wind, clouds, UV are the values at the start of the step
+- **`build_forecasts($openmeteo, $metno, $elevation)`** — All available sources in the common format: `['openmeteo' | 'arome' | 'metno' => {hourly, six_hourly}]`
+- **`enrich_metno_timeseries($metno)`** — Legacy: enriches the raw MET.no timeseries in place (dew point, Roebber classification of next_1_hours / next_6_hours). Idempotent (recomputes from untouched source fields), which the golden-master relies on. The tests check that `build_forecasts` finds the same values
 
 #### Model Priorities & History
 
@@ -195,11 +205,12 @@ anything placed in the proxy becomes untestable.
 
 ### Output Format
 
-The proxy returns JSON with 6 keys:
+The proxy returns JSON with 7 keys:
 - `metno` — Raw MET.no data + enriched timeseries
 - `openmeteo` — Raw Open-Meteo data
 - `openmeteo_aggregated` — Enriched best_match data (hourly + 6-hourly)
 - `arome_aggregated` — AROME-only data (hourly + 6-hourly)
+- `forecasts` — **All three sources in the common format** (`openmeteo`, `arome`, `metno`, each `{hourly, six_hourly}`), from `build_forecasts`. `openmeteo_aggregated` and `arome_aggregated` are extracted from it. The frontend does not read it yet: the legacy keys go away once it does
 - `elevation` — Station altitude in metres (from Open-Meteo)
 - `meta` — Metadata: sources, methods, timestamps, `http_metno` / `http_openmeteo` status codes
 

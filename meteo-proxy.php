@@ -203,29 +203,6 @@ if ($res_metno) {
 // Récupérer l'elevation depuis Open-Meteo (utile pour le front)
 $elevation = $res_open['elevation'] ?? null;
 
-$aggregated = null;
-$arome_aggregated = null;
-
-if (isset($res_open['hourly'])) {
-    // Agrégation Open-Meteo (best_match en priorité) - comportement par défaut
-    $hourly_enriched = enrich_openmeteo_hourly($res_open, $elevation);
-    $six_hourly_agg = aggregate_hourly_to_6h($hourly_enriched);
-
-    $aggregated = [
-        'hourly' => $hourly_enriched,
-        'six_hourly' => $six_hourly_agg
-    ];
-
-    // Agrégation AROME (modèles Météo-France uniquement, sans best_match)
-    $hourly_arome = enrich_openmeteo_hourly($res_open, $elevation, arome_priorities());
-    $six_hourly_arome = aggregate_hourly_to_6h($hourly_arome);
-
-    $arome_aggregated = [
-        'hourly' => $hourly_arome,
-        'six_hourly' => $six_hourly_arome
-    ];
-}
-
 // Merger les données MET.no avec le cache existant (garder l'historique)
 $metno_merged = $res_metno;
 if ($res_metno && file_exists($cache_file)) {
@@ -242,11 +219,18 @@ if ($res_metno && file_exists($cache_file)) {
     }
 }
 
+// Toutes les sources au format commun (adaptateurs + pipeline commun, voir lib/weather.php).
+// Les anciennes clés en sont extraites, en attendant que le front passe sur "forecasts".
+$forecasts = build_forecasts($res_open, $metno_merged, $elevation);
+$aggregated = $forecasts['openmeteo'] ?? null;
+$arome_aggregated = $forecasts['arome'] ?? null;
+
 $output = [
     'metno' => $metno_merged,
     'openmeteo' => $res_open,
     'openmeteo_aggregated' => $aggregated,
     'arome_aggregated' => $arome_aggregated,
+    'forecasts' => $forecasts,
     'elevation' => $elevation,
     'meta' => [
         'generated_at' => gmdate('Y-m-d\TH:i:s\Z'),

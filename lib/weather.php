@@ -423,19 +423,30 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
     };
 }
 
-// ================= PIPELINE D'ENRICHISSEMENT =================
+// ================= ADAPTATEURS : une source → lignes horaires communes =================
+//
+// Chaque source est convertie en lignes horaires au même format, puis passe par le même
+// pipeline (derive_hourly). Une ligne contient :
+//   time (UTC, 'AAAA-MM-JJTHH:MM'), temperature, apparent_temperature, dew_point, humidity,
+//   wind_speed et wind_gusts (m/s, non arrondis), wind_direction, precipitation (mm),
+//   precipitation_probability, freezing_point, freezing_point_corrected, cloud_cover,
+//   weather_code, symbol_code (null : calculé par le pipeline), uv_index, is_day
+// Les corrections propres à une source restent dans son adaptateur.
 
 /**
- * Enrichit les données hourly d'Open-Meteo
- * Fusionne les données de plusieurs modèles selon leur spécialité
+ * Open-Meteo → lignes horaires communes, pour une chaîne de priorités de modèles
+ * (best_match par défaut, ou arome_priorities()).
+ *
+ * Corrections propres à Open-Meteo : incohérence weather_code / précipitations (best_match
+ * mélange les modèles), weather_code / couverture nuageuse, isotherme 0 en cas d'inversion,
+ * replis UV et is_day.
  *
  * @param array $openmeteo Données brutes Open-Meteo
- * @param float $elevation Altitude de la station (depuis Open-Meteo)
+ * @param float|null $elevation Altitude du point (depuis Open-Meteo)
  * @param array|null $priorities Priorités personnalisées ['hd' => [...], 'decomp' => [...], 'prob' => [...], 'freezing' => [...], 'cloud' => [...]]
+ * @return array Lignes horaires communes
  */
-function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = null) {
-    if (!isset($openmeteo['hourly']['time'])) return null;
-
+function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
     $hourly = $openmeteo['hourly'];
     $count = count($hourly['time']);
 
@@ -461,31 +472,8 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
     // Codes WMO de précipitation (utilisé à chaque heure pour détecter les incohérences)
     $precip_codes = range(51, 99);
 
-    $enriched = [
-        'time' => [],
-        'temperature' => [],
-        'apparent_temperature' => [],
-        'dew_point' => [],
-        'humidity' => [],
-        'wind_speed' => [],
-        'wind_direction' => [],
-        'wind_gusts' => [],
-        'precipitation' => [],
-        'rain' => [],
-        'snowfall' => [],
-        'snowfall_roebber' => [],  // Neige calculée avec méthode Roebber (calibrée Alpes)
-        'roebber_slr' => [],  // Ratio SLR Roebber utilisé
-        'precipitation_probability' => [],
-        'freezing_point' => [],
-        'freezing_point_corrected' => [],  // true si valeur corrigée (inversion thermique)
-        'cloud_cover' => [],
-        'weather_code' => [],
-        'symbol_code' => [],
-        'snow_quality' => [],
-        'uv_index' => [],
-        'is_day' => []
-    ];
-    
+    $rows = [];
+
     for ($i = 0; $i < $count; $i++) {
         $time = $hourly['time'][$i];
         
@@ -520,7 +508,7 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
         // CORRECTION INCOHÉRENCE WEATHER_CODE / PRÉCIPITATIONS
         // Open-Meteo "best_match" peut mixer des modèles incohérents :
         // weather_code=61 (pluie) mais précipitation totale nulle. On juge sur
-        // le total, celui-là même que classe classify_precipitation plus bas.
+        // le total, celui-là même que classe derive_hourly.
         //
         // Stratégie : fallback sur meteofrance_arome_france si incohérent,
         // puis correction basée sur cloud_cover en dernier recours.
@@ -567,22 +555,6 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
             }
         }
 
-        // ============================================================
-        // CLASSIFICATION NEIGE/PLUIE : la même règle pour toutes les sources
-        // Le type est décidé par la température humide (is_snow_conditions) et
-        // la quantité de neige par Roebber, exactement comme pour MET.no.
-        // La décomposition rain/snowfall des modèles n'est pas utilisée :
-        // best_match annonce par exemple de la pluie à -1.5°C à 2590 m.
-        // (Seul le contrôle de cohérence AROME ci-dessus lit celle d'AROME.)
-        // ============================================================
-        // Note: wind_speed est en km/h ici, on convertit en m/s pour Roebber
-        $wind_ms_for_slr = $wind_speed !== null ? $wind_speed / 3.6 : null;
-        $classified = classify_precipitation($precip, $temp, $dew, $humidity, $wind_ms_for_slr);
-        $rain = $classified['rain'];
-        $snowfall = $classified['snowfall_roebber'];
-        $roebber_slr = $classified['roebber_slr'];
-        $snowfall_roebber = $classified['snowfall_roebber'];
-        
         // UV index (préférer uv_index, fallback sur uv_index_clear_sky)
         $uv = get_model_value($hourly, 'uv_index', $i, $prio_hd);
         if ($uv === null) {
@@ -595,42 +567,185 @@ function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = nu
             $hour = (int)substr($time, 11, 2);
             $is_day = ($hour >= 7 && $hour < 17);
         }
-        
-        // Symbol code basé sur les précipitations réelles ET le weather_code
-        $symbol = determine_symbol($snowfall, $rain, $weather_code, (bool)$is_day);
-        
-        // Qualité de neige
-        $snow_quality = get_snow_quality($snowfall, $temp, $dew);
-        
-        // Conversion vent km/h -> m/s
-        $wind_speed_ms = $wind_speed !== null ? round($wind_speed / 3.6, 1) : null;
-        $wind_gusts_ms = $wind_gusts !== null ? round($wind_gusts / 3.6, 1) : null;
-        
-        $enriched['time'][] = $time;
+
+        $rows[] = [
+            'time' => $time,
+            'temperature' => $temp,
+            'apparent_temperature' => $apparent,
+            'dew_point' => $dew,
+            'humidity' => $humidity,
+            'wind_speed' => $wind_speed !== null ? $wind_speed / 3.6 : null,  // km/h → m/s
+            'wind_direction' => $wind_dir,
+            'wind_gusts' => $wind_gusts !== null ? $wind_gusts / 3.6 : null,
+            'precipitation' => $precip,
+            'precipitation_probability' => $precip_prob,
+            'freezing_point' => $freezing_point,
+            'freezing_point_corrected' => $freezing_corrected,
+            'cloud_cover' => $cloud,
+            'weather_code' => $weather_code,
+            'symbol_code' => null,
+            'uv_index' => $uv,
+            'is_day' => $is_day,
+        ];
+    }
+
+    return $rows;
+}
+
+/**
+ * MET.no → lignes horaires communes : une par heure (next_1_hours), ou une par pas de 6 h
+ * aligné sur 0/6/12/18 UTC (next_6_hours).
+ *
+ * Température, vent, nuages et UV sont les valeurs instantanées au début de la période :
+ * MET.no ne donne pas de moyenne. Le pas de 6 h est donc classé neige/pluie avec la
+ * température du début du pas, comme le fait enrich_metno_timeseries.
+ * MET.no fournit sa propre icône, conservée telle quelle. Son "ressenti"
+ * (apparent_air_temperature) n'est pas repris : il affiche ~4°C de plus que la
+ * température à -2°C sans vent.
+ *
+ * @param array $metno Réponse MET.no (endpoint complete)
+ * @param string $period 'next_1_hours' ou 'next_6_hours'
+ * @return array Lignes communes, plus temperature_min / temperature_max (pas de 6 h)
+ */
+function metno_rows($metno, $period = 'next_1_hours') {
+    $rows = [];
+
+    foreach ($metno['properties']['timeseries'] ?? [] as $entry) {
+        $next = $entry['data'][$period] ?? null;
+        $details = $entry['data']['instant']['details'] ?? null;
+        if (!$next || !$details) continue;
+
+        $time = substr($entry['time'], 0, 16);
+        $hour = (int)substr($time, 11, 2);
+        if ($period === 'next_6_hours' && $hour % 6 !== 0) continue;
+
+        $temp = $details['air_temperature'] ?? null;
+        $humidity = $details['relative_humidity'] ?? null;
+        $symbol = $next['summary']['symbol_code'] ?? null;
+
+        // Jour/nuit d'après le suffixe de l'icône MET.no, sinon même repli qu'Open-Meteo
+        if (str_ends_with((string)$symbol, '_night')) {
+            $is_day = false;
+        } elseif (str_ends_with((string)$symbol, '_day')) {
+            $is_day = true;
+        } else {
+            $is_day = ($hour >= 7 && $hour < 17);
+        }
+
+        $rows[] = [
+            'time' => $time,
+            'temperature' => $temp,
+            'apparent_temperature' => null,
+            'dew_point' => $details['dew_point_temperature'] ?? calculate_dew_point($temp, $humidity),
+            'humidity' => $humidity,
+            'wind_speed' => $details['wind_speed'] ?? null,  // déjà en m/s
+            'wind_direction' => $details['wind_from_direction'] ?? null,
+            'wind_gusts' => $details['wind_speed_of_gust'] ?? null,
+            'precipitation' => $next['details']['precipitation_amount'] ?? 0,
+            'precipitation_probability' => $next['details']['probability_of_precipitation'] ?? 0,
+            'freezing_point' => null,
+            'freezing_point_corrected' => false,
+            'cloud_cover' => $details['cloud_area_fraction'] ?? null,
+            'weather_code' => null,
+            'symbol_code' => $symbol,
+            'uv_index' => $details['ultraviolet_index_clear_sky'] ?? null,
+            'is_day' => $is_day,
+            'temperature_min' => $next['details']['air_temperature_min'] ?? null,
+            'temperature_max' => $next['details']['air_temperature_max'] ?? null,
+        ];
+    }
+
+    return $rows;
+}
+
+// ================= PIPELINE COMMUN =================
+
+/**
+ * Pipeline commun à toutes les sources : lignes horaires → tableau en colonnes enrichi.
+ *
+ * CLASSIFICATION NEIGE/PLUIE : la même règle pour toutes les sources. Le type est
+ * décidé par la température humide (is_snow_conditions), la quantité de neige par
+ * Roebber. La décomposition rain/snowfall des modèles n'est pas utilisée : best_match
+ * annonce par exemple de la pluie à -1.5°C à 2590 m.
+ * L'icône est calculée, sauf si la source fournit la sienne (MET.no).
+ *
+ * @param array $rows Lignes horaires communes (voir les adaptateurs)
+ * @return array Colonnes : time, temperature, ..., symbol_code, snow_quality, uv_index, is_day
+ */
+function derive_hourly(array $rows) {
+    $enriched = [
+        'time' => [],
+        'temperature' => [],
+        'apparent_temperature' => [],
+        'dew_point' => [],
+        'humidity' => [],
+        'wind_speed' => [],
+        'wind_direction' => [],
+        'wind_gusts' => [],
+        'precipitation' => [],
+        'rain' => [],
+        'snowfall' => [],
+        'snowfall_roebber' => [],  // Identique à snowfall (Roebber), gardé pour le front
+        'roebber_slr' => [],  // Ratio SLR Roebber utilisé
+        'precipitation_probability' => [],
+        'freezing_point' => [],
+        'freezing_point_corrected' => [],  // true si valeur corrigée (inversion thermique)
+        'cloud_cover' => [],
+        'weather_code' => [],
+        'symbol_code' => [],
+        'snow_quality' => [],
+        'uv_index' => [],
+        'is_day' => []
+    ];
+
+    foreach ($rows as $row) {
+        $temp = $row['temperature'];
+        $dew = $row['dew_point'];
+
+        $classified = classify_precipitation($row['precipitation'], $temp, $dew, $row['humidity'], $row['wind_speed']);
+        $rain = $classified['rain'];
+        $snowfall = $classified['snowfall_roebber'];
+
+        $symbol = $row['symbol_code'] ?? determine_symbol($snowfall, $rain, $row['weather_code'], (bool)$row['is_day']);
+
+        $enriched['time'][] = $row['time'];
         $enriched['temperature'][] = $temp;
-        $enriched['apparent_temperature'][] = $apparent;
+        $enriched['apparent_temperature'][] = $row['apparent_temperature'];
         $enriched['dew_point'][] = $dew;
-        $enriched['humidity'][] = $humidity;
-        $enriched['wind_speed'][] = $wind_speed_ms;
-        $enriched['wind_direction'][] = $wind_dir;
-        $enriched['wind_gusts'][] = $wind_gusts_ms;
-        $enriched['precipitation'][] = round($precip, 4);
+        $enriched['humidity'][] = $row['humidity'];
+        $enriched['wind_speed'][] = $row['wind_speed'] !== null ? round($row['wind_speed'], 1) : null;
+        $enriched['wind_direction'][] = $row['wind_direction'];
+        $enriched['wind_gusts'][] = $row['wind_gusts'] !== null ? round($row['wind_gusts'], 1) : null;
+        $enriched['precipitation'][] = round($row['precipitation'], 4);
         $enriched['rain'][] = $rain;
         $enriched['snowfall'][] = $snowfall;
-        $enriched['snowfall_roebber'][] = $snowfall_roebber;
-        $enriched['roebber_slr'][] = round($roebber_slr, 1);
-        $enriched['precipitation_probability'][] = $precip_prob;
-        $enriched['freezing_point'][] = $freezing_point;
-        $enriched['freezing_point_corrected'][] = $freezing_corrected;
-        $enriched['cloud_cover'][] = $cloud;
-        $enriched['weather_code'][] = $weather_code;
+        $enriched['snowfall_roebber'][] = $classified['snowfall_roebber'];
+        $enriched['roebber_slr'][] = round($classified['roebber_slr'], 1);
+        $enriched['precipitation_probability'][] = $row['precipitation_probability'];
+        $enriched['freezing_point'][] = $row['freezing_point'];
+        $enriched['freezing_point_corrected'][] = $row['freezing_point_corrected'];
+        $enriched['cloud_cover'][] = $row['cloud_cover'];
+        $enriched['weather_code'][] = $row['weather_code'];
         $enriched['symbol_code'][] = $symbol;
-        $enriched['snow_quality'][] = $snow_quality;
-        $enriched['uv_index'][] = $uv !== null ? round($uv, 1) : null;
-        $enriched['is_day'][] = $is_day ? 1 : 0;
+        $enriched['snow_quality'][] = get_snow_quality($snowfall, $temp, $dew);
+        $enriched['uv_index'][] = $row['uv_index'] !== null ? round($row['uv_index'], 1) : null;
+        $enriched['is_day'][] = $row['is_day'] ? 1 : 0;
     }
 
     return $enriched;
+}
+
+/**
+ * Enrichit les données hourly d'Open-Meteo : adaptateur Open-Meteo + pipeline commun.
+ *
+ * @param array $openmeteo Données brutes Open-Meteo
+ * @param float $elevation Altitude de la station (depuis Open-Meteo)
+ * @param array|null $priorities Priorités personnalisées (voir openmeteo_rows)
+ */
+function enrich_openmeteo_hourly($openmeteo, $elevation = null, $priorities = null) {
+    if (!isset($openmeteo['hourly']['time'])) return null;
+
+    return derive_hourly(openmeteo_rows($openmeteo, $elevation, $priorities));
 }
 
 /**
@@ -829,6 +944,69 @@ function enrich_metno_timeseries(&$metno) {
             $entry['data'][$period]['details']['snow_quality'] = $classified['snow_quality'];
         }
     }
+}
+
+/**
+ * MET.no → tableau 6 h au même format que aggregate_hourly_to_6h, construit à partir des
+ * pas de 6 h de MET.no (ses heures s'arrêtent vers J+2).
+ * Vent, nuages et UV sont les valeurs du début du pas : MET.no ne fournit pas de maximum.
+ *
+ * @param array $metno Réponse MET.no
+ * @return array Colonnes 6 h
+ */
+function metno_six_hourly($metno) {
+    $rows = metno_rows($metno, 'next_6_hours');
+    $derived = derive_hourly($rows);
+
+    return [
+        'time' => $derived['time'],
+        'temperature_min' => array_map(fn($row) => $row['temperature_min'], $rows),
+        'temperature_max' => array_map(fn($row) => $row['temperature_max'], $rows),
+        'wind_speed_max' => $derived['wind_speed'],
+        'wind_direction' => $derived['wind_direction'],
+        'precipitation' => $derived['precipitation'],
+        'rain' => $derived['rain'],
+        'snowfall' => $derived['snowfall'],
+        'snowfall_roebber' => $derived['snowfall_roebber'],
+        'precipitation_probability' => $derived['precipitation_probability'],
+        'freezing_point' => $derived['freezing_point'],
+        'freezing_point_corrected' => $derived['freezing_point_corrected'],
+        'weather_code' => $derived['weather_code'],
+        'symbol_code' => $derived['symbol_code'],
+        'snow_quality' => $derived['snow_quality'],
+        'uv_index_max' => $derived['uv_index'],
+        'cloud_cover' => $derived['cloud_cover'],
+    ];
+}
+
+/**
+ * Toutes les sources au format commun ({hourly, six_hourly} chacune). C'est ce que le
+ * front consommera ; les anciennes clés (openmeteo_aggregated, arome_aggregated, metno)
+ * restent produites en parallèle jusqu'à sa migration.
+ *
+ * @param array|null $openmeteo Données brutes Open-Meteo
+ * @param array|null $metno Réponse MET.no (historique fusionné)
+ * @param float|null $elevation Altitude du point
+ * @return array ['openmeteo' => ..., 'arome' => ..., 'metno' => ...] (sources disponibles seulement)
+ */
+function build_forecasts($openmeteo, $metno, $elevation) {
+    $forecasts = [];
+
+    if (isset($openmeteo['hourly']['time'])) {
+        foreach (['openmeteo' => null, 'arome' => arome_priorities()] as $source => $priorities) {
+            $hourly = enrich_openmeteo_hourly($openmeteo, $elevation, $priorities);
+            $forecasts[$source] = ['hourly' => $hourly, 'six_hourly' => aggregate_hourly_to_6h($hourly)];
+        }
+    }
+
+    if (isset($metno['properties']['timeseries'])) {
+        $forecasts['metno'] = [
+            'hourly' => derive_hourly(metno_rows($metno)),
+            'six_hourly' => metno_six_hourly($metno),
+        ];
+    }
+
+    return $forecasts;
 }
 
 // ================= PRIORITÉS DE MODÈLES =================
