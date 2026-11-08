@@ -441,6 +441,133 @@ const DataNormalizer = {
             .filter(d => d !== null);
     },
 
+    // Seuils du verdict (bloc "selon les modèles") : valeurs de départ, à régler ici seulement
+    VERDICT: {
+        snowCm: 0.5,          // neige à partir de laquelle la journée est une journée de neige
+        rainMm: 1,            // sinon, pluie à partir de laquelle c'est une journée de pluie
+        divergeSnowCm: 2,     // écart minimal entre modèles pour dire qu'ils divergent (neige)
+        divergeRainMm: 3,     // idem pour la pluie
+        divergeRatio: 1.5,    // ... et rapport minimal entre le plus fort et le plus faible
+        divergeTempC: 3       // jour sec : écart de min ou de max entre modèles
+    },
+
+    // Résumé d'un jour pour UNE source : totaux, isotherme 0 °C, et ce dont le verdict a besoin
+    // (regel, vent, nuages, qualité de neige). null si la source n'a rien ce jour-là (AROME au-delà
+    // de ~4 jours). sourceData = { hourly, sixHourly } indexés par heure, series = chronologie commune
+    daySummary(day, series, sourceData) {
+        const dayEntries = series
+            .filter(e => Utils.getLocalDay(e.time) === day)
+            .map(e => ({ time: e.time, hourly: sourceData.hourly[e.time] || null, sixHourly: sourceData.sixHourly[e.time] || null }));
+        const hasData = dayEntries.some(e => (e.hourly && e.hourly.temp !== null) || (e.sixHourly && e.sixHourly.tempMax !== null));
+        if (!hasData) return null;
+
+        // TOUTE la journée : chaque heure de la source, et ses pas de 6 h là où elle n'a pas
+        // d'heures (MET.no au-delà de J+2)
+        const entries = dayEntries
+            .map(e => e.hourly ? { time: e.time, data: e.hourly, hours: 1 }
+                : e.sixHourly ? { time: e.time, data: e.sixHourly, hours: 6 } : null)
+            .filter(e => e !== null);
+        const totals = this.computeTotals(entries);
+
+        // Isotherme 0 °C (MET.no ne le fournit pas)
+        const freezing = { min: null, max: null };
+        const dayFreezing = dayEntries.map(e => e.hourly).filter(v => v?.freezingPoint > 100);
+        if (dayFreezing.length > 0) {
+            freezing.min = Math.min(...dayFreezing.map(v => v.freezingPoint));
+            freezing.max = Math.max(...dayFreezing.map(v => v.freezingPoint));
+        }
+
+        let nightMin = null, windMax = null;
+        const clouds = [], qualities = [];
+        entries.forEach(({ time, data, hours }) => {
+            const low = hours === 6 ? data.tempMin : data.temp;
+            if (low !== null && low !== undefined && Utils.parseTime(time).getHours() < 6) {
+                nightMin = nightMin === null ? low : Math.min(nightMin, low);
+            }
+            if (data.windSpeed !== null && data.windSpeed !== undefined) {
+                windMax = windMax === null ? data.windSpeed : Math.max(windMax, data.windSpeed);
+            }
+            if (data.cloudCover !== null && data.cloudCover !== undefined) clouds.push(data.cloudCover);
+            if ((data.snow || 0) > 0 && data.snowQuality) qualities.push(data.snowQuality);
+        });
+
+        return {
+            ...totals,
+            freezing,
+            nightMin,
+            windMax,  // m/s
+            cloudCover: clouds.length ? clouds.reduce((a, c) => a + c, 0) / clouds.length : null,
+            snowQuality: qualities.length
+                ? (qualities.filter(q => q === 'dry').length > qualities.length / 2 ? 'dry' : 'wet')
+                : null,
+            sixHourly: entries.some(e => e.hours === 6)
+        };
+    },
+
+    // Verdict d'un jour selon les modèles disponibles. summaries = { source: daySummary | null }.
+    // mode : 'snow' | 'rain' | 'dry' (la grandeur qui décide de la journée), range : fourchette de
+    // cette grandeur entre modèles (températures pour un jour sec), diverge : null s'il n'y a
+    // qu'un modèle. freezing.position situe l'isotherme par rapport au point.
+    computeVerdict(summaries, elevation) {
+        const T = this.VERDICT;
+        const sources = Object.keys(summaries).filter(k => summaries[k]);
+        if (!sources.length) return null;
+        const list = sources.map(k => summaries[k]);
+        const spread = values => Math.max(...values) - Math.min(...values);
+
+        const snow = list.map(s => s.snow), rain = list.map(s => s.rain);
+        const mode = Math.max(...snow) >= T.snowCm ? 'snow'
+            : Math.max(...rain) >= T.rainMm ? 'rain' : 'dry';
+
+        const mins = list.map(s => s.tempMin).filter(v => v !== null);
+        const maxs = list.map(s => s.tempMax).filter(v => v !== null);
+        const tempMin = mins.length ? Math.min(...mins) : null;
+        const tempMax = maxs.length ? Math.max(...maxs) : null;
+
+        let range, diverge = null;
+        if (mode === 'dry') {
+            range = { lo: tempMin, hi: tempMax };
+            if (list.length > 1) diverge = spread(mins) >= T.divergeTempC || spread(maxs) >= T.divergeTempC;
+        } else {
+            const values = mode === 'snow' ? snow : rain;
+            range = { lo: Math.min(...values), hi: Math.max(...values) };
+            if (list.length > 1) {
+                diverge = (range.hi - range.lo) >= (mode === 'snow' ? T.divergeSnowCm : T.divergeRainMm)
+                    && range.hi / Math.max(range.lo, 0.1) >= T.divergeRatio;
+            }
+        }
+
+        const withFreezing = list.filter(s => s.freezing.min !== null);
+        let freezing = { min: null, max: null, position: null };
+        if (withFreezing.length && elevation) {
+            const min = Math.min(...withFreezing.map(s => s.freezing.min));
+            const max = Math.max(...withFreezing.map(s => s.freezing.max));
+            freezing = { min, max, position: min > elevation ? 'above' : max < elevation ? 'below' : 'around' };
+        }
+
+        const qualities = list.map(s => s.snowQuality).filter(q => q);
+        const nights = list.map(s => s.nightMin).filter(v => v !== null);
+        const winds = list.map(s => s.windMax).filter(v => v !== null);
+        const clouds = list.map(s => s.cloudCover).filter(v => v !== null);
+
+        return {
+            mode,
+            sources,
+            range,
+            diverge,
+            tempMin,
+            tempMax,
+            freezing,
+            snowQuality: qualities.length ? (qualities.includes('wet') ? 'wet' : 'dry') : null,
+            alsoRain: mode === 'snow' && Math.max(...rain) >= T.rainMm,
+            nightMin: nights.length ? Math.min(...nights) : null,
+            windMax: winds.length ? Math.max(...winds) : null,  // m/s
+            cloudCover: clouds.length ? clouds.reduce((a, c) => a + c, 0) / clouds.length : null,
+            // Sources qui ne couvrent qu'une partie de la journée (MET.no le soir, AROME en fin d'horizon)
+            partial: sources.filter(k => summaries[k].period)
+        };
+    },
+
     // entries = [{ time, data, hours }] : une heure (hours 1) ou un pas de 6 h (hours 6)
     computeTotals(entries) {
         let snow = 0, rain = 0;

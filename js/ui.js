@@ -720,24 +720,11 @@ const App = {
         const preparedEntries = displayEntries.map(e => DataNormalizer.prepareEntry(e, isToday));
         const preparedHourlyEntries = hourlyEntries.map(e => DataNormalizer.prepareEntry(e, true));
 
-        // Résumé sur TOUTE la journée : chaque heure de la source, et ses pas de 6 h là où
-        // elle n'a pas d'heures (MET.no au-delà de J+2)
-        const summaryEntries = dayEntries
-            .map(e => e.hourly ? { time: e.time, data: e.hourly, hours: 1 }
-                : e.sixHourly ? { time: e.time, data: e.sixHourly, hours: 6 } : null)
-            .filter(e => e !== null);
-        const totals = DataNormalizer.computeTotals(summaryEntries);
-
-        // Calculer l'isotherme 0°C (MET.no ne le fournit pas)
-        let freezing = { min: null, max: null };
-        const dayFreezing = dayEntries.map(e => e.hourly).filter(v => v?.freezingPoint > 100);
-        if (dayFreezing.length > 0) {
-            freezing.min = Math.min(...dayFreezing.map(v => v.freezingPoint));
-            freezing.max = Math.max(...dayFreezing.map(v => v.freezingPoint));
-        }
+        // Résumé sur TOUTE la journée (totaux et isotherme 0 °C)
+        const summary = DataNormalizer.daySummary(day, series, sourceData);
 
         // Construire le HTML
-        const summaryHtml = Components.Summary(totals, freezing, elevation);
+        const summaryHtml = Components.Summary(summary, summary.freezing, elevation);
 
         // Déterminer si on peut afficher un graphique pour ce jour
         const dayIndex = this.state.days.indexOf(day);

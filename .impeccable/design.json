@@ -1,0 +1,611 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-08T19:31:52.506Z",
+  "title": "Design System: MeteoFoux",
+  "extensions": {
+    "colorMeta": {
+      "bleu-poudreuse": {
+        "role": "primary",
+        "displayName": "Bleu Poudreuse",
+        "canonical": "oklch(75.4% 0.139 232.7)",
+        "tonalRamp": [
+          "#000d17",
+          "#002b4c",
+          "#004d82",
+          "#0071a7",
+          "#0096cf",
+          "#36bcf7",
+          "#9ddbfc",
+          "#d9f3ff"
+        ]
+      },
+      "source-openmeteo": {
+        "role": "secondary",
+        "displayName": "Source Openmeteo",
+        "canonical": "oklch(75.4% 0.139 232.7)",
+        "tonalRamp": [
+          "#000d17",
+          "#002b4c",
+          "#004d82",
+          "#0071a7",
+          "#0096cf",
+          "#36bcf7",
+          "#9ddbfc",
+          "#d9f3ff"
+        ]
+      },
+      "source-arome": {
+        "role": "secondary",
+        "displayName": "Source Arome",
+        "canonical": "oklch(62.7% 0.233 303.9)",
+        "tonalRamp": [
+          "#11041e",
+          "#390063",
+          "#6200a6",
+          "#8529ce",
+          "#a956f8",
+          "#cf7eff",
+          "#e3bbff",
+          "#f7e6ff"
+        ]
+      },
+      "source-metno": {
+        "role": "secondary",
+        "displayName": "Source Metno",
+        "canonical": "oklch(77.2% 0.155 67.4)",
+        "tonalRamp": [
+          "#160700",
+          "#461600",
+          "#772a00",
+          "#9e4e00",
+          "#c57300",
+          "#ee9825",
+          "#f8c793",
+          "#ffead4"
+        ]
+      },
+      "point-station": {
+        "role": "tertiary",
+        "displayName": "Point Station",
+        "canonical": "oklch(66.2% 0.119 231.7)",
+        "tonalRamp": [
+          "#000d15",
+          "#002b47",
+          "#004d79",
+          "#00709e",
+          "#2195c4",
+          "#51bbec",
+          "#a5daf6",
+          "#dbf3ff"
+        ]
+      },
+      "point-observatoire": {
+        "role": "tertiary",
+        "displayName": "Point Observatoire",
+        "canonical": "oklch(66.4% 0.157 349.9)",
+        "tonalRamp": [
+          "#17040d",
+          "#49042e",
+          "#7c0751",
+          "#a43673",
+          "#cc5b96",
+          "#f681bc",
+          "#febad9",
+          "#ffe4f2"
+        ]
+      },
+      "point-marin-pascal": {
+        "role": "tertiary",
+        "displayName": "Point Marin Pascal",
+        "canonical": "oklch(72.3% 0.139 68.2)",
+        "tonalRamp": [
+          "#140800",
+          "#431900",
+          "#722f00",
+          "#985200",
+          "#bf7600",
+          "#e79b3d",
+          "#f4c89a",
+          "#ffebd6"
+        ]
+      },
+      "point-vescal": {
+        "role": "tertiary",
+        "displayName": "Point Vescal",
+        "canonical": "oklch(60.5% 0.139 293.2)",
+        "tonalRamp": [
+          "#0c0818",
+          "#2a194f",
+          "#4b3087",
+          "#6b53ad",
+          "#8e77d4",
+          "#b29cfd",
+          "#d2c8ff",
+          "#efebff"
+        ]
+      },
+      "ciel-avant-aube": {
+        "role": "neutral",
+        "displayName": "Ciel Avant Aube",
+        "canonical": "oklch(12.9% 0.041 264.7)",
+        "tonalRamp": [
+          "#090b10",
+          "#202634",
+          "#3a455b",
+          "#5b667e",
+          "#7d89a2",
+          "#a1aec8",
+          "#cad1e0",
+          "#ebeff6"
+        ]
+      },
+      "ciel-avant-aube-haut": {
+        "role": "neutral",
+        "displayName": "Ciel Avant Aube Haut",
+        "canonical": "oklch(20.8% 0.040 265.8)",
+        "tonalRamp": [
+          "#090b0f",
+          "#202634",
+          "#3b455b",
+          "#5b667e",
+          "#7e89a2",
+          "#a2aec8",
+          "#cad1e0",
+          "#ebeef5"
+        ]
+      },
+      "givre-texte": {
+        "role": "neutral",
+        "displayName": "Givre Texte",
+        "canonical": "oklch(92.8% 0.006 264.5)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252628",
+          "#434548",
+          "#646669",
+          "#87898d",
+          "#acaeb2",
+          "#d0d1d3",
+          "#eeeeef"
+        ]
+      },
+      "ardoise-muted": {
+        "role": "neutral",
+        "displayName": "Ardoise Muted",
+        "canonical": "oklch(71.1% 0.035 256.8)",
+        "tonalRamp": [
+          "#090b0f",
+          "#1f2732",
+          "#394658",
+          "#59677a",
+          "#7c8a9f",
+          "#a0afc5",
+          "#c9d2de",
+          "#ebeff4"
+        ]
+      },
+      "jour-fond": {
+        "role": "neutral",
+        "displayName": "Jour Fond",
+        "canonical": "oklch(92.5% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#aeaeae",
+          "#d1d1d1",
+          "#eeeeee"
+        ]
+      },
+      "jour-fond-haut": {
+        "role": "neutral",
+        "displayName": "Jour Fond Haut",
+        "canonical": "oklch(96.1% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#aeaeae",
+          "#d1d1d1",
+          "#eeeeee"
+        ]
+      },
+      "jour-texte": {
+        "role": "neutral",
+        "displayName": "Jour Texte",
+        "canonical": "oklch(27.9% 0.037 260.0)",
+        "tonalRamp": [
+          "#090b0f",
+          "#1f2733",
+          "#3a4659",
+          "#5a677c",
+          "#7c8aa0",
+          "#a1afc6",
+          "#c9d2df",
+          "#ebeff5"
+        ]
+      },
+      "jour-muted": {
+        "role": "neutral",
+        "displayName": "Jour Muted",
+        "canonical": "oklch(51.9% 0.042 256.0)",
+        "tonalRamp": [
+          "#080b10",
+          "#1d2734",
+          "#36465c",
+          "#56677e",
+          "#798ba3",
+          "#9db0c9",
+          "#c7d2e1",
+          "#eaeff6"
+        ]
+      },
+      "neige": {
+        "role": "semantic",
+        "displayName": "Neige",
+        "canonical": "oklch(71.4% 0.143 254.6)",
+        "tonalRamp": [
+          "#020b1a",
+          "#002554",
+          "#00428f",
+          "#1f66b5",
+          "#468bdd",
+          "#6bb1ff",
+          "#aed4ff",
+          "#dff0ff"
+        ]
+      },
+      "pluie": {
+        "role": "semantic",
+        "displayName": "Pluie",
+        "canonical": "oklch(62.3% 0.188 259.8)",
+        "tonalRamp": [
+          "#020a1f",
+          "#001e63",
+          "#0038a7",
+          "#155ecf",
+          "#3d84f8",
+          "#62abff",
+          "#a8d2ff",
+          "#dcf0ff"
+        ]
+      },
+      "neige-seche": {
+        "role": "semantic",
+        "displayName": "Neige Seche",
+        "canonical": "oklch(80.9% 0.096 251.8)",
+        "tonalRamp": [
+          "#050c15",
+          "#0a2745",
+          "#174676",
+          "#3a699b",
+          "#5d8dc1",
+          "#81b2e9",
+          "#b8d4f4",
+          "#e3f0ff"
+        ]
+      },
+      "neige-humide": {
+        "role": "semantic",
+        "displayName": "Neige Humide",
+        "canonical": "oklch(81.7% 0.102 154.0)",
+        "tonalRamp": [
+          "#030e07",
+          "#003016",
+          "#00542a",
+          "#2d774a",
+          "#539b6c",
+          "#78c190",
+          "#b5ddc0",
+          "#e2f4e7"
+        ]
+      },
+      "serie-temperature": {
+        "role": "semantic",
+        "displayName": "Serie Temperature",
+        "canonical": "oklch(70.5% 0.187 47.6)",
+        "tonalRamp": [
+          "#1a0400",
+          "#520000",
+          "#8b0000",
+          "#b53200",
+          "#de5b00",
+          "#ff822e",
+          "#ffbc95",
+          "#ffe6d4"
+        ]
+      },
+      "serie-ressenti": {
+        "role": "semantic",
+        "displayName": "Serie Ressenti",
+        "canonical": "oklch(83.7% 0.117 66.3)",
+        "tonalRamp": [
+          "#130801",
+          "#3f1c00",
+          "#6d3400",
+          "#925600",
+          "#b87931",
+          "#e09e58",
+          "#efc9a4",
+          "#fdebdb"
+        ]
+      },
+      "serie-vent": {
+        "role": "semantic",
+        "displayName": "Serie Vent",
+        "canonical": "oklch(84.5% 0.092 158.4)",
+        "tonalRamp": [
+          "#040e08",
+          "#002f1a",
+          "#005332",
+          "#2f7652",
+          "#559a74",
+          "#7ac098",
+          "#b6dcc5",
+          "#e2f3e9"
+        ]
+      },
+      "serie-rafales": {
+        "role": "semantic",
+        "displayName": "Serie Rafales",
+        "canonical": "oklch(68.2% 0.150 153.6)",
+        "tonalRamp": [
+          "#000f05",
+          "#00330a",
+          "#005a17",
+          "#007d3a",
+          "#21a25d",
+          "#53c980",
+          "#a6e2b8",
+          "#dcf6e3"
+        ]
+      },
+      "serie-uv": {
+        "role": "semantic",
+        "displayName": "Serie Uv",
+        "canonical": "oklch(83.7% 0.164 84.4)",
+        "tonalRamp": [
+          "#130900",
+          "#3f1d00",
+          "#6c3600",
+          "#915900",
+          "#b77d00",
+          "#dea300",
+          "#edcd8a",
+          "#fcedd0"
+        ]
+      },
+      "serie-neige": {
+        "role": "semantic",
+        "displayName": "Serie Neige",
+        "canonical": "oklch(95.1% 0.025 236.8)",
+        "tonalRamp": [
+          "#090c0d",
+          "#1f282e",
+          "#394751",
+          "#596973",
+          "#7b8c97",
+          "#a0b1bc",
+          "#c9d3d9",
+          "#ebeff2"
+        ]
+      },
+      "alerte": {
+        "role": "semantic",
+        "displayName": "Alerte",
+        "canonical": "oklch(63.7% 0.208 25.3)",
+        "tonalRamp": [
+          "#1c0202",
+          "#590000",
+          "#960000",
+          "#c1001c",
+          "#ed4142",
+          "#ff6c66",
+          "#ffb3aa",
+          "#ffe2dd"
+        ]
+      },
+      "panneau-givre": {
+        "role": "neutral",
+        "displayName": "Panneau Givre"
+      },
+      "panneau-givre-hover": {
+        "role": "neutral",
+        "displayName": "Panneau Givre Hover"
+      },
+      "trait-givre": {
+        "role": "neutral",
+        "displayName": "Trait Givre"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Temperature on weather cards."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Top-bar date and day header."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Summary bar, loading text, modal fields."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Card times and data rows, badges, footer."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Uppercase point pills."
+      }
+    },
+    "shadows": [
+      {
+        "name": "drag-lift",
+        "value": "0 4px 15px rgba(0, 0, 0, 0.4)",
+        "purpose": "The dragged point pill in reorder mode; the only shadow in the system."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "all 0.2s",
+        "purpose": "Default hover/active transition on controls and cards."
+      },
+      {
+        "name": "card-lift",
+        "value": "translateY(-2px)",
+        "purpose": "Card hover."
+      },
+      {
+        "name": "modal-in",
+        "value": "fade 0.2s ease + slide-up 20px 0.25s ease",
+        "purpose": "Add-point modal entrance."
+      },
+      {
+        "name": "wobble",
+        "value": "rotate ±1.5deg, 0.3s ease-in-out infinite",
+        "purpose": "Point pills in drag mode."
+      },
+      {
+        "name": "skeleton-pulse",
+        "value": "1.5s ease-in-out infinite",
+        "purpose": "Loading skeleton shimmer."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "small-mobile",
+        "value": "400px"
+      },
+      {
+        "name": "tablet-grid",
+        "value": "600px"
+      },
+      {
+        "name": "desktop",
+        "value": "768px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Point Pills",
+      "kind": "nav",
+      "refersTo": "point-pill",
+      "description": "Altitude tabs: one pill per point, the active one filled with its point colour.",
+      "html": "<div class=\"ds-pills\"><button class=\"ds-pill ds-pill-active\" style=\"--point-color:#309fcf\">Station</button><button class=\"ds-pill\" style=\"--point-color:#d866a1\">Observatoire</button><button class=\"ds-pill\" style=\"--point-color:#de9333\">Marin-Pascal</button><button class=\"ds-pill ds-pill-add\">+</button></div>",
+      "css": ".ds-pills{display:flex;gap:.5rem;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-pill{padding:.5rem .6rem;border-radius:2rem;border:1px solid var(--border,rgba(255,255,255,.08));background:transparent;color:var(--muted,#94a3b8);font-size:.62rem;text-transform:uppercase;font-weight:600;cursor:pointer;transition:all .2s} .ds-pill:hover{background:rgba(255,255,255,.05)} .ds-pill:focus-visible{outline:2px solid #38bdf8;outline-offset:2px} .ds-pill-active,.ds-pill-active:hover{background:var(--point-color);border-color:var(--point-color);color:#fff} .ds-pill-add{border-style:dashed;opacity:.6;font-size:.85rem;line-height:1} .ds-pill-add:hover{opacity:1}"
+    },
+    {
+      "name": "Day Buttons",
+      "kind": "nav",
+      "refersTo": "day-button",
+      "description": "Day navigation: muted initials, the active day in Bleu poudreuse with a dot.",
+      "html": "<div class=\"ds-days\"><button class=\"ds-day ds-day-active\">LU<span class=\"ds-dot\"></span></button><button class=\"ds-day\">MA<span class=\"ds-dot\"></span></button><button class=\"ds-day\">ME<span class=\"ds-dot\"></span></button></div>",
+      "css": ".ds-days{display:flex;gap:.3rem;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-day{display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.5rem .8rem;min-width:40px;border:none;border-radius:.5rem;background:transparent;color:var(--muted,#94a3b8);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .2s} .ds-day:hover{background:rgba(255,255,255,.05)} .ds-day:focus-visible{outline:2px solid #38bdf8;outline-offset:2px} .ds-dot{width:5px;height:5px;border-radius:50%;background:transparent} .ds-day-active{color:#38bdf8} .ds-day-active .ds-dot{background:#38bdf8}"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "Square top-bar control (refresh, theme).",
+      "html": "<button class=\"ds-icon-btn\" aria-label=\"Rafraîchir\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#94a3b8\" stroke-width=\"1.8\" stroke-linecap=\"round\"><path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5\"/></svg></button>",
+      "css": ".ds-icon-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:.5rem;border:1px solid var(--border,rgba(255,255,255,.08));background:rgba(30,41,59,.4);cursor:pointer;transition:all .2s} .ds-icon-btn:hover{background:rgba(255,255,255,.1)} .ds-icon-btn:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}"
+    },
+    {
+      "name": "Source Toggle",
+      "kind": "custom",
+      "refersTo": "source-toggle-arome",
+      "description": "Cycles the global source; tinted with the current source hue (three variants shown).",
+      "html": "<div class=\"ds-sources\"><button class=\"ds-src ds-src-om\"><span>Open<br>Meteo</span></button><button class=\"ds-src ds-src-arome\"><span>Arome</span></button><button class=\"ds-src ds-src-metno\"><span>Met<br>No</span></button></div>",
+      "css": ".ds-sources{display:flex;gap:.6rem;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-src{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border-radius:.4rem;border:1px solid rgba(255,255,255,.2);cursor:pointer;transition:all .2s ease} .ds-src span{font-size:.46rem;line-height:1.1;font-weight:700;letter-spacing:-.02em;text-transform:uppercase} .ds-src:hover{filter:brightness(1.15)} .ds-src:focus-visible{outline:2px solid #38bdf8;outline-offset:2px} .ds-src-om{background:rgba(56,189,248,.25);border-color:rgba(56,189,248,.5);color:#38bdf8} .ds-src-arome{background:rgba(168,85,247,.25);border-color:rgba(168,85,247,.5);color:#a855f7} .ds-src-metno{background:rgba(245,146,40,.25);border-color:rgba(215,111,31,.5);color:#f59f30}"
+    },
+    {
+      "name": "Summary Bar",
+      "kind": "custom",
+      "refersTo": "summary-bar",
+      "description": "Day totals strip: icon + figure pairs.",
+      "html": "<div class=\"ds-summary\"><span class=\"ds-sum-item\"><b>-6°</b> / <b>-1°</b></span><span class=\"ds-sum-item\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#60a5fa\" stroke-width=\"1.8\" stroke-linecap=\"round\"><path d=\"M2 12h20M12 2v20M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4\"/></svg><b>18 cm</b></span><span class=\"ds-sum-item ds-sum-muted\">pluie 0 mm</span></div>",
+      "css": ".ds-summary{display:flex;flex-wrap:wrap;gap:1rem;padding:.45rem 1rem;min-height:40px;align-items:center;background:rgba(255,255,255,.05);border-radius:.75rem;font-size:.85rem;color:var(--text,#e5e7eb);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-sum-item{display:flex;align-items:center;gap:.4rem} .ds-sum-muted{color:var(--muted,#94a3b8);opacity:.6}"
+    },
+    {
+      "name": "Weather Card",
+      "kind": "card",
+      "refersTo": "weather-card",
+      "description": "One hour or period: time, MET.no icon, temperature, inset data block.",
+      "html": "<article class=\"ds-card\"><time>Matin</time><div class=\"ds-card-icon\">❄</div><div class=\"ds-temp\">-4<span>°C</span></div><div class=\"ds-data\"><span><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#bce5c8\" stroke-width=\"1.8\" stroke-linecap=\"round\"><path d=\"M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2\"/></svg> NO 22 km/h</span><span><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#60a5fa\" stroke-width=\"1.8\" stroke-linecap=\"round\"><path d=\"M2 12h20M12 2v20M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4\"/></svg> 6 cm <em class=\"ds-dry\">sèche</em></span></div></article>",
+      "css": ".ds-card{width:150px;display:flex;flex-direction:column;align-items:center;gap:.5rem;padding:.75rem;border-radius:.75rem;background:var(--card,rgba(255,255,255,.075));color:var(--text,#e5e7eb);text-align:center;transition:transform .2s;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-card:hover{transform:translateY(-2px);background:var(--card-hover,rgba(255,255,255,.09))} .ds-card time{font-size:.75rem;color:var(--muted,#94a3b8)} .ds-card-icon{font-size:32px;line-height:48px;height:48px;color:#e0f2fe} .ds-temp{font-size:1.4rem;font-weight:700;display:flex;align-items:flex-start} .ds-temp span{font-size:.6em;margin-top:.2rem} .ds-data{display:flex;flex-direction:column;gap:.3rem;width:100%;padding:.6rem;border-radius:.5rem;background:rgba(0,0,0,.17);font-size:.75rem;color:var(--muted,#94a3b8)} .ds-data span{display:flex;align-items:center;gap:.3em} .ds-dry{font-style:normal;font-size:.65rem;color:#93c5fd}"
+    },
+    {
+      "name": "Show More Button",
+      "kind": "button",
+      "refersTo": "button-more",
+      "description": "Translucent pill revealing the following hours.",
+      "html": "<button class=\"ds-btn-more\">Voir heures suivantes</button>",
+      "css": ".ds-btn-more{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:var(--text,#e5e7eb);padding:.6rem 1.2rem;border-radius:2rem;font-size:.8rem;cursor:pointer;transition:all .2s;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-btn-more:hover{background:rgba(255,255,255,.2)} .ds-btn-more:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}"
+    },
+    {
+      "name": "Confirm Button",
+      "kind": "button",
+      "refersTo": "button-confirm",
+      "description": "Primary modal action in Bleu poudreuse, with its cancel sibling.",
+      "html": "<div class=\"ds-modal-actions\"><button class=\"ds-btn-cancel\">Annuler</button><button class=\"ds-btn-confirm\">Ajouter</button></div>",
+      "css": ".ds-modal-actions{display:flex;gap:.5rem;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-btn-cancel,.ds-btn-confirm{padding:.5rem 1.2rem;border-radius:.5rem;border:1px solid var(--border,rgba(255,255,255,.08));font-size:.85rem;cursor:pointer;transition:all .2s} .ds-btn-cancel{background:transparent;color:var(--muted,#94a3b8)} .ds-btn-cancel:hover{color:var(--text,#e5e7eb)} .ds-btn-confirm{background:#38bdf8;border-color:#38bdf8;color:#fff;font-weight:600} .ds-btn-confirm:hover{filter:brightness(1.1)} .ds-btn-confirm:disabled{opacity:.4;cursor:not-allowed} .ds-btn-cancel:focus-visible,.ds-btn-confirm:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Modal field with uppercase label; focus turns the border Bleu poudreuse.",
+      "html": "<label class=\"ds-field\"><span>Nom du point</span><input class=\"ds-input\" placeholder=\"Ex. Col de la Cayolle\"></label>",
+      "css": ".ds-field{display:block;width:240px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif} .ds-field span{display:block;font-size:.75rem;color:var(--muted,#94a3b8);margin-bottom:.3rem;text-transform:uppercase;font-weight:600} .ds-input{width:100%;box-sizing:border-box;padding:.5rem .7rem;border-radius:.5rem;border:1px solid var(--border,rgba(255,255,255,.08));background:var(--bg,#020617);color:var(--text,#e5e7eb);font-size:.9rem;outline:none} .ds-input:focus{border-color:#38bdf8}"
+    }
+  ],
+  "narrative": {
+    "northStar": "La salle des cartes",
+    "overview": "The map room is where you spread several readings side by side and decide for yourself. MeteoFoux\nputs Open-Meteo, AROME and MET.no, and the points of the ski area from Station to Observatoire, on\nthe same table, each with its own colour, so you can tell at a glance whose reading you are looking\nat and where it applies. The colour is playful on purpose: it is the fun of a tool made by and for\na group of young skiers, and the user wants to keep it. But the room is a professional one. The\nfigures are the reason it exists, so the chrome stays quiet and the data reads as trustworthy.\n\nDark by default: a pre-dawn sky gradient behind translucent frosted panels, with a light theme as\nan alternative. Information density is welcome as long as it stays legible; the user does not\nobject to dense screens, only to unreadable ones. The surface is read outdoors, in the cold and in\nbright sunlight, by people wearing gloves.\n\nDepth, component sizing and the presentation of sources are explicitly **open for the coming\nredesign**: this document records the incumbent system, it does not freeze it.",
+    "keyCharacteristics": [
+      "Colour is identity: one hue per source, one hue per point, one hue per measured quantity.",
+      "The data is the hero; buttons, pills and toggles must never pull the eye away from it.",
+      "Clear, warm and personal rather than neutral; young, but never at the expense of clarity.",
+      "Translucent layers on a dark gradient, almost no shadow.",
+      "System font only; hierarchy through size and weight."
+    ],
+    "rules": [
+      {
+        "name": "The Colour Means Something Rule",
+        "body": "Every hue identifies a source, a point or a weather quantity. A colour that names nothing does not get added.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Rule",
+        "body": "Interface state (active, focus, confirm, loading) uses Bleu poudreuse only; identity hues never stand in for interface state, except the active point pill, which takes its point's colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Figure First Rule",
+        "body": "A reading (temperature, snow, wind) is always set larger or heavier than its label. The label explains, the figure informs.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do give every source and every point its own hue, and keep it consistent everywhere it",
+      "Do make the reading (temperature, snow, wind) the most prominent element of any card or",
+      "Do keep controls large enough to hit with gloves while staying visually quieter than the",
+      "Do keep Bleu poudreuse as the only interface-state accent.",
+      "Do design both themes: dark is the default, light must work in direct sunlight."
+    ],
+    "donts": [
+      "Don't let a button, pill or toggle draw the eye away from the data.",
+      "Don't add colour that identifies nothing; the multicolour palette is a key, not decoration.",
+      "Don't fall back to a neutral, corporate grey dashboard: the playful multi-source colour is a",
+      "Don't let density cost legibility: dense is fine, unreadable is not."
+    ]
+  }
+}
