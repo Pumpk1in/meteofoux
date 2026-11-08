@@ -127,40 +127,9 @@ foreach ($fixtures as $name => $desc) {
         check("[$name] enrich_metno_timeseries idempotent", json_encode($metno), $before);
     }
 
-    // Nouvelle clé "forecasts" (format commun) : mêmes valeurs que les anciennes clés
-    $forecasts = build_forecasts($raw, $fixture['metno'] ?? null, $elevation);
-    check_deep("[$name] forecasts.openmeteo = openmeteo_aggregated", $forecasts['openmeteo'], $fixture['openmeteo_aggregated']);
-    check_deep("[$name] forecasts.arome = arome_aggregated", $forecasts['arome'], $fixture['arome_aggregated']);
-
-    if (isset($fixture['metno'])) {
-        // MET.no : le pipeline commun doit retrouver ce que l'enrichissement historique a
-        // écrit dans next_1_hours / next_6_hours. Comparaison numérique (2 == 2.0).
-        $num = fn($values) => array_map(fn($v) => is_int($v) || is_float($v) ? (float)$v : $v, $values);
-        foreach (['next_1_hours' => 'hourly', 'next_6_hours' => 'six_hourly'] as $period => $key) {
-            $temp_key = $period === 'next_1_hours' ? 'temperature' : 'temperature_max';
-            $expected = ['time' => [], $temp_key => [], 'precipitation' => [], 'rain' => [], 'snowfall' => [], 'snow_quality' => [], 'symbol_code' => []];
-            foreach ($fixture['metno']['properties']['timeseries'] as $entry) {
-                if (!isset($entry['data'][$period])) continue;
-                if ($period === 'next_6_hours' && (int)substr($entry['time'], 11, 2) % 6 !== 0) continue;
-                $next = $entry['data'][$period];
-                $expected['time'][] = substr($entry['time'], 0, 16);
-                $expected[$temp_key][] = $period === 'next_1_hours'
-                    ? $entry['data']['instant']['details']['air_temperature']
-                    : $next['details']['air_temperature_max'];
-                $expected['precipitation'][] = $next['details']['precipitation_amount'] ?? 0;
-                $expected['rain'][] = $next['details']['rain'];
-                $expected['snowfall'][] = $next['details']['snowfall'];
-                $expected['snow_quality'][] = $next['details']['snow_quality'];
-                $expected['symbol_code'][] = $next['summary']['symbol_code'] ?? null;
-            }
-            $actual = [];
-            foreach (array_keys($expected) as $k) {
-                $actual[$k] = $forecasts['metno'][$key][$k];
-            }
-            check_deep("[$name] forecasts.metno.$key = enrichissement MET.no (" . count($expected['time']) . " pas)",
-                array_map($num, $actual), array_map($num, $expected));
-        }
-    }
+    // Golden-master du pipeline commun : la clé "forecasts" (3 sources), la seule lue par le front.
+    // Figée quand elle était encore vérifiée identique aux anciennes clés, MET.no compris.
+    check_deep("[$name] build_forecasts (golden master)", build_forecasts($raw, $fixture['metno'] ?? null, $elevation), $fixture['forecasts']);
 }
 
 // ================= 2. ASSERTIONS UNITAIRES =================

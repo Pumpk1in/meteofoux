@@ -1,7 +1,7 @@
 <?php
 /**
  * Recalcule les sorties attendues d'une fixture capturée depuis le proxy
- * (openmeteo_aggregated, arome_aggregated, enrichissement MET.no) avec le code courant.
+ * (openmeteo_aggregated, arome_aggregated, enrichissement MET.no, forecasts) avec le code courant.
  *
  *   docker compose exec -T meteofoux php tests/regen-capture-fixture.php observatoire
  *
@@ -37,6 +37,9 @@ $fixture['arome_aggregated'] = ['hourly' => $ha, 'six_hourly' => aggregate_hourl
 if (isset($fixture['metno'])) {
     enrich_metno_timeseries($fixture['metno']);
 }
+
+// Sortie attendue du pipeline commun, pour toutes les sources (golden-master de "forecasts")
+$fixture['forecasts'] = build_forecasts($raw, $fixture['metno'] ?? null, $elevation);
 
 file_put_contents($path, json_encode($fixture));
 echo "ok : $path\n";

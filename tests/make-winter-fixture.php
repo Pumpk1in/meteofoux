@@ -76,6 +76,7 @@ $h = enrich_openmeteo_hourly($raw, $elevation);
 $out['openmeteo_aggregated'] = ['hourly' => $h, 'six_hourly' => aggregate_hourly_to_6h($h)];
 $ha = enrich_openmeteo_hourly($raw, $elevation, arome_priorities());
 $out['arome_aggregated'] = ['hourly' => $ha, 'six_hourly' => aggregate_hourly_to_6h($ha)];
+$out['forecasts'] = build_forecasts($raw, null, $elevation);
 
 file_put_contents(__DIR__ . '/fixtures/openmeteo-winter.json', json_encode($out));
 

@@ -30,8 +30,9 @@ docker compose exec -T meteofoux php tests/weather-test.php
 ```
 
 Run this after any change to `lib/weather.php`. It combines unit assertions on edge cases
-with a **golden-master**: the pipeline is replayed on two fixtures and the output must match
-byte-for-byte what is stored. Any behavioural change fails the suite — which is the point,
+with a **golden-master**: the pipeline is replayed on the fixtures and the output must match
+byte-for-byte what is stored — the `forecasts` key (all three sources, what the frontend reads)
+and the legacy keys. Any behavioural change fails the suite — which is the point,
 so `lib/weather.php` can be refactored safely.
 
 Three fixtures, because they cover different things:
