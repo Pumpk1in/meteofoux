@@ -64,6 +64,16 @@ The first run records the local proxy's responses in `replay_dir`; both runs the
 with a frozen clock, so any difference comes from the code. It uses a throwaway Edge profile
 (override the binary with `EDGE=...`). Every remaining difference must be explained.
 
+The replayed responses carry the `forecasts` computed by the code of the time, so a change to
+`lib/weather.php` does **not** show up as is. For a backend change, take the "after" snapshot on
+a copy whose `forecasts` is rebuilt with the current code (same raw data):
+
+```bash
+for f in <replay_dir>/*.json; do
+  docker compose exec -T meteofoux php tests/rebuild-replay.php < "$f" > "<replay_after>/$(basename "$f")"
+done
+```
+
 **Asset versioning:** `index.php` appends `?v=<filemtime>` to `style.css`, `js/core.js` and
 `js/ui.js`. There is **no version number to bump by hand** — editing a file changes its URL.
 `sw.js` therefore lists only unversioned assets in `SHELL_ASSETS`, and its `CACHE_VERSION`
@@ -83,6 +93,7 @@ METEOFOUX/
 │   ├── regen-capture-fixture.php # Recomputes expected outputs of a real capture fixture
 │   ├── ui-snapshot.js           # Headless-Edge snapshot of the whole UI (frontend checks)
 │   ├── ui-snapshot-diff.js      # Diffs two UI snapshots
+│   ├── rebuild-replay.php       # Rebuilds "forecasts" in a replayed response (backend changes)
 │   └── fixtures/           # Golden-master fixtures (versioned)
 ├── style.css               # Responsive CSS with dark/light themes
 ├── sw.js                   # Service worker (PWA offline shell)
@@ -194,7 +205,7 @@ anything placed in the proxy becomes untestable.
 
 #### Weather Icon Resolution
 - **`resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix)`** — Maps precipitation type → MET.no icon code. Handles thunder/showers variants. Accounts for known MET.no typos (`lightssleet...`, `lightssnow...`)
-- **`determine_symbol($snowfall, $rain, $wmo_code, $is_day)`** — Selects weather icon with priority: WMO sleet codes (56,57,66,67,68,69) → rain+snowfall sleet → snowfall only → rain only → WMO fallback → cloud cover codes
+- **`determine_symbol($snowfall, $rain, $wmo_code, $is_day, $showers = null, $thunder = null)`** — Showers / thunder come from the source when given (MET.no, from its icon), else from the WMO code. Selects weather icon with priority: WMO sleet codes (56,57,66,67,68,69) → rain+snowfall sleet → snowfall only → rain only → WMO fallback → cloud cover codes
 
 #### Data Enrichment — adapters + common pipeline
 
@@ -203,8 +214,8 @@ through the **same pipeline** (`derive_hourly`). Source-specific corrections sta
 adapter. Adding a source means writing an adapter that returns those rows.
 
 - **`openmeteo_rows($openmeteo, $elevation, $priorities)`** — Open-Meteo adapter, for one priority chain (best_match by default, or `arome_priorities()`). Holds the Open-Meteo corrections: weather_code ↔ total precipitation inconsistency (AROME fallback, then cloud cover), weather_code ↔ cloud cover, freezing level (inversions), UV and is_day fallbacks. Wind km/h → m/s (unrounded)
-- **`metno_rows($metno, $period)`** — MET.no adapter, one row per hour (`next_1_hours`) or per 6h step aligned on 0/6/12/18 UTC (`next_6_hours`). Instant values at the start of the period; MET.no's own icon is kept. Its `apparent_air_temperature` is **not** used (it reads ~4°C above the air temperature at -2°C with no wind)
-- **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` unless the source provides one, snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
+- **`metno_rows($metno, $period)`** — MET.no adapter, one row per hour (`next_1_hours`) or per 6h step aligned on 0/6/12/18 UTC (`next_6_hours`). Instant values at the start of the period. From MET.no's own icon only the shape (showers, thunder, day/night) is used; see `derive_hourly`. Its `apparent_air_temperature` is **not** used (it reads ~4°C above the air temperature at -2°C with no wind)
+- **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` from **our** amounts (a source's own icon — MET.no — is kept only when nothing falls; otherwise only its showers/thunder shape is borrowed, so icon and figures agree), snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
 - **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`. Kept for the legacy keys and the golden master
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation
 - **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Wind, clouds, UV are the values at the start of the step

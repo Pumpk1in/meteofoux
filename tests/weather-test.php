@@ -294,6 +294,22 @@ check('brouillard', determine_symbol(0, 0, 45, true), 'fog');
 check('WMO 95 sans precip', determine_symbol(0, 0, 95, true), 'rainandthunder');
 check('code WMO null', determine_symbol(0, 0, null, true), 'clearsky_day');
 
+section('Icone MET.no : sa forme, notre type et notre intensite');
+// Un pas MET.no minimal : icone, temperature (air sature), precipitation sur l'heure
+function one_hour_metno($symbol, $time, $temp, $precip) {
+    return ['properties' => ['timeseries' => [['time' => $time, 'data' => [
+        'instant' => ['details' => ['air_temperature' => $temp, 'relative_humidity' => 100, 'dew_point_temperature' => $temp, 'wind_speed' => 2]],
+        'next_1_hours' => ['summary' => ['symbol_code' => $symbol], 'details' => ['precipitation_amount' => $precip]],
+    ]]]]];
+}
+$icon = fn($symbol, $time, $temp, $precip) => derive_hourly(metno_rows(one_hour_metno($symbol, $time, $temp, $precip)))['symbol_code'][0];
+check('forte pluie MET.no, 2.2 cm de neige chez nous', $icon('heavyrain', '2026-11-10T12:00:00Z', 0.5, 3.0), 'snow');
+check('forme gardee : averses et orage', $icon('rainshowersandthunder', '2026-11-10T12:00:00Z', 0.5, 3.0), 'snowshowersandthunder');
+check('forme gardee : nuit', $icon('lightrainshowers_night', '2026-11-10T22:00:00Z', 0.5, 0.5), 'lightsnowshowers_night');
+check('rien ne tombe : icone MET.no conservee', $icon('cloudy', '2026-11-10T12:00:00Z', 0.5, 0), 'cloudy');
+check('neige fondue MET.no a +3C : pluie chez nous', $icon('sleet', '2026-11-10T12:00:00Z', 3.0, 1.0), 'lightrain');
+check('determine_symbol : averses fournies par la source', determine_symbol(0, 3, 0, true, true, false), 'rainshowers_day');
+
 section('get_model_value (chaine de priorites)');
 $data = [
     'temp_a' => [null, 1],

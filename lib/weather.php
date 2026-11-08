@@ -354,12 +354,15 @@ function resolve_precip_icon($type, $showers, $thunder, $is_day, $suffix) {
  * - 80-82: averses de pluie
  * - 85-86: averses de neige
  * - 95,96,99: orage
+ *
+ * @param bool|null $showers Averses, si la source le dit (MET.no) ; null : déduit du code WMO
+ * @param bool|null $thunder Orage, si la source le dit (MET.no) ; null : déduit du code WMO
  */
-function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
+function determine_symbol($snowfall, $rain, $wmo_code, $is_day, $showers = null, $thunder = null) {
     $wmo_code = $wmo_code ?? 0;
     $suffix = $is_day ? '_day' : '_night';
-    $showers = in_array($wmo_code, [80, 81, 82, 85, 86], true);
-    $thunder = in_array($wmo_code, [95, 96, 99], true);
+    $showers = $showers ?? in_array($wmo_code, [80, 81, 82, 85, 86], true);
+    $thunder = $thunder ?? in_array($wmo_code, [95, 96, 99], true);
 
     // Déterminer le type de précipitation, puis déléguer à resolve_precip_icon
 
@@ -430,7 +433,8 @@ function determine_symbol($snowfall, $rain, $wmo_code, $is_day) {
 //   time (UTC, 'AAAA-MM-JJTHH:MM'), temperature, apparent_temperature, dew_point, humidity,
 //   wind_speed et wind_gusts (m/s, non arrondis), wind_direction, precipitation (mm),
 //   precipitation_probability, freezing_point, freezing_point_corrected, cloud_cover,
-//   weather_code, symbol_code (null : calculé par le pipeline), uv_index, is_day
+//   weather_code, symbol_code (icône fournie par la source, sinon null), showers et thunder
+//   (averses / orage selon la source, null : déduits de weather_code), uv_index, is_day
 // Les corrections propres à une source restent dans son adaptateur.
 
 /**
@@ -584,6 +588,8 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
             'cloud_cover' => $cloud,
             'weather_code' => $weather_code,
             'symbol_code' => null,
+            'showers' => null,
+            'thunder' => null,
             'uv_index' => $uv,
             'is_day' => $is_day,
         ];
@@ -599,7 +605,8 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
  * Température, vent, nuages et UV sont les valeurs instantanées au début de la période :
  * MET.no ne donne pas de moyenne. Le pas de 6 h est donc classé neige/pluie avec la
  * température du début du pas, comme le fait enrich_metno_timeseries.
- * MET.no fournit sa propre icône, conservée telle quelle. Son "ressenti"
+ * MET.no fournit sa propre icône : on n'en garde que la forme (averses, orage, jour/nuit) quand
+ * il précipite, le type et l'intensité suivant nos quantités (voir derive_hourly). Son "ressenti"
  * (apparent_air_temperature) n'est pas repris : il affiche ~4°C de plus que la
  * température à -2°C sans vent.
  *
@@ -648,6 +655,8 @@ function metno_rows($metno, $period = 'next_1_hours') {
             'cloud_cover' => $details['cloud_area_fraction'] ?? null,
             'weather_code' => null,
             'symbol_code' => $symbol,
+            'showers' => str_contains((string)$symbol, 'showers'),
+            'thunder' => str_contains((string)$symbol, 'thunder'),
             'uv_index' => $details['ultraviolet_index_clear_sky'] ?? null,
             'is_day' => $is_day,
             'temperature_min' => $next['details']['air_temperature_min'] ?? null,
@@ -667,7 +676,10 @@ function metno_rows($metno, $period = 'next_1_hours') {
  * décidé par la température humide (is_snow_conditions), la quantité de neige par
  * Roebber. La décomposition rain/snowfall des modèles n'est pas utilisée : best_match
  * annonce par exemple de la pluie à -1.5°C à 2590 m.
- * L'icône est calculée, sauf si la source fournit la sienne (MET.no).
+ * L'icône suit nos quantités : une source qui fournit la sienne (MET.no) ne la garde que
+ * lorsqu'il ne tombe rien ; sinon on ne lui emprunte que sa forme (averses, orage), pour que
+ * l'icône et les chiffres affichés concordent (MET.no annonçait "forte pluie" sur des pas
+ * où l'app affichait des centimètres de neige).
  *
  * @param array $rows Lignes horaires communes (voir les adaptateurs)
  * @return array Colonnes : time, temperature, ..., symbol_code, snow_quality, uv_index, is_day
@@ -706,7 +718,11 @@ function derive_hourly(array $rows) {
         $rain = $classified['rain'];
         $snowfall = $classified['snowfall_roebber'];
 
-        $symbol = $row['symbol_code'] ?? determine_symbol($snowfall, $rain, $row['weather_code'], (bool)$row['is_day']);
+        if ($row['symbol_code'] !== null && $snowfall <= 0 && $rain <= 0) {
+            $symbol = $row['symbol_code'];
+        } else {
+            $symbol = determine_symbol($snowfall, $rain, $row['weather_code'], (bool)$row['is_day'], $row['showers'], $row['thunder']);
+        }
 
         $enriched['time'][] = $row['time'];
         $enriched['temperature'][] = $temp;
