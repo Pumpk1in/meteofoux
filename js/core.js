@@ -577,11 +577,25 @@ const DataNormalizer = {
         let snow = 0, rain = 0;
         const temps = [];
 
+        // Période réellement couverte : une source peut ne pas couvrir toute la journée
+        // (MET.no ne renvoie pas les heures passées, AROME s'arrête en cours de journée)
+        let from = null, to = null, hours = 0;
+        const cover = (time, duration) => {
+            const start = Utils.parseTime(time).getTime();
+            const end = start + duration * 3600000;
+            from = from === null ? start : Math.min(from, start);
+            to = to === null ? end : Math.max(to, end);
+            hours += duration;
+        };
+
         entries.forEach(entry => {
             if (entry.om) {
                 snow += entry.om.snow || 0;
                 rain += entry.om.rain || 0;
-                if (entry.om.temp !== null) temps.push(entry.om.temp);
+                if (entry.om.temp !== null) {
+                    temps.push(entry.om.temp);
+                    cover(entry.time, 1);
+                }
             } else if (entry.metno) {
                 const details = entry.metno.data?.instant?.details;
                 // Utiliser next_1_hours si dispo, sinon fallback sur next_6_hours
@@ -594,6 +608,7 @@ const DataNormalizer = {
                 // Utiliser les valeurs enrichies par le PHP (en cm avec méthode Roebber)
                 snow += forecast?.details?.snowfall || 0;
                 rain += forecast?.details?.rain || 0;
+                if (forecast) cover(entry.metno.time, entry.metno.data.next_1_hours ? 1 : 6);
             }
         });
 
@@ -601,7 +616,9 @@ const DataNormalizer = {
             snow,
             rain,
             tempMin: temps.length ? Math.min(...temps) : null,
-            tempMax: temps.length ? Math.max(...temps) : null
+            tempMax: temps.length ? Math.max(...temps) : null,
+            // null si la journée est couverte (tolérance d'1 h pour le calage des pas de 6 h)
+            period: from !== null && hours < 23 ? { from, to } : null
         };
     }
 };

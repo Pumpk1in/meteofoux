@@ -291,7 +291,7 @@ Formats raw data for UI consumption.
 - **`toCardData(entry)`** — Formats entry → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Prefers `entry.om` (Open-Meteo) over `entry.metno`
 - **`prepareEntry(entry, isToday, source)`** — Selects hourly (today) vs 6-hourly (future) data per source (`'openmeteo'|'arome'|'metno'`)
 - **`toChartData(day, sourceData, pointData, useOMData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`
-- **`computeTotals(entries)`** — Sums snow/rain, finds min/max temps across entries
+- **`computeTotals(entries)`** — Sums snow/rain, finds min/max temps across entries. Also returns `period` `{from, to}` (ms) when the entries cover less than 23 h of the day (MET.no has no past hours, AROME stops mid-day), `null` otherwise. A MET.no 6h step counts for 6 hours
 
 ---
 
@@ -322,7 +322,7 @@ ApexCharts wrapper for multi-axis weather charts.
 HTML generators (return HTML strings).
 
 - **`Skeleton()`** — Loading skeleton with animated bars
-- **`Summary(totals, freezing, elevation)`** — Summary bar: min/max temp, snow total, rain total, freezing min/max (if available & >100m)
+- **`Summary(totals, freezing, elevation)`** — Summary bar: min/max temp, snow total, rain total, covered period when partial (e.g. `18h–24h`, so sources stay comparable), freezing min/max (if available & >100m)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views

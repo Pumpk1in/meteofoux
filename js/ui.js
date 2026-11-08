@@ -1345,6 +1345,18 @@ const Components = {
                </span>`
             : `<span class="summary-item muted"><i data-lucide="cloud-rain-wind"></i> --</span>`;
 
+        // Cumuls partiels : afficher la période couverte, sinon les sources ne sont pas comparables
+        const hourLabel = (ms, isEnd) => {
+            const h = new Date(ms).getHours();
+            return `${isEnd && h === 0 ? 24 : h}h`;
+        };
+        const periodHtml = totals.period
+            ? `<span class="summary-item muted" title="Cumuls calculés sur cette période seulement : la source ne couvre pas toute la journée">
+                <i data-lucide="clock"></i>
+                <span>${hourLabel(totals.period.from, false)}–${hourLabel(totals.period.to, true)}</span>
+               </span>`
+            : '';
+
         const freezingHtml = (freezing.min && freezing.max && freezing.min > 100)
             ? `<span class="summary-item" title="Isotherme 0°C">
                 <i data-lucide="thermometer-snowflake"></i>
@@ -1357,6 +1369,7 @@ const Components = {
                 ${tempHtml}
                 ${snowHtml}
                 ${rainHtml}
+                ${periodHtml}
                 ${freezingHtml}
             </div>
         `;
