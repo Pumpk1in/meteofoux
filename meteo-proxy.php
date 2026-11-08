@@ -235,7 +235,9 @@ if ($res_metno && file_exists($cache_file)) {
         $metno_merged['properties']['timeseries'] = merge_metno_timeseries(
             $cached['metno']['properties']['timeseries'],
             $res_metno['properties']['timeseries'] ?? [],
-            strtotime('today midnight')
+            // Minuit heure de Paris : le fuseau PHP est UTC, et un minuit UTC
+            // supprimait l'heure 0h-1h locale (1h-2h en été)
+            (new DateTime('today', new DateTimeZone('Europe/Paris')))->getTimestamp()
         );
     }
 }

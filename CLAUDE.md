@@ -207,7 +207,9 @@ The proxy returns JSON with 6 keys:
 
 - JSON files in `cache/` with 15-minute TTL
 - Validated by minimum 50KB file size
-- MET.no timeseries are merged with existing cache (keeps old entries, updates/adds new)
+- MET.no timeseries are merged with existing cache (keeps old entries, updates/adds new).
+  MET.no only returns the current hour onwards, so past hours exist only if the proxy was
+  called earlier that day. History is purged at **Paris** midnight (the PHP timezone is UTC)
 
 **Failure handling** — the cache also holds the accumulated MET.no history, so a partial
 response must never overwrite it:
