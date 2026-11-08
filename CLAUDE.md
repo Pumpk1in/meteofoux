@@ -34,12 +34,14 @@ with a **golden-master**: the pipeline is replayed on two fixtures and the outpu
 byte-for-byte what is stored. Any behavioural change fails the suite — which is the point,
 so `lib/weather.php` can be refactored safely.
 
-Two fixtures, because they cover different things:
+Three fixtures, because they cover different things:
 - `openmeteo-station.json` — a real proxy capture (August, 10-25°C). Locks the multi-model
   fusion on production data, but crosses **no snow branch at all**.
 - `openmeteo-winter.json` — deterministically derived from the former (see
-  `tests/make-winter-fixture.php`): 72/216 snow hours, 90 distinct SLR values. This is the
-  one that covers Roebber, snow/rain classification and snow icons.
+  `tests/make-winter-fixture.php`): 72/216 snow hours, 90 distinct SLR values. Covers
+  Roebber, snow/rain classification and snow icons, but its weather is synthetic.
+- `openmeteo-observatoire.json` — a real proxy capture (8 November 2026, Observatoire,
+  2590 m): real snow with temperatures around 0°C, i.e. the borderline rain/snow cases.
 
 Only regenerate the winter fixture (and re-inspect the diff) when a behaviour change is
 **intended** — regenerating it to make a red suite green defeats its purpose.

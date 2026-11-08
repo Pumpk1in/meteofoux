@@ -79,13 +79,19 @@ function section($title) {
 
 // ================= 1. GOLDEN-MASTER =================
 
-// Deux jeux de données :
+// Trois jeux de données :
 // - station : capture réelle du proxy (aout, 10-25°C). Verrouille la fusion
 //   multi-modèles sur données de production, mais ne traverse aucune branche neige.
 // - winter  : dérivée déterministe de la précédente (voir make-winter-fixture.php).
 //   72/216 heures de neige, 90 valeurs de SLR distinctes : c'est elle qui couvre
 //   Roebber, la classification neige/pluie et les icônes de neige.
-$fixtures = ['station' => 'donnees reelles, aout', 'winter' => 'derivee hivernale'];
+// - observatoire : capture réelle du proxy (8 novembre 2026, 2590 m). Vraie neige,
+//   températures autour de 0°C : couvre les cas limites pluie/neige réels.
+$fixtures = [
+    'station' => 'donnees reelles, aout',
+    'winter' => 'derivee hivernale',
+    'observatoire' => 'donnees reelles, novembre, 2590 m',
+];
 
 foreach ($fixtures as $name => $desc) {
     section("Golden-master : $name ($desc)");
