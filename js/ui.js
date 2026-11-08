@@ -1269,14 +1269,15 @@ const Components = {
             </span>
         `;
 
-        const snowHtml = totals.snow > 0
+        // Un cumul qui s'arrondit à 0.0 s'affiche "--" (résidus de la répartition neige/pluie)
+        const snowHtml = totals.snow >= 0.05
             ? `<span class="summary-item snow" title="Neige cumulée">
                 <i data-lucide="snowflake"></i>
                 <span>${totals.snow.toFixed(1)} cm</span>
                </span>`
             : `<span class="summary-item muted"><i data-lucide="snowflake"></i> --</span>`;
 
-        const rainHtml = totals.rain > 0
+        const rainHtml = totals.rain >= 0.05
             ? `<span class="summary-item rain" title="Pluie cumulée">
                 <i data-lucide="cloud-rain-wind"></i>
                 <span>${totals.rain.toFixed(1)} mm</span>

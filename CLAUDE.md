@@ -218,7 +218,8 @@ adapter. Adding a source means writing an adapter that returns those rows.
 - **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` from **our** amounts (a source's own icon — MET.no — is kept only when nothing falls; otherwise only its showers/thunder shape is borrowed, so icon and figures agree), snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
 - **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`. Kept for the legacy keys and the golden master
 - **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation
-- **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Wind, clouds, UV are the values at the start of the step
+- **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Rain and snow of a step = **the sum of its 6 hours** when MET.no provides them (each classified with its own temperature), else `split_precipitation_by_temperature_range`. One icon, built from both amounts (sleet when both). Wind, clouds, UV are the values at the start of the step
+- **`split_precipitation_by_temperature_range($precip, $temp_min, $temp_max, $dew_depression, $humidity, $wind_speed)`** — For a 6h step known only by its min/max temperature: the share of the step whose wet-bulb temperature is under the threshold (temperature assumed linear from min to max) falls as snow, the rest as rain. On 43 steps whose hours were known: 7.6 cm / 9.4 mm total error, vs 25.4 cm / 29.6 mm with the temperature at the start of the step and 10.1 cm / 13.9 mm with the mean temperature
 - **`build_forecasts($openmeteo, $metno, $elevation)`** — All available sources in the common format: `['openmeteo' | 'arome' | 'metno' => {hourly, six_hourly}]`
 - **`enrich_metno_timeseries($metno)`** — Legacy: enriches the raw MET.no timeseries in place (dew point, Roebber classification of next_1_hours / next_6_hours). Idempotent (recomputes from untouched source fields), which the golden-master relies on. The tests check that `build_forecasts` finds the same values
 
@@ -363,7 +364,7 @@ ApexCharts wrapper for multi-axis weather charts.
 HTML generators (return HTML strings).
 
 - **`Skeleton()`** — Loading skeleton with animated bars
-- **`Summary(totals, freezing, elevation)`** — Summary bar: min/max temp, snow total, rain total, covered period when partial (e.g. `18h–24h`, so sources stay comparable), freezing min/max (if available & >100m)
+- **`Summary(totals, freezing, elevation)`** — Summary bar: min/max temp, snow total, rain total (`--` when it rounds to 0.0), covered period when partial (e.g. `18h–24h`, so sources stay comparable), freezing min/max (if available & >100m)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views

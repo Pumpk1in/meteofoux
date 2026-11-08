@@ -310,6 +310,34 @@ check('rien ne tombe : icone MET.no conservee', $icon('cloudy', '2026-11-10T12:0
 check('neige fondue MET.no a +3C : pluie chez nous', $icon('sleet', '2026-11-10T12:00:00Z', 3.0, 1.0), 'lightrain');
 check('determine_symbol : averses fournies par la source', determine_symbol(0, 3, 0, true, true, false), 'rainshowers_day');
 
+section('MET.no pas de 6 h : ses heures sommees, sinon repartition selon min/max');
+// Pas de 06 UTC : 6 heures de 1 mm, de 0C a 4C en air sature (neige puis pluie)
+function six_hour_step_metno($with_hours) {
+    $timeseries = [];
+    foreach ([0.0, 0.5, 1.0, 2.0, 3.0, 4.0] as $k => $t) {
+        $data = ['instant' => ['details' => ['air_temperature' => $t, 'relative_humidity' => 100, 'dew_point_temperature' => $t, 'wind_speed' => 2]]];
+        if ($with_hours) {
+            $data['next_1_hours'] = ['summary' => ['symbol_code' => 'rain'], 'details' => ['precipitation_amount' => 1.0]];
+        }
+        if ($k === 0) {
+            $data['next_6_hours'] = ['summary' => ['symbol_code' => 'heavyrain'], 'details' => ['precipitation_amount' => 6.0, 'air_temperature_min' => 0.0, 'air_temperature_max' => 4.0]];
+        }
+        $timeseries[] = ['time' => sprintf('2026-11-10T%02d:00:00Z', 6 + $k), 'data' => $data];
+    }
+    return ['properties' => ['timeseries' => $timeseries]];
+}
+$step = six_hour_step_metno(true);
+$six = metno_six_hourly($step);
+$hours = derive_hourly(metno_rows($step));
+check('heures connues : pluie = somme des 3 heures chaudes', $six['rain'][0], 3.0);
+check('heures connues : neige = somme des 3 heures froides', $six['snowfall'][0], round(array_sum($hours['snowfall']), 2));
+check('heures connues : une icone de neige fondue', str_contains($six['symbol_code'][0], 'sleet'), true);
+$six = metno_six_hourly(six_hour_step_metno(false));
+check('pas seul : 3/4 du pas au-dessus du seuil -> 4.5 mm de pluie', $six['rain'][0], 4.5);
+check('pas seul : le reste en neige', $six['snowfall'][0] > 0, true);
+$cold = split_precipitation_by_temperature_range(6.0, -4.0, -1.0, 0, 100, 2);
+check('pas seul et froid : tout en neige', $cold['rain'] == 0 && $cold['snowfall'] > 0, true);
+
 section('get_model_value (chaine de priorites)');
 $data = [
     'temp_a' => [null, 1],

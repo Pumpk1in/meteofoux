@@ -603,8 +603,8 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
  * aligné sur 0/6/12/18 UTC (next_6_hours).
  *
  * Température, vent, nuages et UV sont les valeurs instantanées au début de la période :
- * MET.no ne donne pas de moyenne. Le pas de 6 h est donc classé neige/pluie avec la
- * température du début du pas, comme le fait enrich_metno_timeseries.
+ * MET.no ne donne pas de moyenne. Pour le pas de 6 h, neige et pluie sont recalculées par
+ * metno_six_hourly (température du début du pas trop peu fiable).
  * MET.no fournit sa propre icône : on n'en garde que la forme (averses, orage, jour/nuit) quand
  * il précipite, le type et l'intensité suivant nos quantités (voir derive_hourly). Son "ressenti"
  * (apparent_air_temperature) n'est pas repris : il affiche ~4°C de plus que la
@@ -963,8 +963,55 @@ function enrich_metno_timeseries(&$metno) {
 }
 
 /**
- * MET.no → tableau 6 h au même format que aggregate_hourly_to_6h, construit à partir des
- * pas de 6 h de MET.no (ses heures s'arrêtent vers J+2).
+ * Répartit la précipitation d'un pas de 6 h entre neige et pluie, quand on ne connaît que
+ * sa température minimale et maximale (MET.no au-delà de ~J+2).
+ *
+ * La température est supposée varier linéairement du min au max ; la part du pas où la
+ * température humide reste sous le seuil tombe en neige, le reste en pluie. L'écart T - Td
+ * est supposé constant. Testé sur 43 pas dont on connaissait les 6 heures : erreur 7.6 cm
+ * de neige et 9.4 mm de pluie au total, contre 25.4 cm et 29.6 mm avec la température du
+ * début du pas, et 10.1 cm / 13.9 mm avec la température moyenne.
+ *
+ * @return array ['snowfall' => cm, 'rain' => mm, 'snow_quality' => string|null]
+ */
+function split_precipitation_by_temperature_range($precip, $temp_min, $temp_max, $dew_depression, $humidity, $wind_speed) {
+    if ($precip <= 0 || $temp_min === null || $temp_max === null) {
+        return ['snowfall' => 0, 'rain' => 0, 'snow_quality' => null];
+    }
+
+    $wet_bulb_min = calculate_wet_bulb($temp_min, $temp_min - $dew_depression);
+    $wet_bulb_max = calculate_wet_bulb($temp_max, $temp_max - $dew_depression);
+
+    if ($wet_bulb_max <= SNOW_WET_BULB_THRESHOLD) {
+        $snow_part = 1.0;
+    } elseif ($wet_bulb_min > SNOW_WET_BULB_THRESHOLD) {
+        $snow_part = 0.0;
+    } else {
+        $snow_part = (SNOW_WET_BULB_THRESHOLD - $wet_bulb_min) / ($wet_bulb_max - $wet_bulb_min);
+    }
+
+    // Roebber avec la température moyenne de la partie neigeuse du pas
+    $snow_temp = $temp_min + $snow_part * ($temp_max - $temp_min) / 2;
+    $snowfall = $snow_part > 0
+        ? round(calculate_snowfall_from_slr($snow_part * $precip, calculate_roebber_slr($snow_temp, $humidity, $wind_speed)), 2)
+        : 0;
+
+    return [
+        'snowfall' => $snowfall,
+        'rain' => round((1 - $snow_part) * $precip, 4),
+        'snow_quality' => get_snow_quality($snowfall, $snow_temp, $snow_temp - $dew_depression),
+    ];
+}
+
+/**
+ * MET.no → tableau 6 h au même format que aggregate_hourly_to_6h, un pas par tranche de
+ * 0/6/12/18 UTC.
+ *
+ * Neige et pluie d'un pas : la somme de ses 6 heures quand MET.no les fournit (chacune
+ * classée avec sa propre température), sinon la répartition selon le min/max du pas
+ * (split_precipitation_by_temperature_range). Classer tout le pas avec la température
+ * de son début donnait par ex. 6.5 cm de neige là où les heures disaient 2.4 cm puis
+ * 5.4 mm de pluie. Une seule icône, construite depuis ces deux quantités.
  * Vent, nuages et UV sont les valeurs du début du pas : MET.no ne fournit pas de maximum.
  *
  * @param array $metno Réponse MET.no
@@ -972,7 +1019,52 @@ function enrich_metno_timeseries(&$metno) {
  */
 function metno_six_hourly($metno) {
     $rows = metno_rows($metno, 'next_6_hours');
-    $derived = derive_hourly($rows);
+    $derived = derive_hourly($rows);  // vent, nuages, UV... ; précipitations recalculées ci-dessous
+
+    $hourly = derive_hourly(metno_rows($metno));
+    $hour_index = array_flip($hourly['time']);
+
+    foreach ($rows as $n => $row) {
+        // Les 6 heures du pas, si MET.no les fournit toutes
+        $start = strtotime($row['time'] . 'Z');
+        $hours = [];
+        for ($k = 0; $k < 6; $k++) {
+            $i = $hour_index[gmdate('Y-m-d\TH:i', $start + 3600 * $k)] ?? null;
+            if ($i === null) {
+                $hours = null;
+                break;
+            }
+            $hours[] = $i;
+        }
+
+        if ($hours !== null) {
+            $sum = fn($key) => array_sum(array_map(fn($i) => $hourly[$key][$i] ?? 0, $hours));
+            $precip = $sum('precipitation');
+            $snowfall = round($sum('snowfall'), 2);
+            $rain = round($sum('rain'), 4);
+            $snow_quality = get_snow_quality($snowfall, $sum('temperature') / 6, $sum('dew_point') / 6);
+        } else {
+            $precip = $row['precipitation'];
+            $split = split_precipitation_by_temperature_range(
+                $precip,
+                $row['temperature_min'] ?? $row['temperature'],
+                $row['temperature_max'] ?? $row['temperature'],
+                max(0, $row['temperature'] - $row['dew_point']),
+                $row['humidity'],
+                $row['wind_speed']
+            );
+            ['snowfall' => $snowfall, 'rain' => $rain, 'snow_quality' => $snow_quality] = $split;
+        }
+
+        $derived['precipitation'][$n] = round($precip, 4);
+        $derived['rain'][$n] = $rain;
+        $derived['snowfall'][$n] = $snowfall;
+        $derived['snowfall_roebber'][$n] = $snowfall;
+        $derived['snow_quality'][$n] = $snow_quality;
+        $derived['symbol_code'][$n] = ($snowfall <= 0 && $rain <= 0)
+            ? $row['symbol_code']
+            : determine_symbol($snowfall, $rain, null, (bool)$row['is_day'], $row['showers'], $row['thunder']);
+    }
 
     return [
         'time' => $derived['time'],
