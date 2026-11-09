@@ -1361,18 +1361,16 @@ const Components = {
         const barHeights = [40, 65, 55, 80, 70, 50, 75, 60, 45, 70, 85, 55, 40, 60, 75, 50, 65, 45, 55, 70, 60, 50, 65, 45];
         const barsHtml = barHeights.map(h => `<div class="skeleton-bar skeleton" style="height: ${h}%"></div>`).join('');
 
-        // Générer 4 cartes skeleton
-        const cardsHtml = Array(4).fill(null).map(() => `
-            <div class="skeleton-card">
-                <div class="skeleton-time skeleton"></div>
-                <div class="skeleton-icon skeleton"></div>
-                <div class="skeleton-temp skeleton"></div>
-                <div class="skeleton-data">
-                    <div class="skeleton-line skeleton" style="width: 85%"></div>
-                    <div class="skeleton-line skeleton" style="width: 65%"></div>
-                </div>
-            </div>
-        `).join('');
+        // 4 bandes, sur les colonnes des bandes horaires
+        const rowsHtml = Array(4).fill(`
+            <div class="card">
+                <span class="skeleton sk-time"></span>
+                <span class="skeleton sk-icon"></span>
+                <span class="skeleton sk-temp"></span>
+                <span class="skeleton sk-precip"></span>
+                <span class="skeleton sk-wind"></span>
+                <span class="skeleton sk-cloud"></span>
+            </div>`).join('');
 
         return `
             <div class="skeleton-loader">
@@ -1388,7 +1386,7 @@ const Components = {
                         <div class="skeleton-summary-item skeleton" style="width: 65px"></div>
                     </div>
                     <div class="skeleton-chart">${barsHtml}</div>
-                    <div class="skeleton-cards">${cardsHtml}</div>
+                    <div class="rows skeleton-rows" style="--n: 2">${rowsHtml}</div>
                 </div>
             </div>
         `;

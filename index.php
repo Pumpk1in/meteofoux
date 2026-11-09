@@ -88,42 +88,39 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
                 <div class="skeleton-bar skeleton" style="height: 65%"></div>
                 <div class="skeleton-bar skeleton" style="height: 45%"></div>
             </div>
-            <div class="skeleton-cards">
-                <div class="skeleton-card">
-                    <div class="skeleton-time skeleton"></div>
-                    <div class="skeleton-icon skeleton"></div>
-                    <div class="skeleton-temp skeleton"></div>
-                    <div class="skeleton-data">
-                        <div class="skeleton-line skeleton" style="width: 85%"></div>
-                        <div class="skeleton-line skeleton" style="width: 65%"></div>
-                    </div>
+            <!-- Mêmes colonnes que les bandes horaires (--n : 2 bandes par colonne sur ordinateur) -->
+            <div class="rows skeleton-rows" style="--n: 2">
+                <div class="card">
+                    <span class="skeleton sk-time"></span>
+                    <span class="skeleton sk-icon"></span>
+                    <span class="skeleton sk-temp"></span>
+                    <span class="skeleton sk-precip"></span>
+                    <span class="skeleton sk-wind"></span>
+                    <span class="skeleton sk-cloud"></span>
                 </div>
-                <div class="skeleton-card">
-                    <div class="skeleton-time skeleton"></div>
-                    <div class="skeleton-icon skeleton"></div>
-                    <div class="skeleton-temp skeleton"></div>
-                    <div class="skeleton-data">
-                        <div class="skeleton-line skeleton" style="width: 85%"></div>
-                        <div class="skeleton-line skeleton" style="width: 65%"></div>
-                    </div>
+                <div class="card">
+                    <span class="skeleton sk-time"></span>
+                    <span class="skeleton sk-icon"></span>
+                    <span class="skeleton sk-temp"></span>
+                    <span class="skeleton sk-precip"></span>
+                    <span class="skeleton sk-wind"></span>
+                    <span class="skeleton sk-cloud"></span>
                 </div>
-                <div class="skeleton-card">
-                    <div class="skeleton-time skeleton"></div>
-                    <div class="skeleton-icon skeleton"></div>
-                    <div class="skeleton-temp skeleton"></div>
-                    <div class="skeleton-data">
-                        <div class="skeleton-line skeleton" style="width: 85%"></div>
-                        <div class="skeleton-line skeleton" style="width: 65%"></div>
-                    </div>
+                <div class="card">
+                    <span class="skeleton sk-time"></span>
+                    <span class="skeleton sk-icon"></span>
+                    <span class="skeleton sk-temp"></span>
+                    <span class="skeleton sk-precip"></span>
+                    <span class="skeleton sk-wind"></span>
+                    <span class="skeleton sk-cloud"></span>
                 </div>
-                <div class="skeleton-card">
-                    <div class="skeleton-time skeleton"></div>
-                    <div class="skeleton-icon skeleton"></div>
-                    <div class="skeleton-temp skeleton"></div>
-                    <div class="skeleton-data">
-                        <div class="skeleton-line skeleton" style="width: 85%"></div>
-                        <div class="skeleton-line skeleton" style="width: 65%"></div>
-                    </div>
+                <div class="card">
+                    <span class="skeleton sk-time"></span>
+                    <span class="skeleton sk-icon"></span>
+                    <span class="skeleton sk-temp"></span>
+                    <span class="skeleton sk-precip"></span>
+                    <span class="skeleton sk-wind"></span>
+                    <span class="skeleton sk-cloud"></span>
                 </div>
             </div>
         </div>

@@ -1342,81 +1342,44 @@ main {
     100% { background-position: 0 -200%; }
 }
 
-/* Skeleton cards */
-.skeleton-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 0.75rem;
-    margin-top: 1rem;
-}
-
-@media (min-width: 400px) {
-    .skeleton-cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (min-width: 600px) {
-    .skeleton-cards {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-.skeleton-card {
-    background: var(--card);
-    border-radius: 0.75rem;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.skeleton-time {
-    height: 12px;
-    width: 40px;
-    border-radius: 0.25rem;
-}
-
-.skeleton-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-}
-
 @media screen and (max-width:600px) {
-    .skeleton-icon {
-        width: 40px;
-        height: 40px;
-    }
     .skeleton-chart .skeleton-bar:nth-child(3n) {
         display: none;
     }
 }
 
-.skeleton-temp {
-    height: 20px;
-    width: 50px;
+/* Bandes de chargement : la grille des bandes horaires (.rows .card), des blocs à la place du texte */
+.skeleton-rows {
+    margin-top: 1rem;
+}
+
+.skeleton-rows .skeleton {
+    display: block;
+    height: 12px;
     border-radius: 0.25rem;
 }
 
-.skeleton-data {
-    width: 100%;
-    background: rgba(0, 0, 0, 0.15);
-    border-radius: 0.5rem;
-    padding: 0.6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+.skeleton-rows .sk-icon {
+    width: var(--col-icon);
+    height: var(--col-icon);
+    border-radius: 50%;
 }
 
-[data-theme="light"] .skeleton-data {
-    background: rgba(0, 0, 0, 0.05);
+.skeleton-rows .sk-temp {
+    height: 16px;
+    width: 80%;
+    justify-self: end;
 }
 
-.skeleton-line {
-    height: 14px;
-    border-radius: 0.25rem;
+.skeleton-rows .sk-precip {
+    width: 55%;
+    margin-left: 0.3rem;
+}
+
+.skeleton-rows .sk-wind,
+.skeleton-rows .sk-cloud {
+    width: 75%;
+    justify-self: end;
 }
 
 /* Loading text animation */
