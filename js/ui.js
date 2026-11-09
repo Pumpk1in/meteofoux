@@ -1426,7 +1426,8 @@ const Components = {
     Verdict(verdict, summaries, selected, available) {
         if (!verdict) return '';
         const LABELS = {};
-        for (const key of ['openmeteo', 'arome', 'metno']) LABELS[key] = this.sourceLabel(key, summaries[key]);
+        // Ordre des cases : AROME d'abord, le modèle affiché par défaut
+        for (const key of ['arome', 'openmeteo', 'metno']) LABELS[key] = this.sourceLabel(key, summaries[key]);
         const dec = n => n.toFixed(1).replace('.', ',');
         const deg = n => String(Math.round(n)).replace('-', '−');
         const hourLabel = (ms, isEnd) => {
@@ -1516,8 +1517,8 @@ const Components = {
                 <div class="verdict-help"${helpOpen ? '' : ' hidden'}>
                     <p>Trois services de prévision, qui calculent chacun la météo à leur façon. Touchez une case pour voir ses heures en dessous.</p>
                     <ul>
-                        <li><strong>Open-Meteo</strong> : combine plusieurs modèles, à sa façon.</li>
                         <li><strong>AROME</strong> : Météo-France, le plus détaillé, sur environ 2 jours. Ensuite, son modèle plus large : <strong>ARPEGE</strong>.</li>
+                        <li><strong>Open-Meteo</strong> : combine plusieurs modèles, à sa façon.</li>
                         <li><strong>MET.no</strong> : l’institut météo norvégien. Heure par heure sur environ 2 jours, puis toutes les 6 h.</li>
                     </ul>
                 </div>
