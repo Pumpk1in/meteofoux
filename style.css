@@ -798,11 +798,9 @@ main {
     gap: 1rem;
 }
 
+/* Pas de carte autour du graphique : il est déjà dans le panneau teinté du détail */
 .chart-wrapper {
-    background: var(--card);
-    border-radius: 0.75rem;
     padding: 0.6rem 0rem 1.3rem;
-    border: 1px solid var(--border);
     min-width: 0; /* Force le respect de la grille */
     overflow: visible;
 }
@@ -815,10 +813,6 @@ main {
 
 .chart-scroll .chart {
     min-width: 600px; /* Largeur minimum pour forcer le scroll */
-}
-
-[data-theme="light"] .chart-wrapper {
-    background: var(--card);
 }
 
 .chart-wrapper h4 {
@@ -880,10 +874,15 @@ main {
 
 /* Unités : °C au-dessus de la colonne de gauche, km/h et UV au-dessus des colonnes de droite
    (positions des graduations : labels.offsetX des axes dans Charts.createUnifiedChart) */
-.chart-units {
+.chart-units-row {
     position: relative;
     height: 1rem;
     margin-top: 0.7rem;
+}
+
+.chart-units {
+    position: absolute;
+    inset: 0;
     font-size: 0.7rem;
     font-weight: 600;
     line-height: 1rem;
@@ -909,16 +908,22 @@ main {
     right: 14px;
 }
 
-/* « Plus de détails » : lien discret dans la clé, cible de 44 px sans élargir la ligne */
+/* « Plus de détails » : lien discret centré sur la ligne des unités (place fixe, même quand la clé
+   passe sur deux lignes), cible de 44 px qui déborde de la ligne sans l'agrandir */
 .chart-details-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     min-height: 44px;
-    margin: -14px -0.5rem;
     padding: 0 0.5rem;
     border: none;
     background: transparent;
     color: var(--accent);
     font: inherit;
+    font-size: 0.72rem;
     font-weight: 600;
+    white-space: nowrap;
     cursor: pointer;
 }
 

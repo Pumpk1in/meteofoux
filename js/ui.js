@@ -11,7 +11,8 @@ const Charts = {
     // saturée : c'est la grandeur qui compte ici
     getSeriesColors(isDark) {
         return isDark
-            ? { temp: '#f97316', feels: '#fdba74', wind: '#98dfb6', gusts: '#39b36c', uv: '#fbbf24', snow: '#22d3ee', rain: '#3b82f6' }
+            // Neige cyan clair / pluie bleu moyen : même famille, mais un net écart de clarté (3:1 entre elles)
+            ? { temp: '#f97316', feels: '#fdba74', wind: '#98dfb6', gusts: '#39b36c', uv: '#fbbf24', snow: '#67e8f9', rain: '#3b82f6' }
             : { temp: '#c2410c', feels: '#ea580c', wind: '#15803d', gusts: '#16a34a', uv: '#b45309', snow: '#0891b2', rain: '#1d4ed8' };
     },
 
@@ -34,11 +35,16 @@ const Charts = {
         }).join('');
         const t = this.getAxisTitleColors(isDark);
         const hasUv = defs.some(d => d.key === 'uv');
-        return `<div class="chart-key">${items}<button class="chart-details-btn" aria-expanded="${details}" onclick="App.toggleChartDetails(this)">${details ? 'Moins de détails' : 'Plus de détails'}</button></div>
-            <div class="chart-units${hasUv ? '' : ' no-uv'}" aria-hidden="true">
-                <span style="color:${t.temp}">°C</span>
-                <span class="chart-unit-wind" style="color:${t.wind}">km/h</span>
-                ${hasUv ? `<span class="chart-unit-uv" style="color:${t.uv}">UV</span>` : ''}
+        // Le bouton est centré sur la ligne des unités, pas au bout de la clé : quand la clé passe
+        // sur deux lignes (détails affichés), il ne change pas de place sous le doigt
+        return `<div class="chart-key">${items}</div>
+            <div class="chart-units-row">
+                <div class="chart-units${hasUv ? '' : ' no-uv'}" aria-hidden="true">
+                    <span style="color:${t.temp}">°C</span>
+                    <span class="chart-unit-wind" style="color:${t.wind}">km/h</span>
+                    ${hasUv ? `<span class="chart-unit-uv" style="color:${t.uv}">UV</span>` : ''}
+                </div>
+                <button class="chart-details-btn" aria-expanded="${details}" onclick="App.toggleChartDetails(this)">${details ? 'Moins de détails' : 'Plus de détails'}</button>
             </div>`;
     },
 
@@ -76,7 +82,7 @@ const Charts = {
             xaxis: {
                 type: 'datetime',
                 labels: {
-                    style: { colors: isDark ? '#94a3b8' : '#6b7280' },
+                    style: { colors: isDark ? '#94a3b8' : '#4b5563' },
                     datetimeUTC: false,
                     datetimeFormatter: { hour: 'HH:mm' }
                 },
@@ -85,7 +91,7 @@ const Charts = {
                 range: undefined // Pas de range fixe, utiliser les données
             },
             yaxis: {
-                labels: { style: { colors: isDark ? '#94a3b8' : '#6b7280' } }
+                labels: { style: { colors: isDark ? '#94a3b8' : '#4b5563' } }
             }
         };
     },
@@ -139,7 +145,7 @@ const Charts = {
 
         // Une entrée par série, avec son axe (même ordre : ApexCharts associe série et axe par index).
         // Unités des axes : dans la clé HTML (chartHeadHtml), pas en titres ApexCharts.
-        const labelStyle = { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' };
+        const labelStyle = { colors: isDark ? '#94a3b8' : '#4b5563', fontSize: '10px' }; // ≈ Micro (0.62rem), DESIGN.md
         const showUv = details;
         const defs = [
             { key: 'temp', name: 'Temp.', type: 'line', data: data.temp, width: 3, dash: 0, axis: {
@@ -269,7 +275,7 @@ const Charts = {
                 min: xMinVisible,
                 max: xMaxVisible,
                 labels: {
-                    style: { colors: isDark ? '#94a3b8' : '#6b7280' },
+                    style: { colors: isDark ? '#94a3b8' : '#4b5563' },
                     datetimeUTC: false,
                     datetimeFormatter: { hour: 'HH:mm' }
                 },
