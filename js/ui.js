@@ -480,10 +480,12 @@ const App = {
         }
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
-            const formatted = Utils.formatDateShort(this.state.currentDay);
+            // Sur ordinateur, tous les jours s'empilent et chacun a sa date en tête : en haut, la
+            // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste
+            const formatted = Utils.isMobile() ? Utils.formatDateShort(this.state.currentDay) : '';
             const freshness = this.freshness(DataService.state.data[this.state.currentPoint]?.meta);
-            dateEl.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1)
-                + (freshness ? ` · ${freshness.text}` : '');
+            const line = [formatted, freshness?.text].filter(Boolean).join(' · ');
+            dateEl.textContent = line.charAt(0).toUpperCase() + line.slice(1);
             dateEl.classList.toggle('is-stale', !!freshness?.stale);
         }
     },
@@ -683,14 +685,12 @@ const App = {
     },
 
     renderDayContent(day, pointData, isToday) {
-        const { point, series, elevation } = pointData;
+        const { series } = pointData;
 
+        // En tête du jour (ordinateur, où tous les jours s'empilent) : la date seule, le point est en haut
         const dayHeaderHtml = `
             <h2 class="day-header">
                 <span class="day-label">${Utils.formatDateLabel(day)}</span>
-                <span class="point-badge" style="--point-color: ${point.color}">
-                    ${Utils.escapeHtml(point.name)} ${elevation ? `(${Math.round(elevation)}m)` : ''}
-                </span>
             </h2>`;
 
         // Verdict du jour selon tous les modèles disponibles (bloc en tête du jour)
@@ -1453,6 +1453,7 @@ const Components = {
             const quality = { wet: ' humide', dry: ' sèche' }[verdict.snowQuality] || '';
             what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
         }
+        // Affiché d'un bloc avec le « ? » (.nowrap) : la phrase se coupe après la virgule, jamais avant le « ? »
         const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
         // Accord : une puce. Contradiction (0 contre 17 cm) : une alerte, la prévision est peu fiable.
         // Simple divergence : rien de plus, la fourchette et les cases juste en dessous la montrent déjà
@@ -1515,9 +1516,9 @@ const Components = {
 
         return `
             <div class="verdict" data-mode="${mode}">
-                <p class="verdict-main">${prefix ? `<span class="verdict-unit">${prefix}</span>` : ''}<span class="verdict-value">${value}</span><span class="verdict-unit">${unit}</span></p>
+                <p class="verdict-main">${prefix ? `<span class="verdict-unit">${prefix}</span>` : ''}<span class="verdict-value">${value.replace(' à ', ' <span class="verdict-sep">à</span> ')}</span><span class="verdict-unit">${unit}</span></p>
                 <p class="verdict-sub">
-                    <span>${what}, ${by}<button class="verdict-help-btn" aria-expanded="${helpOpen}" aria-label="Qui sont ces modèles ?" title="Qui sont ces modèles ?" onclick="App.toggleModelsHelp(this)"><i data-lucide="circle-help"></i></button></span>
+                    <span>${what}, <span class="nowrap">${by}<button class="verdict-help-btn" aria-expanded="${helpOpen}" aria-label="Qui sont ces modèles ?" title="Qui sont ces modèles ?" onclick="App.toggleModelsHelp(this)"><i data-lucide="circle-help"></i></button></span></span>
                     ${agreeHtml}
                 </p>
                 ${facts.length ? `<ul class="verdict-facts">${facts.map(([icon, text]) => `<li><i data-lucide="${icon}"></i>${text}</li>`).join('')}</ul>` : ''}

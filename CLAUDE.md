@@ -421,7 +421,7 @@ Main application state & logic.
 - **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max), the unit (cm / mm / max) on its own line under it on mobile (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
 - **`selectPoint(pointKey)`** — Switch active point (loads it if needed), save it to localStorage, re-render
-- **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness
+- **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness on mobile, freshness only on desktop (every day is stacked there, each with its own date)
 - **`freshness(meta)`** — "màj il y a X min", or "données d'il y a X h" (amber) when the proxy served its cache or the data is over an hour old
 
 #### Point Sheet (opened from the title)
@@ -435,7 +435,7 @@ Main application state & logic.
 - **`toggleTheme()`** — Switches dark ↔ light, re-renders (only once the point has data), saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, hourly rows, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
+- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop: the date only, the point is in the top bar), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, hourly rows, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
 - **`renderCharts()`** — Iterates days, calls renderChartForDay with the source of that day (`daySource`)
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`, and only with `chartDetails`)
 - **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours). Apparent temperature and gusts count only when shown (`chartDetails`): otherwise they would leave empty space at the top
@@ -485,7 +485,6 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 | Class | Description |
 |-------|-------------|
 | `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme. Its side padding follows `main`, so title and buttons line up with the content |
-| `.point-badge` | Point in the desktop day header: neutral pill + the point's color as a dot (white text on the point color fell to 1.5:1) |
 | `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (≥ 48 px) with `.day-indicator` (`.is-unsure` in amber) and `.day-unit` |
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |

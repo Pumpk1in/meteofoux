@@ -582,31 +582,12 @@ main {
 }
 
 .day-label {
-    text-transform: capitalize;
     font-weight: 600;
 }
 
-/* Point en tête du jour (ordinateur) : pastille neutre + point de couleur, comme le titre en haut.
-   Du blanc sur la couleur du point tombait à 1,5:1 (jaune) - 3:1 (bleu de la Station) */
-.point-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1-5);
-    font-size: var(--text-label);
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--border);
-    background: var(--card);
-    color: var(--text-soft);
-    font-weight: 500;
-}
-
-.point-badge::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--point-color);
+/* « Mardi 10 novembre » : majuscule au jour seulement (capitalize mettait « Novembre ») */
+.day-label::first-letter {
+    text-transform: uppercase;
 }
 
 /* ============================================
@@ -646,6 +627,18 @@ main {
 .verdict-unit {
     font-size: var(--text-unit);
     font-weight: 700;
+}
+
+/* « 0 à 26 » : le connecteur s'efface, les chiffres portent le bloc */
+.verdict-sep {
+    font-size: 0.6em;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text-soft);
+}
+
+.nowrap {
+    white-space: nowrap;
 }
 
 .verdict-sub {
@@ -843,7 +836,15 @@ main {
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+    white-space: nowrap; /* « OPEN- / METEO » décalait sa case d'une ligne */
     color: var(--model-color);
+}
+
+/* 320 px : OPEN-METEO fait 69 px pour 68 de place avec l'espacement, 65 sans */
+@media (max-width: 359px) {
+    .model-name {
+        letter-spacing: 0;
+    }
 }
 
 .model-cell:disabled .model-name {
@@ -934,6 +935,11 @@ main {
 /* Cacher la toolbar ApexCharts (pan activé par défaut) */
 .apexcharts-toolbar {
     display: none !important;
+}
+
+/* Icônes météo sous l'axe, en thème clair : les nuages blancs se perdaient sur le fond teinté */
+[data-theme="light"] .weather-icon-annotation {
+    filter: drop-shadow(0 0 1px rgba(15, 23, 42, 0.5));
 }
 
 /* Clé du graphique (Charts.chartHeadHtml) : séries, puis unités au-dessus de leurs graduations */

@@ -171,7 +171,7 @@ names something: a source, a point, or a weather quantity.
 
 ### Tertiary: point identity
 - **Station**, **Observatoire**, **Marin-Pascal**, **Vescal** (`point-*`): the fill of the active
-  point pill and of the point badge, injected as `--point-color`. Custom points draw from an
+  point pill and of the dot before the point name in the top bar, injected as `--point-color`. Custom points draw from an
   8-colour palette in `js/core.js` (`#26b763 #e67e22 #1abc9c #6c5ce7 #00b894 #fdcb6e #3498db
   #f39c12`).
 
