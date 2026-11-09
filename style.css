@@ -23,7 +23,7 @@
     --bg: #e6e6e6;
     --bg-secondary: #f2f2f2;
     --card: rgba(255, 255, 255, 1);
-    --card-hover: #f8fafc;
+    --card-hover: #ffffff;
     --text: #1e293b;
     --muted: #4a5568;
     --text-soft: #334155;
@@ -620,6 +620,7 @@ main {
 
 /* Thème clair : teintes foncées pour rester lisibles au soleil */
 [data-theme="light"] .model-cell { background: rgba(0, 0, 0, 0.02); }
+[data-theme="light"] .model-cell:hover:not(:disabled) { background: rgba(0, 0, 0, 0.05); }
 [data-theme="light"] .model-cell.is-openmeteo { --model-color: #0369a1; --model-pressed-bg: rgba(14, 165, 233, 0.12); --model-pressed-border: #0369a1; }
 [data-theme="light"] .model-cell.is-arome { --model-color: #7e22ce; --model-pressed-bg: rgba(168, 85, 247, 0.12); --model-pressed-border: #7e22ce; }
 [data-theme="light"] .model-cell.is-metno { --model-color: #b45309; --model-pressed-bg: rgba(245, 146, 40, 0.14); --model-pressed-border: #b45309; }
@@ -779,9 +780,18 @@ main {
     gap: 0.5rem;
 }
 
-.card:hover {
-    transform: translateY(-2px);
-    background: var(--card-hover);
+/* Survol seulement avec une souris : sur un téléphone, il restait "collé" après un appui */
+@media (hover: hover) {
+    .card:hover {
+        transform: translateY(-2px);
+        background: var(--card-hover);
+    }
+
+    /* Thème clair : la carte reste blanche et se soulève (le gris du survol la faisait paraître
+       plus sombre sur le fond teinté) */
+    [data-theme="light"] .card:hover {
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+    }
 }
 
 .card time {
@@ -957,6 +967,11 @@ main {
 
 .btn-more:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+/* Thème clair : blanc plein au survol (la règle sombre le rendait plus transparent, donc plus foncé) */
+[data-theme="light"] .btn-more:hover {
+    background: #ffffff;
 }
 
 /* ============================================
