@@ -418,12 +418,15 @@ const App = {
     },
 
     // Barre des jours : "AUJ." puis les jours de la semaine, chacun avec l'indicateur du verdict
-    // pour le point affiché (flocon + cm, goutte + mm, soleil + max). À refaire quand le point change.
+    // pour le point affiché (flocon + cm, goutte + mm, soleil + max), l'unité sur sa propre ligne
+    // (« 28–49 mm » ne tient pas dans un bouton de 44 px), en ambre si les modèles se contredisent.
+    // À refaire quand le point change.
     renderDayNav() {
         const pointData = DataService.state.data[this.state.currentPoint];
         const deg = n => String(Math.round(n)).replace('-', '−');
         const ICONS = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' };
         const SPOKEN = { snow: ' de neige', rain: ' de pluie', dry: ', sec' };
+        const UNITS = { snow: 'cm', rain: 'mm', dry: 'max' };
 
         document.getElementById('day-nav').innerHTML = this.state.days.map((day, index) => {
             const isActive = day === this.state.currentDay;
@@ -433,7 +436,7 @@ const App = {
             let indicatorHtml = '', spoken = '';
             if (verdict) {
                 const { prefix, value, unit } = Components.verdictValue(verdict);
-                spoken = ` : ${prefix ? `${prefix} ` : ''}${value} ${unit}${SPOKEN[verdict.mode]}`;
+                spoken = ` : ${prefix ? `${prefix} ` : ''}${value} ${unit}${SPOKEN[verdict.mode]}${verdict.contradict ? ', peu fiable' : ''}`;
                 let short;
                 if (verdict.mode === 'dry') {
                     short = `${deg(verdict.tempMax)}°`;
@@ -441,7 +444,8 @@ const App = {
                     const lo = Math.round(verdict.range.lo), hi = Math.round(verdict.range.hi);
                     short = verdict.basis.length === 1 || lo === hi ? `${hi}` : `${lo}–${hi}`;
                 }
-                indicatorHtml = `<span class="day-indicator is-${verdict.mode}"><i data-lucide="${ICONS[verdict.mode]}"></i>${short}</span>`;
+                indicatorHtml = `<span class="day-indicator is-${verdict.mode}${verdict.contradict ? ' is-unsure' : ''}"><i data-lucide="${ICONS[verdict.mode]}"></i>${short}</span>
+                    <span class="day-unit">${UNITS[verdict.mode]}</span>`;
             }
 
             return `

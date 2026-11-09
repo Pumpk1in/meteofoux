@@ -415,7 +415,7 @@ Main application state & logic.
 
 #### Navigation
 - **`renderNavigation()`** — Day bar, top bar
-- **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max). Redone when the point changes
+- **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max), the unit (cm / mm / max) on its own line under it on mobile (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
 - **`selectPoint(pointKey)`** — Switch active point (loads it if needed), re-render
 - **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness
@@ -470,7 +470,7 @@ Main application state & logic.
 --focus: var(--accent);  /* keyboard focus outline; light theme: #0369a1 (--accent is 2.1:1 on white) */
 --border: rgba(255,255,255, 0.08);                 --border-strong: rgba(255,255,255, 0.18);
 --warn: #fbbf24;
---top-bar-height: 60px;  --bottom-nav-height: 64px;
+--top-bar-height: 60px;  --bottom-nav-height: 68px;  /* 60px on desktop */
 ```
 
 Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
@@ -483,7 +483,7 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 |-------|-------------|
 | `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme. Its side padding follows `main`, so title and buttons line up with the content |
 | `.point-badge` | Point in the desktop day header: neutral pill + the point's color as a dot (white text on the point color fell to 1.5:1) |
-| `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (48 px) with `.day-indicator` |
+| `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (≥ 48 px) with `.day-indicator` (`.is-unsure` in amber) and `.day-unit` |
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
 | `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |

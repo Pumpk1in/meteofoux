@@ -16,7 +16,7 @@
     --accent3: #f472b6;
     --border: rgba(255, 255, 255, 0.08);
     --top-bar-height: 60px;
-    --bottom-nav-height: 64px;
+    --bottom-nav-height: 68px; /* Boutons des jours sur 3 lignes : jour, indicateur, unité */
 }
 
 /* Thème clair */
@@ -432,6 +432,20 @@ body {
 [data-theme="light"] .day-indicator.is-snow .lucide { stroke: #0369a1; }
 [data-theme="light"] .day-indicator.is-rain .lucide { stroke: #1d4ed8; }
 [data-theme="light"] .day-indicator.is-dry .lucide { stroke: #b45309; }
+
+/* Modèles qui se contredisent ce jour-là : la fourchette en ambre, comme l'alerte du verdict */
+.day-indicator.is-unsure {
+    color: var(--warn);
+}
+
+/* Unité de l'indicateur (cm, mm, max), sur sa ligne : elle ne tient pas à côté de « 28–49 » */
+.day-unit {
+    margin-top: -0.2rem;
+    font-size: 0.6rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--muted);
+}
 
 /* ============================================
    MAIN CONTENT
@@ -1447,6 +1461,12 @@ footer details p {
         flex-direction: row;
         gap: 0.5rem;
         padding: 0.3rem 0.7rem;
+    }
+
+    /* Boutons en ligne : l'unité suit la fourchette, sur la même ligne */
+    .day-unit {
+        margin: 0 0 0 -0.3rem;
+        font-size: 0.65rem;
     }
 
     .chart-full {
