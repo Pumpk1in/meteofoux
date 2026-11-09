@@ -353,15 +353,21 @@ body {
 /* Détail du jour - fond coloré selon le modèle affiché CE jour-là (au-delà de l'horizon d'AROME,
    le détail passe sur Open-Meteo : la teinte suit) */
 .day-detail[data-source="openmeteo"] {
-    background: rgba(8, 42, 74, 0.5);
+    background: rgba(14, 110, 220, 0.3);
 }
 
 .day-detail[data-source="arome"] {
-    background: rgba(50, 17, 85, 0.5);
+    background: rgba(130, 50, 235, 0.3);
 }
 
 .day-detail[data-source="metno"] {
-    background: rgba(67, 40, 15, 0.5);
+    background: rgba(225, 115, 15, 0.26);
+}
+
+/* Sur ces teintes plus vives, le gris des unités (cm, humide, SO…) tombait à 3,9:1 sur les tuiles
+   en bas de page : un cran plus clair le garde au-dessus de 4,5:1 */
+[data-theme="dark"] .day-detail {
+    --muted: #a8b5c8;
 }
 
 /* Thème clair : seule la zone de détail prend la teinte du modèle, légère, pour que la page

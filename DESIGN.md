@@ -162,9 +162,12 @@ names something: a source, a point, or a weather quantity.
 
 ### Secondary: source identity
 - **Open-Meteo** (`source-openmeteo`), **AROME** (`source-arome`), **MET.no** (`source-metno`):
-  the source toggle's label and border (with a 25% fill), and a dark tint of the whole day section
-  in dark mode (`rgba(8,42,74,.5)`, `rgba(50,17,85,.5)`, `rgba(67,40,15,.5)`) or of the page
-  background in light mode. When the source changes, the room changes colour.
+  the model cell's label and border, and a tint of the day detail (chart and hourly rows). In dark
+  mode the tint is assumed (`rgba(14,110,220,.3)`, `rgba(130,50,235,.3)`, `rgba(225,115,15,.26)`;
+  `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode it stays faint
+  (10-12%): a stronger tint muddied the reading in the sun (tested 2026-11-09; a neutral background
+  with a thick border in the source colour is the idea to try next). When the source changes, the
+  detail changes colour.
 
 ### Tertiary: point identity
 - **Station**, **Observatoire**, **Marin-Pascal**, **Vescal** (`point-*`): the fill of the active
