@@ -211,7 +211,7 @@ const Utils = {
 
 // Service de fetch des data
 const DataService = {
-    state: { data: {} },
+    state: { data: {}, failed: {} },
 
     // Charge un seul point (le premier ou celui spécifié)
     async loadFirst(forceRefresh = false, pointKey = null) {
@@ -225,15 +225,22 @@ const DataService = {
         return this.state.data;
     },
 
-    // Charge les points restants en arrière-plan (ceux pas encore chargés)
+    // Charge les points restants en arrière-plan (ceux pas encore chargés). Un point en échec ne
+    // bloque pas les suivants : il est noté dans state.failed (la feuille des points l'affiche)
     async loadRemaining(forceRefresh = false, onPointLoaded = null) {
         const remaining = CONFIG.points.filter(p => !this.state.data[p.key]);
 
         for (let i = 0; i < remaining.length; i++) {
             const point = remaining[i];
             if (i > 0) await new Promise(r => setTimeout(r, 100));
-            const rawData = await this.fetchPointData(point, forceRefresh);
-            this.state.data[point.key] = this.processPointData(point, rawData);
+            try {
+                const rawData = await this.fetchPointData(point, forceRefresh);
+                this.state.data[point.key] = this.processPointData(point, rawData);
+                delete this.state.failed[point.key];
+            } catch (e) {
+                console.warn(`Chargement de ${point.key} impossible :`, e.message);
+                this.state.failed[point.key] = true;
+            }
             if (onPointLoaded) onPointLoaded(point.key);
         }
 

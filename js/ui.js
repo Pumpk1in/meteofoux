@@ -568,9 +568,12 @@ const App = {
         document.documentElement.setAttribute('data-theme', this.state.theme);
         localStorage.setItem('fmeteo_theme', this.state.theme);
         // Les graphiques sont recréés : séries ET titres d'axes changent de teinte avec le thème
-        const scrollY = window.scrollY;
-        this.render();
-        window.scrollTo(0, scrollY);
+        // (pas de rendu tant que le point n'a pas de données : chargement initial, écran d'erreur)
+        if (DataService.state.data[this.state.currentPoint]) {
+            const scrollY = window.scrollY;
+            this.render();
+            window.scrollTo(0, scrollY);
+        }
         // Mettre à jour la couleur du navigateur mobile
         const themeColor = this.state.theme === 'dark' ? '#0f172a' : '#f8fafc';
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
@@ -581,7 +584,10 @@ const App = {
     async refreshData() {
         const btn = document.getElementById('refresh-btn');
         const content = document.getElementById('content');
-        if (btn.classList.contains('refreshing')) return;
+        // Un seul rafraîchissement à la fois, arrière-plan compris (sinon deux tournées forcées
+        // de tous les points en parallèle : appels doublés vers les API, risque de 429)
+        if (this._refreshing) return;
+        this._refreshing = true;
         btn.classList.add('refreshing');
         content.classList.add('is-refreshing');
         content.setAttribute('aria-busy', 'true');
@@ -611,6 +617,7 @@ const App = {
                 console.warn(`Rafraîchissement de ${point.key} impossible :`, e.message);
             }
         }
+        this._refreshing = false;
     },
 
     // Message en tête du contenu (remplacé au prochain rendu)
@@ -869,6 +876,7 @@ const App = {
 
     renderPointSheet() {
         const root = document.getElementById('point-sheet');
+        const hadFocus = root.contains(document.activeElement);
         const focusedKey = document.activeElement?.closest?.('#point-sheet [data-focus-key]')?.dataset.focusKey;
         const data = DataService.state.data;
         const day = this.state.currentDay;
@@ -877,7 +885,11 @@ const App = {
         // Verdict court du jour pour un point (s'il est chargé)
         const verdictHtml = point => {
             const pointData = data[point.key];
-            if (!pointData) return '<span class="sheet-row-verdict is-loading">Chargement…</span>';
+            if (!pointData) {
+                return DataService.state.failed[point.key]
+                    ? '<span class="sheet-row-verdict is-loading">Indisponible</span>'
+                    : '<span class="sheet-row-verdict is-loading">Chargement…</span>';
+            }
             const { verdict } = DataNormalizer.dayVerdict(pointData, day);
             if (!verdict) return '<span class="sheet-row-verdict">—</span>';
             const { value, unit } = Components.verdictValue(verdict);
@@ -938,7 +950,15 @@ const App = {
                 </section>
             </div>`;
         lucide.createIcons();
-        if (focusedKey) root.querySelector(`[data-focus-key="${focusedKey}"]`)?.focus();
+        // Le focus reste dans la feuille après un re-rendu (sinon Échap et le piège de Tab ne marchent
+        // plus) : même bouton si possible, sinon "Modifier"/"Terminé", sinon "Fermer"
+        // (bouton supprimé, ou flèche devenue inactive en bout de liste)
+        if (hadFocus) {
+            const usable = el => el && !el.disabled ? el : null;
+            (usable(focusedKey && root.querySelector(`[data-focus-key="${focusedKey}"]`))
+                || root.querySelector('[data-focus-key="edit"]')
+                || root.querySelector('.sheet-close'))?.focus();
+        }
     },
 
     // Échap ferme ; Tab reste dans la feuille
@@ -1405,7 +1425,8 @@ const Components = {
                 : mode === 'rain' ? `${dec(s.rain)} mm`
                 : `${deg(s.tempMin)} / ${deg(s.tempMax)}°`;
             const barHtml = mode === 'dry' ? ''
-                : `<span class="model-bar"><span style="width: ${range.hi > 0 ? Math.max(3, Math.round(amount / range.hi * 100)) : 3}%"></span></span>`;
+                // Plafonnée à 100 % : une source partielle (hors fourchette) peut dépasser range.hi
+                : `<span class="model-bar"><span style="width: ${range.hi > 0 ? Math.min(100, Math.max(3, Math.round(amount / range.hi * 100))) : 3}%"></span></span>`;
             const sub = s.period ? `${hourLabel(s.period.from, false)}–${hourLabel(s.period.to, true)} seulement`
                 : s.sixHourly ? 'Par pas de 6 h'
                 : mode === 'dry' ? (s.nightMin !== null ? `Nuit ${deg(s.nightMin)}°` : '')
@@ -1548,10 +1569,10 @@ const Components = {
                     <div class="snow" title="Cumul de neige">
                         <span>${snowHtml}${snowQualityHtml}</span>
                     </div>` : ''}
-                ${rain >= 0.05 ? `
+                ${rain > 0 ? `
                     <div class="rain" title="Cumul de pluie">
                         <i data-lucide="cloud-rain-wind" class="lucide"></i>
-                        <span><strong>${dec(rain)}</strong> <small>mm</small></span>
+                        <span>${rain < 0.05 ? '<small>&lt; </small><strong>0,1</strong>' : `<strong>${dec(rain)}</strong>`} <small>mm</small></span>
                     </div>` : ''}
             </div>
         </div>`;
