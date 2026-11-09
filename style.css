@@ -106,10 +106,6 @@ button.sheet-row:active,
     transform: scale(0.98);
 }
 
-/* Centré par translate : garder le centrage pendant l'appui */
-.chart-details-btn:active {
-    transform: translate(-50%, -50%) scale(0.96);
-}
 
 /* ============================================
    BASE STYLES
@@ -1015,11 +1011,14 @@ main {
    deux lignes), cible de 44 px qui déborde de la ligne sans l'agrandir. Le bouton visible est la
    pastille à l'intérieur : un simple texte bleu ne se lisait pas comme un bouton */
 .chart-details-btn {
+    /* Centré par inset + marges auto, pas par transform : la règle d'appui (button:active,
+       transform: scale) remplaçait le translate et le bouton sautait sous le doigt, qui le
+       relâchait alors à côté (pas de clic) */
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    min-height: 44px;
+    inset: 0;
+    margin: auto;
+    width: fit-content;
+    height: 44px;
     padding: 0 var(--space-1);
     border: none;
     background: transparent;
