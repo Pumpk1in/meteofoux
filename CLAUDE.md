@@ -105,6 +105,7 @@ METEOFOUX/
 ├── docker-compose.yml      # Local dev server (php:8.3-apache, port 8123)
 ├── .htaccess               # Apache config (DirectoryIndex, no listing)
 ├── favicon.png
+├── fonts/                  # Fira Sans woff2 (400-800, latin), self-hosted, OFL licence
 ├── js/
 │   ├── core.js             # CONFIG, CustomPoints, Utils, DataService, DataNormalizer
 │   └── ui.js               # Charts, Components, App
@@ -571,6 +572,9 @@ Icons in `weather/` are from MET.no (Norwegian Meteorological Institute). Availa
 - **ApexCharts 8.5.0** — Charting library for multi-axis weather charts
 - **Lucide 1.61.0** — Icon library (wind, snowflake, thermometer, etc.)
 - **Leaflet 1.9.4** — Map library for custom point selection (loaded on demand)
+
+The UI font, **Fira Sans** (Fontsource 5.3.0), is self-hosted in `fonts/` (offline, weak network);
+`index.php` preloads the 400 and 600 weights and the chart uses it too (`getBaseOptions`).
 
 All three are pinned to an exact version (index.php, `loadLeaflet()`): an upstream release must not
 change the UI unannounced. Bump deliberately, to a version at least two weeks old, and check the

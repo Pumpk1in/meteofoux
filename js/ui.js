@@ -53,6 +53,7 @@ const Charts = {
         return {
             chart: {
                 background: 'transparent',
+                fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                 toolbar: { show: false },
                 zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
                 animations: { enabled: true, speed: 400 },
@@ -376,7 +377,7 @@ const App = {
             this.state.theme = savedTheme;
             document.documentElement.setAttribute('data-theme', savedTheme);
             // Mettre à jour la couleur du navigateur mobile
-            const themeColor = savedTheme === 'dark' ? '#0f172a' : '#f8fafc';
+            const themeColor = savedTheme === 'dark' ? '#020617' : '#ffffff'; // = fond de la barre du haut
             document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 
             // Charger la source sauvegardée
@@ -560,7 +561,7 @@ const App = {
             window.scrollTo(0, scrollY);
         }
         // Mettre à jour la couleur du navigateur mobile
-        const themeColor = this.state.theme === 'dark' ? '#0f172a' : '#f8fafc';
+        const themeColor = this.state.theme === 'dark' ? '#020617' : '#ffffff'; // = fond de la barre du haut
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
     },
 

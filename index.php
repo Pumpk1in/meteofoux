@@ -7,14 +7,17 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png">
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Meteo 7 jours - La Foux d'Allos et +</title>
+    <!-- Les deux graisses de l'écran d'ouverture : sans elles, le texte s'affiche d'abord en police système -->
+    <link rel="preload" href="fonts/fira-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/fira-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="style.css<?= $v('style.css') ?>">
     <!-- Versions épinglées : une nouvelle version publiée en amont ne change pas l'interface en douce -->
     <script src="https://unpkg.com/lucide@1.61.0/dist/umd/lucide.min.js"></script>

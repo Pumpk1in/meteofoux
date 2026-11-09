@@ -34,24 +34,24 @@ colors:
   alerte: "#ef4444"
 typography:
   display:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "1.4rem"
     fontWeight: 700
     lineHeight: 1
   title:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "1.1rem"
     fontWeight: 600
   body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "0.85rem"
     fontWeight: 400
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 400
   micro:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "0.62rem"
     fontWeight: 600
     letterSpacing: "0em"
@@ -60,9 +60,9 @@ rounded:
   sm: "0.5rem"
   md: "0.75rem"
   lg: "1rem"
-  pill: "2rem"
+  pill: "999px"
 spacing:
-  xs: "0.3rem"
+  xs: "0.25rem"
   sm: "0.5rem"
   md: "0.75rem"
   lg: "1rem"
@@ -147,7 +147,7 @@ redesign**: this document records the incumbent system, it does not freeze it.
 - The data is the hero; buttons, pills and toggles must never pull the eye away from it.
 - Clear, warm and personal rather than neutral; young, but never at the expense of clarity.
 - Translucent layers on a dark gradient, almost no shadow.
-- System font only; hierarchy through size and weight.
+- One self-hosted face, Fira Sans; hierarchy through size and weight on a fixed scale.
 
 ## Colors
 
@@ -202,22 +202,20 @@ its point's colour.
 
 ## Typography
 
-**Display Font:** system UI stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-sans-serif`)
-**Body Font:** same stack
+**Font:** Fira Sans (400 to 800, latin subset), self-hosted in `fonts/` (OFL), so it works offline
+and on a weak network; the system stack is the fallback. The same face is used in the chart.
 
-**Character:** no brand typeface; the native face of each phone keeps the app light and familiar.
-Hierarchy is carried entirely by size and weight, with the temperature as the loudest text on the
-screen.
+**Character:** a humanist sans built for small screens, with clear figures; data columns use
+tabular figures (`font-variant-numeric: tabular-nums`). Hierarchy is carried by size and weight,
+with the verdict figure as the loudest text on the screen.
 
-### Hierarchy
-- **Display** (700, 1rem; 0.95rem for a period range): the temperature on each hourly row.
-- **Title** (600, 1.1rem; 1rem under 600px): the date in the top bar and the day header
-  (capitalized).
-- **Body** (400, 0.85rem; 0.8rem under 600px): the summary bar, loading text, modal fields.
-- **Label** (400, 0.75rem): row times, point badge, footer. Row figures (snow, rain, wind, clouds) are 0.85rem, their units 0.7rem muted; column headers 0.65rem muted.
-- **Micro** (600, 0.62rem, uppercase): point pills. Smaller still: snow quality (0.65rem), the
-  source toggle label (0.46rem, 700, uppercase), chart axis labels (9-10px).
+### Scale
+Only the tokens of `:root` in `style.css` are used, never a raw size:
+`--text-micro` 11 px (units, column headers, model names, day-bar indicators) ·
+`--text-label` 12 px (times, labels) · `--text-small` 13 px (secondary text, buttons) ·
+`--text-body` 14 px (body text, row figures) · `--text-title` 16 px (titles, temperatures,
+values) · `--text-heading` 18 px (day header) · `--text-unit` 20 px (verdict unit) ·
+`--text-display` 44 px (verdict figure). Chart axis labels stay at 10 px (SVG, set in `js/ui.js`).
 
 ### Named Rules
 **The Figure First Rule.** A reading (temperature, snow, wind) is always set larger or heavier
@@ -238,8 +236,9 @@ the day on the left). Today shows 4 hours then "Voir heures suivantes"; future d
 (Nuit, Matin, Midi, Soir, with their local hours) with a toggle to every hour. On mobile only the selected day renders; on desktop every
 day stacks.
 
-Spacing runs on small rem steps (0.3, 0.5, 0.75, 1, 2rem): tight inside rows, 0.4rem between
-rows, 1rem between blocks of a section, 2rem between sections.
+Spacing runs on a 4 px grid, as `--space-*` tokens in `style.css` (2, 4, 6, 8, 12, 16, 20, 24, 32,
+48, 64 px; 6 px is the one half-step): tight inside rows, 6 px between rows, 16 px between blocks of
+a section, 32 px between sections. Only negative margins tuned against ApexCharts stay raw.
 
 ## Elevation & Depth
 
@@ -254,11 +253,11 @@ This is recorded as current practice, **not as a rule**: the user left depth ope
 
 ## Shapes
 
-Soft, friendly corners throughout, on a graded scale: 0.25rem for skeleton lines, 0.5rem for
-buttons and inputs, 0.6rem for hourly rows, 0.75rem for the chart panel and the summary bar, 1rem
-for day sections and the modal. Point pills and "show more" buttons are full pills (2rem); the
-delete badge and day dots are circles. Borders are 1px hairlines in `trait-givre`; the add-point
-pill uses a dashed border. `.day-section` declares its radius twice (8px, then 1rem; 1rem wins).
+Soft, friendly corners on four `--radius-*` tokens: `xs` 4 px for skeleton lines, `sm` 8 px for
+buttons, inputs, model cells, day buttons and hourly rows, `md` 12 px for sheet rows and notices,
+`lg` 16 px for day sections, the verdict, the sheet and the modal. "Show more" buttons and chips
+are full pills (`--radius-pill`); dots are circles; the thin bars (model bars, chart key) keep a
+2 px radius. Borders are 1px hairlines in `trait-givre`.
 
 ## Components
 
