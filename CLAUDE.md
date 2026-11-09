@@ -379,8 +379,9 @@ ApexCharts wrapper for multi-axis weather charts.
 HTML generators (return HTML strings).
 
 - **`Skeleton()`** — Loading skeleton with animated bars
-- **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles", agree/diverge chip, facts (temperatures, freezing level vs the point; on a dry day night refreeze and wind), then one cell per model (value, bar, temps / covered period / "Par pas de 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
-- **`verdictValue(verdict)`** — The big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). Shared with the point sheet and the day bar
+- **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles" + a "?" button (`App.toggleModelsHelp`) that unfolds a plain-language note on the three models under the cells, agree/diverge chip (when they diverge it names the gap: "AROME en voit 18, Open-Meteo rien", or on a dry day "X annonce 4 °C de plus qu'Y"), facts (temperatures, "Limite du gel" = freezing level vs the point; on a dry day night refreeze and wind), then one cell per model (value, bar, "2° à 3°" / covered period / "Toutes les 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
+- **`verdictValue(verdict)`** — `{prefix, value, unit}`: the big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). When the lowest model rounds to zero, `prefix` = "jusqu'à" and `value` = the highest ("jusqu'à 18 cm", not "0 à 18"). Shared with the point sheet and the day bar (spoken label)
+- **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views
@@ -399,7 +400,8 @@ Main application state & logic.
   theme,                         // 'dark' | 'light'
   days,                          // Array of day strings
   expandedDays,                  // Set of expanded future days
-  todayHoursExpanded             // Boolean: today's extra hours visible
+  todayHoursExpanded,            // Boolean: today's extra hours visible
+  modelsHelpOpen                 // Boolean: the verdict's note on the three models is unfolded
 }
 ```
 

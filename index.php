@@ -145,7 +145,7 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
         <ul>
             <li><strong>Open-Meteo</strong> : fusion multi-modèles "best_match", 7 jours. Priorité : best_match → AROME HD → Seamless.</li>
             <li><strong>AROME / ARPEGE</strong> : modèles Météo-France uniquement (sans best_match). AROME HD (1,5 km) puis AROME (2,5 km) sur environ 2 jours, puis ARPEGE jusqu'à J+4. La case affiche le modèle réellement utilisé ce jour-là.</li>
-            <li><strong>MET.no</strong> : institut météorologique norvégien. Heure par heure sur environ 2 jours, puis par pas de 6 h.</li>
+            <li><strong>MET.no</strong> : institut météorologique norvégien. Heure par heure sur environ 2 jours, puis toutes les 6 h.</li>
         </ul>
         <p><strong>Accord des modèles</strong> : ils divergent quand l'écart dépasse 2 cm de neige (3 mm de pluie) et que le plus fort vaut au moins 1,5 fois le plus faible. Une source qui ne couvre qu'une partie de la journée n'entre pas dans la fourchette.</p>
         <p><strong>Cohérence</strong> : si le code météo indique des précipitations sans données associées, repli automatique sur AROME. Si le code indique un ciel clair mais une couverture nuageuse ≥ 80 %, l'icône est corrigée vers "couvert".</p>
@@ -153,7 +153,7 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
         <p><strong>Quantité de neige</strong> : méthode Roebber, ratio neige/eau dynamique (base 14:1) calibré pour les Alpes. Le ratio est ajusté selon la température (plus froid = neige plus légère), l'humidité (> 90 % = neige plus dense) et le vent (> 3 m/s = compaction). C'est cette quantité qui est affichée, pour les trois sources.</p>
         <p><strong>Qualité de neige</strong> : "sèche" si la température est ≤ -2 °C ou le point de rosée ≤ -3 °C, "humide" sinon.</p>
         <p><strong>Nébulosité</strong> : pour AROME, la couverture nuageuse vient d'ARPEGE en priorité. AROME HD ne fournit pas cette donnée, et AROME standard semble moins précis qu'ARPEGE comparé aux observations sur place.</p>
-        <p><strong>Isotherme 0 °C</strong> : corrigé automatiquement via MeteoSwiss lorsqu'une inversion thermique est détectée (température négative mais isotherme au-dessus de l'altitude).</p>
+        <p><strong>Limite du gel</strong> (isotherme 0 °C : l'altitude au-dessus de laquelle il gèle) : corrigée automatiquement via MeteoSwiss lorsqu'une inversion thermique est détectée (température négative mais isotherme au-dessus de l'altitude).</p>
         <p><strong>Points de mesure</strong> : Station (1794 m), Marin-Pascal (2291 m), Vescal (2419 m), Observatoire (2590 m) — coordonnées GPS spécifiques à La Foux d'Allos. Vous pouvez ajouter vos propres points depuis le titre en haut de l'écran.</p>
     </details>
 </footer>

@@ -534,6 +534,61 @@ main {
 .verdict-agree .lucide {
     width: 13px;
     height: 13px;
+    flex-shrink: 0;
+}
+
+/* "?" collé à "selon les 3 modèles" : cible de 44 px sans agrandir la ligne */
+.verdict-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -12px -12px -12px -9px;
+    vertical-align: middle;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.verdict-help-btn[aria-expanded="true"] {
+    color: var(--accent);
+}
+
+.verdict-help-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -6px;
+}
+
+.verdict-help-btn .lucide {
+    width: 18px;
+    height: 18px;
+}
+
+.verdict-help {
+    padding: 0.2rem 0.15rem 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-soft);
+}
+
+.verdict-help p {
+    margin: 0 0 0.35rem;
+}
+
+.verdict-help ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.verdict-help strong {
+    color: var(--text);
 }
 
 .verdict-facts {

@@ -371,7 +371,8 @@ const App = {
         theme: 'dark',
         days: [],
         expandedDays: new Set(), // Jours avec vue horaire étendue
-        todayHoursExpanded: false // État du "Voir heures suivantes" pour aujourd'hui
+        todayHoursExpanded: false, // État du "Voir heures suivantes" pour aujourd'hui
+        modelsHelpOpen: false      // Explication des modèles (bouton "?" du verdict) dépliée
     },
 
     // Helper pour obtenir les données selon la source sélectionnée
@@ -456,8 +457,8 @@ const App = {
 
             let indicatorHtml = '', spoken = '';
             if (verdict) {
-                const { value, unit } = Components.verdictValue(verdict);
-                spoken = ` : ${value} ${unit}${SPOKEN[verdict.mode]}`;
+                const { prefix, value, unit } = Components.verdictValue(verdict);
+                spoken = ` : ${prefix ? `${prefix} ` : ''}${value} ${unit}${SPOKEN[verdict.mode]}`;
                 let short;
                 if (verdict.mode === 'dry') {
                     short = `${deg(verdict.tempMax)}°`;
@@ -892,9 +893,9 @@ const App = {
             }
             const { verdict } = DataNormalizer.dayVerdict(pointData, day);
             if (!verdict) return '<span class="sheet-row-verdict">—</span>';
-            const { value, unit } = Components.verdictValue(verdict);
+            const { prefix, value, unit } = Components.verdictValue(verdict);
             const icon = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' }[verdict.mode];
-            return `<span class="sheet-row-verdict is-${verdict.mode}"><i data-lucide="${icon}"></i>${value} ${unit}</span>`;
+            return `<span class="sheet-row-verdict is-${verdict.mode}"><i data-lucide="${icon}"></i>${prefix ? `${prefix} ` : ''}${value} ${unit}</span>`;
         };
 
         const row = point => {
@@ -1243,6 +1244,14 @@ const App = {
         this.refreshPointSheet();
     },
 
+    // Bouton "?" du verdict : déplie l'explication des trois modèles. L'état survit aux rendus
+    // (choisir un modèle redessine la page) ; sur ordinateur, les autres jours suivent au prochain rendu
+    toggleModelsHelp(btn) {
+        this.state.modelsHelpOpen = !this.state.modelsHelpOpen;
+        btn.setAttribute('aria-expanded', String(this.state.modelsHelpOpen));
+        btn.closest('.verdict').querySelector('.verdict-help').hidden = !this.state.modelsHelpOpen;
+    },
+
     toggleMore(btn) {
         const block = btn.closest('.cards-grid');
         const hiddenCards = block.querySelectorAll('.hidden-card');
@@ -1336,18 +1345,23 @@ const Components = {
         `;
     },
 
+    // Format d'une quantité du verdict : cm de neige arrondis, mm de pluie au dixième
+    verdictAmount(mode, v) {
+        return mode === 'snow' ? String(Math.round(v)) : v.toFixed(1).replace('.', ',');
+    },
+
     // Le gros chiffre du verdict : fourchette entre modèles de la grandeur qui décide de la journée
-    // (cm de neige arrondis, mm de pluie au dixième, températures un jour sec)
+    // (températures un jour sec). Quand le plus faible est à zéro, "jusqu'à 18" plutôt que "0 à 18"
+    // (prefix, à afficher avant value)
     verdictValue(verdict) {
         const deg = n => String(Math.round(n)).replace('-', '−');
         const { mode, range, basis } = verdict;
-        if (mode === 'dry') return { value: `${deg(range.lo)} à ${deg(range.hi)}`, unit: '°C' };
-        const fmt = mode === 'snow' ? v => String(Math.round(v)) : v => v.toFixed(1).replace('.', ',');
-        const lo = fmt(range.lo), hi = fmt(range.hi);
-        return {
-            value: basis.length === 1 || lo === hi ? hi : `${lo} à ${hi}`,
-            unit: mode === 'snow' ? 'cm' : 'mm'
-        };
+        if (mode === 'dry') return { prefix: '', value: `${deg(range.lo)} à ${deg(range.hi)}`, unit: '°C' };
+        const lo = this.verdictAmount(mode, range.lo), hi = this.verdictAmount(mode, range.hi);
+        const unit = mode === 'snow' ? 'cm' : 'mm';
+        if (basis.length === 1 || lo === hi) return { prefix: '', value: hi, unit };
+        if (Number(lo.replace(',', '.')) === 0) return { prefix: 'jusqu’à', value: hi, unit };
+        return { prefix: '', value: `${lo} à ${hi}`, unit };
     },
 
     // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,
@@ -1376,7 +1390,9 @@ const Components = {
             return `${isEnd && h === 0 ? 24 : h}h`;
         };
         const { mode, range, basis } = verdict;
-        const { value, unit } = this.verdictValue(verdict);
+        const { prefix, value, unit } = this.verdictValue(verdict);
+        // "que" élidé devant un nom de modèle à voyelle (qu'AROME, qu'Open-Meteo)
+        const que = name => /^[aeiouyéè]/i.test(name) ? `qu’${name}` : `que ${name}`;
 
         let what;
         if (mode === 'dry') {
@@ -1387,10 +1403,30 @@ const Components = {
             what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
         }
         const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
+        // Quand les modèles divergent, la puce dit qui voit le plus et qui voit le moins
+        let divergeText = '';
+        if (verdict.diverge) {
+            const known = key => basis.filter(b => summaries[b][key] !== null);
+            const pick = (key, better) => known(key).reduce((a, b) => better(summaries[b][key], summaries[a][key]) ? b : a);
+            if (mode === 'dry') {
+                const gap = k => known(k).length < 2 ? 0
+                    : Math.max(...known(k).map(b => summaries[b][k])) - Math.min(...known(k).map(b => summaries[b][k]));
+                const k = gap('tempMax') >= gap('tempMin') ? 'tempMax' : 'tempMin';
+                const hot = pick(k, (x, y) => x > y), cold = pick(k, (x, y) => x < y);
+                divergeText = `${LABELS[hot]} annonce ${Math.round(gap(k))} °C de plus ${que(LABELS[cold])}`;
+            } else {
+                const k = mode === 'snow' ? 'snow' : 'rain';
+                const most = pick(k, (x, y) => x > y), least = pick(k, (x, y) => x < y);
+                const low = summaries[least][k], lowText = this.verdictAmount(mode, low);
+                const lowSays = low === 0 ? 'rien' : Number(lowText.replace(',', '.')) === 0 ? 'presque rien' : lowText;
+                divergeText = `${LABELS[most]} en voit ${this.verdictAmount(mode, summaries[most][k])}, ${LABELS[least]} ${lowSays}`;
+            }
+        }
         const agreeHtml = verdict.diverge === null ? ''
             : verdict.diverge
-                ? '<span class="verdict-agree"><i data-lucide="split"></i>Les modèles divergent</span>'
+                ? `<span class="verdict-agree"><i data-lucide="split"></i>${divergeText}</span>`
                 : '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>';
+        const helpOpen = App.state.modelsHelpOpen;
 
         const facts = [];
         if (mode !== 'dry' && verdict.tempMin !== null) {
@@ -1404,9 +1440,11 @@ const Components = {
             facts.push(['wind', `Vent ${kmh < 20 ? 'faible' : kmh < 40 ? 'modéré' : 'fort'}, ${kmh} km/h au plus`]);
         }
         if (verdict.freezing.position) {
-            const pos = { above: 'au-dessus du point', below: 'sous le point', around: 'autour du point' }[verdict.freezing.position];
+            // Isotherme 0 °C, en mots simples : l'altitude au-dessus de laquelle il gèle
+            const pos = { above: 'plus haut que le point', below: 'plus bas que le point', around: 'à hauteur du point' }[verdict.freezing.position];
             const r10 = v => Math.round(v / 10) * 10;
-            facts.push(['thermometer-snowflake', `Iso 0 °C entre ${r10(verdict.freezing.min)} et ${r10(verdict.freezing.max)} m, ${pos}`]);
+            const lo = r10(verdict.freezing.min), hi = r10(verdict.freezing.max);
+            facts.push(['thermometer-snowflake', `Limite du gel ${lo === hi ? `vers ${hi}` : `entre ${lo} et ${hi}`} m, ${pos}`]);
         }
 
         const cells = Object.keys(LABELS).map(key => {
@@ -1423,14 +1461,14 @@ const Components = {
             const amount = mode === 'snow' ? s.snow : s.rain;
             const valueHtml = mode === 'snow' ? `${dec(s.snow)} cm`
                 : mode === 'rain' ? `${dec(s.rain)} mm`
-                : `${deg(s.tempMin)} / ${deg(s.tempMax)}°`;
+                : `${deg(s.tempMin)}° à ${deg(s.tempMax)}°`;
             const barHtml = mode === 'dry' ? ''
                 // Plafonnée à 100 % : une source partielle (hors fourchette) peut dépasser range.hi
                 : `<span class="model-bar"><span style="width: ${range.hi > 0 ? Math.min(100, Math.max(3, Math.round(amount / range.hi * 100))) : 3}%"></span></span>`;
             const sub = s.period ? `${hourLabel(s.period.from, false)}–${hourLabel(s.period.to, true)} seulement`
-                : s.sixHourly ? 'Par pas de 6 h'
+                : s.sixHourly ? 'Toutes les 6 h'
                 : mode === 'dry' ? (s.nightMin !== null ? `Nuit ${deg(s.nightMin)}°` : '')
-                : `${deg(s.tempMin)} / ${deg(s.tempMax)}°`;
+                : `${deg(s.tempMin)}° à ${deg(s.tempMax)}°`;
             return `
                 <button class="model-cell is-${key}" aria-pressed="${key === selected}" onclick="App.selectSource('${key}')">
                     <span class="model-name">${LABELS[key]}</span>
@@ -1442,10 +1480,21 @@ const Components = {
 
         return `
             <div class="verdict" data-mode="${mode}">
-                <p class="verdict-main"><span class="verdict-value">${value}</span><span class="verdict-unit">${unit}</span></p>
-                <p class="verdict-sub"><span>${what}, ${by}</span>${agreeHtml}</p>
+                <p class="verdict-main">${prefix ? `<span class="verdict-unit">${prefix}</span>` : ''}<span class="verdict-value">${value}</span><span class="verdict-unit">${unit}</span></p>
+                <p class="verdict-sub">
+                    <span>${what}, ${by}<button class="verdict-help-btn" aria-expanded="${helpOpen}" aria-label="Qui sont ces modèles ?" title="Qui sont ces modèles ?" onclick="App.toggleModelsHelp(this)"><i data-lucide="circle-help"></i></button></span>
+                    ${agreeHtml}
+                </p>
                 ${facts.length ? `<ul class="verdict-facts">${facts.map(([icon, text]) => `<li><i data-lucide="${icon}"></i>${text}</li>`).join('')}</ul>` : ''}
                 <div class="verdict-models" role="group" aria-label="Modèle affiché en détail">${cells}</div>
+                <div class="verdict-help"${helpOpen ? '' : ' hidden'}>
+                    <p>Trois services de prévision, qui calculent chacun la météo à leur façon. Touchez une case pour voir ses heures en dessous.</p>
+                    <ul>
+                        <li><strong>Open-Meteo</strong> : combine plusieurs modèles, à sa façon.</li>
+                        <li><strong>AROME</strong> : Météo-France, le plus détaillé, sur environ 2 jours. Ensuite, son modèle plus large : <strong>ARPEGE</strong>.</li>
+                        <li><strong>MET.no</strong> : l’institut météo norvégien. Heure par heure sur environ 2 jours, puis toutes les 6 h.</li>
+                    </ul>
+                </div>
             </div>
         `;
     },
