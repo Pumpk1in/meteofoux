@@ -7,17 +7,12 @@
 const Charts = {
     instances: {},
 
-    // Couleurs des séries selon le thème
-    getSeriesColors(isDark, hasExtendedData) {
-        if (hasExtendedData) {
-            return isDark
-                ? ['#f97316', '#fdba74', '#98dfb6', '#39b36c', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#c2410c', '#ea580c', '#15803d', '#16a34a', '#b45309', '#0891b2', '#1d4ed8']; // light : ≥ 3:1 sur blanc
-        } else {
-            return isDark
-                ? ['#f97316', '#98dfb6', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#c2410c', '#15803d', '#b45309', '#0891b2', '#1d4ed8']; // light
-        }
+    // Couleurs des séries selon le thème (clair : ≥ 3:1 sur blanc). La neige est la série la plus
+    // saturée : c'est la grandeur qui compte ici
+    getSeriesColors(isDark) {
+        return isDark
+            ? { temp: '#f97316', feels: '#fdba74', wind: '#98dfb6', gusts: '#39b36c', uv: '#fbbf24', snow: '#22d3ee', rain: '#3b82f6' }
+            : { temp: '#c2410c', feels: '#ea580c', wind: '#15803d', gusts: '#16a34a', uv: '#b45309', snow: '#0891b2', rain: '#1d4ed8' };
     },
 
     // Titres d'axes : la couleur de la série qu'ils mesurent (°C, km/h du vent, UV)
@@ -29,20 +24,21 @@ const Charts = {
 
     // Clé du graphique (HTML, au-dessus du tracé) : un repère par série — trait plein ou pointillé
     // pour les courbes, carré pour les barres — puis les unités au-dessus de leur colonne de graduations.
-    // Rien n'est cliquable : on ne masque pas une série par erreur en touchant la clé.
-    chartHeadHtml(series, colors, strokeDash, isDark) {
-        const items = series.map((s, i) => {
-            const mark = s.type === 'column'
-                ? `<span class="chart-key-bar" style="background:${colors[i]}"></span>`
-                : `<span class="chart-key-line${strokeDash[i] > 0 ? ' is-dashed' : ''}" style="border-color:${colors[i]}"></span>`;
-            return `<span class="chart-key-item">${mark}${s.name}</span>`;
+    // Les entrées ne sont pas cliquables ; seul le bouton « Plus de détails » ajoute ressenti, rafales, UV.
+    chartHeadHtml(defs, isDark, details) {
+        const items = defs.map(d => {
+            const mark = d.type === 'column'
+                ? `<span class="chart-key-bar" style="background:${d.color}"></span>`
+                : `<span class="chart-key-line${d.dash > 0 ? ' is-dashed' : ''}" style="border-color:${d.color}"></span>`;
+            return `<span class="chart-key-item">${mark}${d.name}</span>`;
         }).join('');
         const t = this.getAxisTitleColors(isDark);
-        return `<div class="chart-key">${items}</div>
-            <div class="chart-units" aria-hidden="true">
+        const hasUv = defs.some(d => d.key === 'uv');
+        return `<div class="chart-key">${items}<button class="chart-details-btn" aria-expanded="${details}" onclick="App.toggleChartDetails(this)">${details ? 'Moins de détails' : 'Plus de détails'}</button></div>
+            <div class="chart-units${hasUv ? '' : ' no-uv'}" aria-hidden="true">
                 <span style="color:${t.temp}">°C</span>
                 <span class="chart-unit-wind" style="color:${t.wind}">km/h</span>
-                <span class="chart-unit-uv" style="color:${t.uv}">UV</span>
+                ${hasUv ? `<span class="chart-unit-uv" style="color:${t.uv}">UV</span>` : ''}
             </div>`;
     },
 
@@ -97,35 +93,9 @@ const Charts = {
     // Graphique unifié : Température, Vent, Précipitations, UV
     // hasExtendedData = true pour Open-Meteo (ressenti, rafales), false pour MET.no
     // scales = App.sharedChartScales() : axes communs aux modèles du jour (null : axes propres à data)
-    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}, scales = null) {
-        // Couleurs selon le thème
-        const colors = this.getSeriesColors(isDark, hasExtendedData);
-
-        // Séries de base (toujours affichées)
-        const series = [
-            { name: 'Temp.', type: 'line', data: data.temp },
-        ];
-
-        // Séries étendues (Open-Meteo uniquement)
-        if (hasExtendedData) {
-            series.push({ name: 'T° ressentie', type: 'line', data: data.feels });
-        }
-
-        series.push({ name: 'Vent', type: 'line', data: data.speed });
-
-        if (hasExtendedData) {
-            series.push({ name: 'Rafales', type: 'line', data: data.gusts });
-        }
-
-        series.push(
-            { name: 'UV', type: 'line', data: data.uv },
-            { name: 'Neige', type: 'column', data: data.snow },
-            { name: 'Pluie', type: 'column', data: data.rain }
-        );
-
-        // Stroke config selon les séries
-        const strokeWidth = hasExtendedData ? [3, 1.5, 2, 1.5, 2, 0, 0] : [3, 2, 2, 0, 0];
-        const strokeDash = hasExtendedData ? [0, 4, 0, 4, 0, 0, 0] : [0, 0, 0, 0, 0];
+    // details = ressenti, rafales et UV affichés (bouton « Plus de détails »)
+    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}, scales = null, details = false) {
+        const colors = this.getSeriesColors(isDark);
 
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
@@ -161,75 +131,75 @@ const Charts = {
             }
         }
 
-        // Unités des axes : dans la clé HTML (chartHeadHtml), pas en titres ApexCharts
-        const yaxis = [
-            // Axe Température (gauche)
-            {
-                labels: {
-                    formatter: v => Math.round(v) + '°',
-                    style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -7 // Colonne à 12 px du bord gauche, sous « °C » (.chart-units)
-                },
-                showAlways: true,
-                ...yTempConfig
-            }
-        ];
-
-        if (hasExtendedData) {
-            // Ressenti même axe (bornes recopiées : sinon ApexCharts lui calcule sa propre plage)
-            yaxis.push({ show: false, seriesName: 'Temp', ...(scales ? { min: yTempConfig.min, max: yTempConfig.max } : {}) });
-        }
-
-        // Axe Vent (droite)
-        yaxis.push({
-            opposite: true,
-            axisBorder: { show: false },
-            axisTicks: { show: false },
-            labels: {
-                formatter: v => Math.round(v),
-                style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                offsetX: -14 // Sous « km/h » (.chart-unit-wind). Axe opposé : plus négatif = plus à droite
-            },
-            seriesName: 'Vent',
-            min: 0,
-            ...windScale,
-            showAlways: true
-        });
-
-        if (hasExtendedData) {
-            yaxis.push({ show: false, seriesName: 'Vent', min: 0, ...windScale }); // Rafales même axe
-        }
-
         // Calculer max dynamique pour neige et pluie (communs aux modèles si scales est fourni)
         const snowValues = scales ? [scales.snowMax] : data.snow.map(d => d[1]).filter(v => v !== null);
         const rainValues = scales ? [scales.rainMax] : data.rain.map(d => d[1]).filter(v => v !== null);
         const snowMax = Math.max(1.9, ...snowValues) * 1.2; // Au moins 1.9, avec 20% de marge
         const rainMax = Math.max(10, ...rainValues) * 1.2; // Au moins 10, avec 20% de marge
 
-        // Axes UV et Précipitations (ordre: UV, Neige, Pluie)
-        yaxis.push(
-            {
+        // Une entrée par série, avec son axe (même ordre : ApexCharts associe série et axe par index).
+        // Unités des axes : dans la clé HTML (chartHeadHtml), pas en titres ApexCharts.
+        const labelStyle = { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' };
+        const showUv = details;
+        const defs = [
+            { key: 'temp', name: 'Temp.', type: 'line', data: data.temp, width: 3, dash: 0, axis: {
+                labels: {
+                    formatter: v => Math.round(v) + '°',
+                    style: labelStyle,
+                    // Colonne à 12 px du bord gauche, sous « °C » (.chart-units) ; sans l'axe UV, ApexCharts la décale de 5 px
+                    offsetX: showUv ? -7 : -12
+                },
+                showAlways: true,
+                ...yTempConfig
+            } },
+            // Ressenti même axe (bornes recopiées : sinon ApexCharts lui calcule sa propre plage)
+            hasExtendedData && details && { key: 'feels', name: 'T° ressentie', type: 'line', data: data.feels, width: 1.5, dash: 4,
+                axis: { show: false, seriesName: 'Temp', ...(scales ? { min: yTempConfig.min, max: yTempConfig.max } : {}) } },
+            { key: 'wind', name: 'Vent', type: 'line', data: data.speed, width: 2, dash: 0, axis: {
+                opposite: true,
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+                labels: {
+                    formatter: v => Math.round(v),
+                    style: labelStyle,
+                    // Sous « km/h » (.chart-unit-wind), qui prend la place de « UV » quand l'UV est masqué.
+                    // Axe opposé : plus négatif = plus à droite
+                    offsetX: showUv ? -14 : 0
+                },
+                seriesName: 'Vent',
+                min: 0,
+                ...windScale,
+                showAlways: true
+            } },
+            hasExtendedData && details && { key: 'gusts', name: 'Rafales', type: 'line', data: data.gusts, width: 1.5, dash: 4,
+                axis: { show: false, seriesName: 'Vent', min: 0, ...windScale } },
+            showUv && { key: 'uv', name: 'UV', type: 'line', data: data.uv, width: 2, dash: 0, axis: {
                 opposite: true,
                 axisBorder: { show: false },
                 axisTicks: { show: false },
                 labels: {
                     formatter: v => v.toFixed(0),
-                    style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
+                    style: labelStyle,
                     offsetX: -15 // Sous « UV » (.chart-unit-uv)
                 },
                 seriesName: 'UV',
                 min: 0,
                 ...uvScale,
                 showAlways: true
-            },
-            { show: false, min: 0, max: snowMax, showAlways: true }, // Axe Neige
-            { show: false, min: 0, max: rainMax, showAlways: true }  // Axe Pluie
-        );
+            } },
+            { key: 'snow', name: 'Neige', type: 'column', data: data.snow, width: 0, dash: 0,
+                axis: { show: false, min: 0, max: snowMax, showAlways: true } },
+            { key: 'rain', name: 'Pluie', type: 'column', data: data.rain, width: 0, dash: 0,
+                axis: { show: false, min: 0, max: rainMax, showAlways: true } }
+        ].filter(Boolean).map(d => ({ ...d, color: colors[d.key] }));
+        const series = defs.map(d => ({ name: d.name, type: d.type, data: d.data }));
+        const yaxis = defs.map(d => d.axis);
 
         // Étendue de l'axe X : toute la plage de données du jour
         const timestamps = data.temp.map(d => d[0]);
         const xMinVisible = Math.min(...timestamps);
         const xMaxVisible = Math.max(...timestamps);
+        const now = Date.now();
 
         const options = {
             ...this.getBaseOptions(isDark),
@@ -268,16 +238,32 @@ const Charts = {
                 }
             },
             series,
-            colors,
+            colors: defs.map(d => d.color),
             stroke: {
-                width: strokeWidth,
+                width: defs.map(d => d.width),
                 curve: 'smooth',
-                dashArray: strokeDash
+                dashArray: defs.map(d => d.dash)
             },
+            // Ligne « maintenant » : seulement sur le graphique qui contient l'heure actuelle (aujourd'hui)
+            annotations: { xaxis: now >= xMinVisible && now <= xMaxVisible ? [{
+                x: now,
+                borderColor: isDark ? '#cbd5e1' : '#334155',
+                strokeDashArray: 0,
+                label: {
+                    text: 'maintenant',
+                    orientation: 'horizontal',
+                    position: 'top',
+                    offsetY: -2,
+                    borderWidth: 0,
+                    style: { background: 'transparent', color: isDark ? '#cbd5e1' : '#334155', fontSize: '10px', fontWeight: 600 }
+                }
+            }] : [] },
             plotOptions: {
                 bar: { columnWidth: '70%', borderRadius: 2 }
             },
             legend: { show: false }, // Remplacée par la clé HTML (chartHeadHtml)
+            // Sans l'axe UV, ApexCharts réserve moins de place à droite : sans ce réglage, le tracé déborde
+            ...(showUv ? {} : { grid: { ...this.getBaseOptions(isDark).grid, padding: { left: -15, right: -25, top: -12, bottom: 0 } } }),
             xaxis: {
                 type: 'datetime',
                 min: xMinVisible,
@@ -294,7 +280,7 @@ const Charts = {
         };
 
         const head = document.getElementById(containerId)?.parentElement.querySelector('.chart-head');
-        if (head) head.innerHTML = this.chartHeadHtml(series, colors, strokeDash, isDark);
+        if (head) head.innerHTML = this.chartHeadHtml(defs, isDark, details);
 
         if (this.instances[containerId]) {
             this.instances[containerId].updateOptions(options);
@@ -361,7 +347,8 @@ const App = {
         days: [],
         expandedDays: new Set(), // Jours avec vue horaire étendue
         todayHoursExpanded: false, // État du "Voir heures suivantes" pour aujourd'hui
-        modelsHelpOpen: false      // Explication des modèles (bouton "?" du verdict) dépliée
+        modelsHelpOpen: false,     // Explication des modèles (bouton "?" du verdict) dépliée
+        chartDetails: false        // Graphique : ressenti, rafales et UV affichés ("Plus de détails")
     },
 
     // Helper pour obtenir les données selon la source sélectionnée
@@ -827,7 +814,7 @@ const App = {
         const hasExtendedData = sourceData.extended && dataType === 'hourly';
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
             Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour,
-                this.sharedChartScales(day, dataType));
+                this.sharedChartScales(day, dataType), this.state.chartDetails);
         }
     },
 
@@ -840,7 +827,8 @@ const App = {
         for (const src of Object.values(pointData.sources)) {
             const type = Utils.getChartDataAvailability(day, src.hourly, src.sixHourly).type;
             if (type === 'none') continue;
-            const extended = src.extended && type === 'hourly';
+            // Ressenti et rafales comptent seulement s'ils sont affichés : sinon, du vide en haut
+            const extended = src.extended && type === 'hourly' && this.state.chartDetails;
             DataNormalizer.toChartData(day, src, type).forEach(d => {
                 if (d.temp !== null && d.temp !== undefined) temps.push(d.temp);
                 if (extended && d.apparent_temperature != null) temps.push(d.apparent_temperature);
@@ -1270,6 +1258,16 @@ const App = {
         this.state.modelsHelpOpen = !this.state.modelsHelpOpen;
         btn.setAttribute('aria-expanded', String(this.state.modelsHelpOpen));
         btn.closest('.verdict').querySelector('.verdict-help').hidden = !this.state.modelsHelpOpen;
+    },
+
+    // "Plus de détails" : ressenti, rafales et UV, pour tous les graphiques (séries et axes changent : on les refait)
+    toggleChartDetails(btn) {
+        this.state.chartDetails = !this.state.chartDetails;
+        const day = btn.closest('.day-section')?.dataset.day;
+        Charts.destroyAll();
+        this.renderCharts();
+        // La clé est régénérée : le focus revient sur le bouton du même jour
+        document.querySelector(`.day-section[data-day="${day}"] .chart-details-btn`)?.focus({ preventScroll: true });
     },
 
     toggleMore(btn) {

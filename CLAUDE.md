@@ -360,17 +360,17 @@ Formats raw data for UI consumption.
 ApexCharts wrapper for multi-axis weather charts.
 
 - **`instances`** — Stores chart objects by containerId
-- **`getSeriesColors(isDark, hasExtendedData)`** — Returns color array. Extended (Open-Meteo): 7 colors. Basic (MET.no): 5 colors. Light-theme colors are ≥ 3:1 on white
+- **`getSeriesColors(isDark)`** — Series colors by key (`temp`, `feels`, `wind`, `gusts`, `uv`, `snow`, `rain`). Snow is the most saturated series (cyan). Light-theme colors are ≥ 3:1 on white
 - **`getAxisTitleColors(isDark)`** — Axis units take the color of the series they measure (°C, km/h of the wind, UV)
-- **`chartHeadHtml(series, colors, strokeDash, isDark)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark), then the units row `.chart-units` (°C / km/h / UV) above their tick columns. Replaces the ApexCharts legend and axis titles
+- **`chartHeadHtml(defs, isDark, details)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark), the "Plus de détails" / "Moins de détails" button (`App.toggleChartDetails`), then the units row `.chart-units` (°C / km/h / UV; `.no-uv` when UV is hidden, km/h then takes its place) above their tick columns. Replaces the ApexCharts legend and axis titles
 - **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, xaxis (the legend is off: see `chartHeadHtml`)
-- **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour, scales)`** — Creates multi-axis chart. `scales` (from `App.sharedChartScales`) fixes the axes so they are the same for the 3 models of the day; temperature ticks are whole degrees, wind and UV use the same number of intervals so their labels sit on the grid lines:
-  - Y-axis 0: Température (°C, left, orange line)
-  - Y-axis 1: Ressenti (°C, if extended, same axis as temp, line; its hidden axis gets the temp bounds, else ApexCharts gives it its own range)
-  - Y-axis 2: Vent (km/h, right, cyan line) + Rafales (if extended, line)
-  - Y-axis 3: UV (right, opposite)
-  - Y-axis 4: Neige (column, blue)
-  - Y-axis 5: Pluie (column, blue)
+- **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour, scales, details)`** — Creates multi-axis chart. `scales` (from `App.sharedChartScales`) fixes the axes so they are the same for the 3 models of the day; temperature ticks are whole degrees, wind and UV use the same number of intervals so their labels sit on the grid lines. `details` adds apparent temperature, gusts (if extended) and UV. Built from one list of series definitions (name, color, stroke, axis), so a series and its axis come and go together (ApexCharts pairs them by index):
+  - Température (°C, left axis, orange line)
+  - Ressenti (details + extended: dashed, same axis as temp; its hidden axis gets the temp bounds, else ApexCharts gives it its own range)
+  - Vent (km/h, right axis, green line) + Rafales (details + extended: dashed, same axis)
+  - UV (details only: right axis, opposite)
+  - Neige (column, cyan) and Pluie (column, blue), hidden axes
+  - A "maintenant" vertical line (x-axis annotation) on the chart that contains the current time
   - Adds weather SVG icons below X-axis on animation end
 - **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and the key follow the theme)
 - **`addWeatherIcons(containerId, iconByHour)`** — Overlays weather SVG icons below X-axis labels
@@ -402,7 +402,8 @@ Main application state & logic.
   days,                          // Array of day strings
   expandedDays,                  // Set of expanded future days
   todayHoursExpanded,            // Boolean: today's extra hours visible
-  modelsHelpOpen                 // Boolean: the verdict's note on the three models is unfolded
+  modelsHelpOpen,                // Boolean: the verdict's note on the three models is unfolded
+  chartDetails                   // Boolean: charts show apparent temperature, gusts and UV (not saved)
 }
 ```
 
@@ -431,8 +432,9 @@ Main application state & logic.
 #### Rendering
 - **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Day section: header (desktop), verdict block, then the detail (chart div, cards grid, toggle buttons) tinted by the chosen model. When the chosen source has nothing that day: "n'a pas de prévision pour ce jour" (horizon) or "ne répond pas pour le moment" + Réessayer (source missing from the response)
 - **`renderCharts()`** — Iterates days, calls renderChartForDay
-- **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`)
-- **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours)
+- **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`, and only with `chartDetails`)
+- **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours). Apparent temperature and gusts count only when shown (`chartDetails`): otherwise they would leave empty space at the top
+- **`toggleChartDetails(btn)`** — "Plus de détails": toggles `chartDetails` for every chart, re-creates them (series and axes change), puts focus back on the button of the same day
 
 #### Custom Points (Leaflet Map)
 - **`loadLeaflet()`** — Dynamically loads Leaflet CSS/JS
@@ -506,7 +508,7 @@ The day detail gets a background tint per source via the `data-source` attribute
 ### ApexCharts Layout Notes
 
 - No legend and no axis titles inside the chart: the key and the units are HTML (`chartHeadHtml`, `.chart-key` / `.chart-units` in style.css)
-- `grid.padding` (left -9, right -66, top -12): the data is centred in the card (the first hour label stays inside it), the °C column sits left of the data, the km/h and UV columns over its right end; `top` trims the gap under the units. Chart height 210 / 250 px (mobile / desktop): the key is outside the chart
+- `grid.padding` (left -9, right -66, top -12): the data is centred in the card (the first hour label stays inside it), the °C column sits left of the data, the km/h and UV columns over its right end; `top` trims the gap under the units. Chart height 210 / 250 px (mobile / desktop): the key is outside the chart. **Without UV** (details off) ApexCharts reserves less room on the right, so the chart uses its own padding (left -15, right -25) and offsets (°C -12, wind 0); same margins in both modes
 - `labels.offsetX` places each tick column: °C at 12 px from the left edge, wind and UV under "km/h" and "UV". On an **opposite** (right) axis, a more negative value moves the column **right**
 - Moving a column means moving its unit too (`.chart-unit-wind` / `.chart-unit-uv`, `right` in px): both are measured from the card edges, identical on mobile and desktop
 

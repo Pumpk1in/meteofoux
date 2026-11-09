@@ -855,6 +855,34 @@ main {
     right: 14px;
 }
 
+/* UV masqué : km/h prend sa place, tout à droite */
+.chart-units.no-uv .chart-unit-wind {
+    right: 14px;
+}
+
+/* « Plus de détails » : lien discret dans la clé, cible de 44 px sans élargir la ligne */
+.chart-details-btn {
+    min-height: 44px;
+    margin: -14px -0.5rem;
+    padding: 0 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[data-theme="light"] .chart-details-btn {
+    color: #0369a1; /* --accent est trop pâle sur blanc (2,1:1) */
+}
+
+.chart-details-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -8px;
+    border-radius: 0.5rem;
+}
+
 /* ============================================
    CARDS GRID
    ============================================ */
