@@ -84,6 +84,9 @@ only changes when the service worker's own strategy changes.
 
 ```
 METEOFOUX/
+├── PRODUCT.md              # Product context: users, situations, principles (Impeccable)
+├── DESIGN.md               # Visual system: tokens, components, rules (Impeccable)
+├── .impeccable/            # Design sidecar, confirmed screen brief (surfaces/), critiques
 ├── index.php               # SPA entry point (HTML + filemtime asset versioning)
 ├── meteo-proxy.php         # HTTP plumbing: params, cache, cURL, output
 ├── lib/
@@ -137,13 +140,19 @@ Browser (index.php)
      │     └─ Returns JSON: {forecasts, elevation, meta}
      │        (the cache file also keeps the raw responses)
      │  └─ processPointData() → reads `forecasts`: one {hourly, sixHourly} per source,
-     │     plus a common timeline (series) built from all sources
+     │     plus a common timeline (series) built from all sources, and `meta`
      └─ DataService.loadRemaining()  → other points, in background (100ms apart)
      └─ setupDays() + renderNavigation() + render()
-        ├─ DataNormalizer → prepareEntry(), toCardData(), toChartData()
-        ├─ Components → Summary(), CardsGrid(), WeatherCard()
+        ├─ DataNormalizer → dayVerdict() (daySummary per source + computeVerdict),
+        │                   prepareEntry(), toCardData(), toChartData()
+        ├─ Components → Verdict() (model cells), CardsGrid(), WeatherCard()
         └─ Charts → createUnifiedChart() (ApexCharts)
 ```
+
+The main screen follows the confirmed brief in `.impeccable/surfaces/index-php.md` (verdict across
+models at the top of each day, one row of model cells as selector, point sheet opened from the
+title, 7-day bar with a verdict indicator per day). `PRODUCT.md` holds the product context and
+`DESIGN.md` the visual system.
 
 ### Key Files
 
@@ -216,9 +225,10 @@ adapter. Adding a source means writing an adapter that returns those rows.
 
 - **`openmeteo_rows($openmeteo, $elevation, $priorities)`** — Open-Meteo adapter, for one priority chain (best_match by default, or `arome_priorities()`). Holds the Open-Meteo corrections: weather_code ↔ total precipitation inconsistency (AROME fallback, then cloud cover), weather_code ↔ cloud cover, freezing level (inversions), UV and is_day fallbacks. Météo-France models have no UV: the AROME chain takes best_match's. Wind km/h → m/s (unrounded)
 - **`metno_rows($metno, $period)`** — MET.no adapter, one row per hour (`next_1_hours`) or per 6h step aligned on 0/6/12/18 UTC (`next_6_hours`). Instant values at the start of the period. From MET.no's own icon only the shape (showers, thunder, day/night) is used; see `derive_hourly`. Its `apparent_air_temperature` is **not** used (it reads ~4°C above the air temperature at -2°C with no wind)
-- **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` from **our** amounts (a source's own icon — MET.no — is kept only when nothing falls; otherwise only its showers/thunder shape is borrowed, so icon and figures agree), snow quality. Returns the columnar hourly format (`time`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`)
+- **`derive_hourly($rows)`** — The common pipeline: rain/snow by `classify_precipitation` (wet-bulb rule), `snowfall` = Roebber, icon by `determine_symbol` from **our** amounts (a source's own icon — MET.no — is kept only when nothing falls; otherwise only its showers/thunder shape is borrowed, so icon and figures agree), snow quality. Returns the columnar hourly format (`time`, `model`, `temperature`, …, `symbol_code`, `snow_quality`, `uv_index`, `is_day`). `model` = the model that provided the temperature (`get_model_source`): the "arome" chain is AROME HD/AROME until ~D+2, then ARPEGE; null for MET.no. **A row without temperature (past the chain's horizon) stays empty**: no precipitation, rain, snow, icon or freezing level is invented
+- **`get_model_source($data, $key, $index, $priorities)`** — The model `get_model_value()` takes its value from (first non-null of the chain), null if none
 - **`enrich_openmeteo_hourly($openmeteo, $elevation, $priorities)`** — `derive_hourly(openmeteo_rows(...))`, used by `build_forecasts` for each priority chain
-- **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation. Icon intensity uses the block's **mean hourly rate** (total / 6), since the thresholds are hourly: 3 mm in 6 h is light rain (same for MET.no 6h steps)
+- **`aggregate_hourly_to_6h($hourly)`** — Converts hourly data to 6-hour blocks (0h, 6h, 12h, 18h). Min/max temps, max wind, dominant weather code, summed precipitation. Icon intensity uses the block's **mean hourly rate** (total / 6), since the thresholds are hourly: 3 mm in 6 h is light rain (same for MET.no 6h steps). A block whose hours all lack data stays empty (no 0 mm, no clear-sky icon)
 - **`metno_six_hourly($metno)`** — MET.no 6h steps in the `aggregate_hourly_to_6h` format (MET.no hours stop around D+2). Rain and snow of a step = **the sum of its 6 hours** when MET.no provides them (each classified with its own temperature), else `split_precipitation_by_temperature_range`. One icon, built from both amounts (sleet when both). Wind, clouds, UV are the values at the start of the step
 - **`split_precipitation_by_temperature_range($precip, $temp_min, $temp_max, $dew_depression, $humidity, $wind_speed)`** — For a 6h step known only by its min/max temperature: the share of the step whose wet-bulb temperature is under the threshold (temperature assumed linear from min to max) falls as snow, the rest as rain. On 43 steps whose hours were known: 7.6 cm / 9.4 mm total error, vs 25.4 cm / 29.6 mm with the temperature at the start of the step and 10.1 cm / 13.9 mm with the mean temperature
 - **`build_forecasts($openmeteo, $metno, $elevation)`** — All available sources in the common format: `['openmeteo' | 'arome' | 'metno' => {hourly, six_hourly}]`
@@ -311,20 +321,21 @@ Formatting and calculation helpers.
 - **`isToday(dateStr)`** — Boolean check
 - **`isMobile()`** — `window.innerWidth < 768`
 - **`escapeHtml(str)`** — Escapes `& < > " '`. Apply to any user-supplied text injected into HTML (custom point names)
+- **`symbolLabel(code)`** — French description of a MET.no symbol, used as the weather icons' alt text ("Averses de neige faibles")
 - **`getChartDataAvailability(day, hourly, sixHourly)`** — Returns `{type: 'hourly'|'sixhourly'|'none', count}` for the chosen source: hourly if ≥ 12 hours, else 6-hourly if ≥ 3 steps, else a short hourly chart if ≥ 2 hours (MET.no in the evening: its past hours are unknown)
 
 ### DataService Module
 
 API calls and data processing. Stores state per point key.
 
-- **`state`** — `{data[pointKey]: {point, series, elevation, sources}}` with `sources[openmeteo|arome|metno] = {hourly, sixHourly, extended}` (indexed by `YYYY-MM-DDTHH:MM`; `extended` = the source provides apparent temperature and gusts, MET.no does not) and `series` = `[{time}]`, the common timeline of all sources
+- **`state`** — `{data[pointKey]: {point, series, elevation, sources, meta}, failed[pointKey]}` with `sources[openmeteo|arome|metno] = {hourly, sixHourly, extended}` (indexed by `YYYY-MM-DDTHH:MM`; `extended` = the source provides apparent temperature and gusts, MET.no does not; hourly entries carry `model`, the model that served the hour), `series` = `[{time}]`, the common timeline of all sources, and `meta` the proxy's meta (`generated_at`, `stale`). A source missing from `sources` did not answer (429, outage). `failed` = points whose background load failed
 - **`loadFirst(forceRefresh, pointKey)`** — Loads a single point (the first, or the one given) so the UI can render as early as possible. Main entry path.
-- **`loadRemaining(forceRefresh, onPointLoaded)`** — Loads the not-yet-loaded points sequentially in the background (100ms apart)
+- **`loadRemaining(forceRefresh, onPointLoaded)`** — Loads the not-yet-loaded points sequentially in the background (100ms apart). A failing point is recorded in `state.failed` and does not stop the next ones
 - **`loadAll(forceRefresh)`** — Resets state then chains `loadFirst()` + `loadRemaining()`
 - **`fetchPointData(point, forceRefresh, retryCount)`** — Calls `/meteo-proxy.php` with 35s timeout, 1 retry on error
 - **`processPointData(point, rawData)`** — Reads the proxy's `forecasts` key: indexes each source's hourly / six-hourly arrays by time, and builds the common timeline. Nothing depends on MET.no any more: the app renders even if a source is missing
 - **`indexByTime(data, mapper)`** — Array → object indexed by `time.substring(0,16)`
-- **`loadSinglePoint(point, forceRefresh)`** — Load one point (used for custom points)
+- **`loadSinglePoint(point, forceRefresh)`** — Load one point (custom points, a point chosen before it loaded, and the forced refresh, point by point)
 
 ### DataNormalizer Module
 
@@ -335,6 +346,10 @@ Formats raw data for UI consumption.
 - **`prepareEntry(entry, isToday)`** — `entry = {time, hourly, sixHourly}` (chosen source). Returns `{time, data}`: the hour (today, or the "all hours" view), else the 6h step (temperature = max of the step)
 - **`toChartData(day, sourceData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`. Same for every source
 - **`computeTotals(entries)`** — `entries = [{time, data, hours}]` (an hour, or a 6h step where the source has no hours: MET.no beyond D+2). Sums snow/rain, finds min/max temps (a 6h step brings its min and max). Also returns `period` `{from, to}` (ms) when the entries cover less than 23 h of the day (MET.no has no past hours, AROME stops mid-day), `null` otherwise. A MET.no 6h step counts for 6 hours
+- **`daySummary(day, series, sourceData)`** — One source, one day: `computeTotals` plus `freezing {min, max}`, `nightMin`, `windMax` (m/s), `cloudCover`, `snowQuality`, `sixHourly`, `model` (majority model of the day). `null` when the source has nothing that day
+- **`dayVerdict(pointData, day)`** — `{summaries, verdict}`: `daySummary` of the 3 sources then `computeVerdict`. Shared by the verdict block, the point sheet and the day bar
+- **`computeVerdict(summaries, elevation)`** — The day across models: `mode` (`snow` if any model ≥ 0.5 cm, else `rain` if ≥ 1 mm, else `dry`), `range {lo, hi}` of that quantity (temperatures on a dry day), `diverge` (null with one model), `basis` (sources used: a partial-day source is left out when a full-day one exists), `freezing.position` (`above` / `around` / `below` the point), `alsoRain`, `nightMin`, `windMax`, `partial`
+- **`VERDICT`** — The verdict thresholds (0.5 cm, 1 mm, diverge ≥ 2 cm / 3 mm with a ratio ≥ 1.5, dry day ≥ 3 °C). Tune them here only
 
 ---
 
@@ -345,8 +360,8 @@ Formats raw data for UI consumption.
 ApexCharts wrapper for multi-axis weather charts.
 
 - **`instances`** — Stores chart objects by containerId
-- **`instanceMeta`** — Stores `{hasExtendedData}` per chart
-- **`getSeriesColors(isDark, hasExtendedData)`** — Returns color array. Extended (Open-Meteo): 7 colors. Basic (MET.no): 5 colors
+- **`getSeriesColors(isDark, hasExtendedData)`** — Returns color array. Extended (Open-Meteo): 7 colors. Basic (MET.no): 5 colors. Light-theme colors are ≥ 3:1 on white
+- **`getAxisTitleColors(isDark)`** — Axis titles take the color of the series they measure (°C, km/h of the wind, UV)
 - **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, legend, xaxis
 - **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour)`** — Creates multi-axis chart:
   - Y-axis 0: Température (°C, left, orange line)
@@ -356,8 +371,7 @@ ApexCharts wrapper for multi-axis weather charts.
   - Y-axis 4: Neige (column, blue)
   - Y-axis 5: Pluie (column, blue)
   - Adds weather SVG icons below X-axis on animation end
-- **`destroyAll()`** — Destroys all chart instances
-- **`updateTheme(isDark)`** — Updates all charts' colors and theme
+- **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and axis titles follow the theme)
 - **`addWeatherIcons(containerId, iconByHour)`** — Overlays weather SVG icons below X-axis labels
 
 ### Components Module
@@ -365,11 +379,12 @@ ApexCharts wrapper for multi-axis weather charts.
 HTML generators (return HTML strings).
 
 - **`Skeleton()`** — Loading skeleton with animated bars
-- **`Summary(totals, freezing, elevation)`** — Summary bar: min/max temp, snow total, rain total (`--` when it rounds to 0.0), covered period when partial (e.g. `18h–24h`, so sources stay comparable), freezing min/max (if available & >100m)
+- **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles", agree/diverge chip, facts (temperatures, freezing level vs the point; on a dry day night refreeze and wind), then one cell per model (value, bar, temps / covered period / "Par pas de 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
+- **`verdictValue(verdict)`** — The big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). Shared with the point sheet and the day bar
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views
-- **`WeatherCard(label, data, extraClass)`** — Individual card: time label, weather icon (48x48 SVG), temperature, wind direction + speed, cloud cover %, snow amount + quality (`'sèche'`/`'hum.'`), rain amount
+- **`WeatherCard(label, data, extraClass)`** — Individual card: time label, weather icon (48x48 SVG, alt from `Utils.symbolLabel`), temperature, wind direction + speed, cloud cover %, snow amount (1 decimal, comma) + quality (`humide` / `sèche`), rain amount (`< 0,1` below 0.05 mm). 6 h steps without data get no card
 
 ### App Module
 
@@ -389,23 +404,29 @@ Main application state & logic.
 ```
 
 #### Lifecycle
-- **`init()`** — Load custom points, restore theme & source from localStorage, load all data via DataService, setup days, render navigation, render content
-- **`setupDays()`** — Extract unique days from series, filter ≥ today, slice to 7 max
+- **`init()`** — Load custom points, restore theme & source from localStorage, load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
+- **`setupDays()`** — Extract unique days from series, filter ≥ today, slice to 7 max. After 18:00 the app opens on tomorrow
 - **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states, calls renderCharts()
 
 #### Navigation
-- **`renderNavigation()`** — Generates HTML for day buttons + altitude tabs
+- **`renderNavigation()`** — Day bar, `data-source` attribute, top bar
+- **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
-- **`selectPoint(pointKey)`** — Switch active point, re-render
-- **`updateSourceToggle()`** — Updates button label & `data-source` attribute
-- **`updateTopBar()`** — Updates header date display
+- **`selectPoint(pointKey)`** — Switch active point (loads it if needed), re-render
+- **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness
+- **`freshness(meta)`** — "màj il y a X min", or "données d'il y a X h" (amber) when the proxy served its cache or the data is over an hour old
+
+#### Point Sheet (opened from the title)
+- **`openPointSheet()` / `closePointSheet()` / `renderPointSheet()` / `refreshPointSheet()`** — Bottom sheet: "La Foux d'Allos" points sorted by altitude, then "Mes points" (custom, in their order), each with the day's verdict ("Chargement…" / "Indisponible" while unknown). Focus trap and Escape (`onPointSheetKey`), focus back to the title on close, focus kept inside after a re-render
+- **`choosePoint(key)`**, **`togglePointsEdit()`** ("Modifier": up/down and delete for custom points), **`movePoint(key, direction)`** (swaps two custom points in place, saves the order), **`addPointFromSheet()`**
 
 #### Data Source & Theme
-- **`toggleGlobalSource()`** — Cycles: openmeteo → arome → metno → openmeteo, saves to localStorage. Always allowed — rendering degrades on its own when the chosen source has no data for the current day
-- **`toggleTheme()`** — Switches dark ↔ light, updates charts, saves to localStorage
+- **`selectSource(source)`** — Model shown in detail (from the verdict cells), saved to localStorage, keeps the scroll position
+- **`updateSourceAttribute()`** — `data-source` on `<html>`: tints the day detail by the chosen model
+- **`toggleTheme()`** — Switches dark ↔ light, re-renders (only once the point has data), saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Generates day section HTML: header, summary bar, chart div, cards grid, toggle buttons. One path for all sources; shows "Données <source> non disponibles" when the source has nothing for that day
+- **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Day section: header (desktop), verdict block, then the detail (chart div, cards grid, toggle buttons) tinted by the chosen model. When the chosen source has nothing that day: "n'a pas de prévision pour ce jour" (horizon) or "ne répond pas pour le moment" + Réessayer (source missing from the response)
 - **`renderCharts()`** — Iterates days, calls renderChartForDay
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`)
 
@@ -419,13 +440,13 @@ Main application state & logic.
 - **`toggleManualGPS()`** — Show/hide lat/lon input fields
 - **`applyManualGPS()`** — Validate & apply manual coordinates
 - **`confirmAddPoint()`** — Add point via CustomPoints, load data, update UI
-- **`confirmDeletePoint(key)`** — Delete point, switch to Station if current, re-render
+- **`confirmDeletePoint(key)`** — Delete point, switch to the first point if current, re-render (sheet included)
 
 #### Interactions
-- **`refreshData()`** — Force-refresh from PHP (shows skeleton loader)
+- **`refreshData()`** — Force-refresh without wiping anything: the content stays on screen (dimmed, `aria-busy`) until the current point answers; on failure the old data stays with a notice. The other points are then refreshed in the background. One refresh at a time
+- **`showNotice(text)`** — Message at the top of the content (replaced on the next render)
 - **`toggleMore(btn)`** — Expand "Voir heures suivantes" for today
 - **`toggleTomorrowView(btn, day)`** — Toggle between 4 periods & all hourly for future days
-- **`initDragReorder()`** — Touch/mouse drag to reorder altitude tabs (400ms long-press, vibration feedback, saves order via CustomPoints)
 
 ---
 
@@ -436,35 +457,40 @@ Main application state & logic.
 ```css
 --bg: #020617;           --bg-secondary: #0f172a;
 --card: rgba(255,255,255, 0.075);  --card-hover: rgba(255,255,255, 0.09);
---text: #e5e7eb;         --muted: #94a3b8;
+--text: #e5e7eb;         --muted: #94a3b8;         --text-soft: #cbd5e1;
 --accent: #38bdf8;       --accent2: #a78bfa;       --accent3: #f472b6;
---border: rgba(255,255,255, 0.08);
---top-bar-height: 60px;  --bottom-nav-height: 100px;
+--border: rgba(255,255,255, 0.08);                 --border-strong: rgba(255,255,255, 0.18);
+--warn: #fbbf24;
+--top-bar-height: 60px;  --bottom-nav-height: 64px;
 ```
 
-Light theme inverts colors (white bg, dark text, same accents adjusted).
+Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
+icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and the page
+itself is not tinted by the source. See `DESIGN.md` for the visual system.
 
 ### Key Layout Classes
 
 | Class | Description |
 |-------|-------------|
-| `.top-bar` | Fixed 60px header, flex row, backdrop blur |
-| `.bottom-nav` | Fixed bottom nav, altitude tabs + day navigation |
-| `.altitude-tabs` | Horizontal scrollable flex, point selection |
-| `.day-nav` | Centered flex row, day buttons |
+| `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme |
+| `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (48 px) with `.day-indicator` |
 | `main` | Max 900px, centered, 1rem padding |
-| `.day-section` | Card with date header, summary, chart, cards grid |
+| `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
+| `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |
+| `.day-detail` | Chart + cards, tinted by the chosen model |
+| `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
 | `.skeleton-loader` | Loading state with pulse animation |
 
 ### Source Color Indicators
 
 | Class | Color | Source |
 |-------|-------|--------|
-| `.source-toggle.is-openmeteo` | Blue tint | Open-Meteo |
-| `.source-toggle.is-arome` | Purple tint | AROME |
-| `.source-toggle.is-metno` | Orange tint | MET.no |
+| `.model-cell.is-openmeteo` | Blue (#38bdf8, light #0369a1) | Open-Meteo |
+| `.model-cell.is-arome` | Purple (#c084fc, light #7e22ce) | AROME / ARPEGE |
+| `.model-cell.is-metno` | Orange (#f59f30, light #b45309) | MET.no |
 
-Day sections also get subtle background tint per source via `data-source` attribute.
+The day detail gets a background tint per source via the `data-source` attribute on `<html>`.
+`prefers-reduced-motion` disables every animation and transition. Touch targets are ≥ 44 px.
 
 ### Responsive Breakpoints
 
@@ -532,9 +558,13 @@ Icons in `weather/` are from MET.no (Norwegian Meteorological Institute). Availa
 
 ## External Libraries
 
-- **ApexCharts** — Charting library for multi-axis weather charts
-- **Lucide** — Icon library (wind, snowflake, thermometer, etc.)
-- **Leaflet** — Map library for custom point selection (loaded on demand)
+- **ApexCharts 8.5.0** — Charting library for multi-axis weather charts
+- **Lucide 1.61.0** — Icon library (wind, snowflake, thermometer, etc.)
+- **Leaflet 1.9.4** — Map library for custom point selection (loaded on demand)
+
+All three are pinned to an exact version (index.php, `loadLeaflet()`): an upstream release must not
+change the UI unannounced. Bump deliberately, to a version at least two weeks old, and check the
+icons and the chart.
 
 ## localStorage Keys
 
