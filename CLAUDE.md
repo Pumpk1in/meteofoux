@@ -361,8 +361,9 @@ ApexCharts wrapper for multi-axis weather charts.
 
 - **`instances`** — Stores chart objects by containerId
 - **`getSeriesColors(isDark, hasExtendedData)`** — Returns color array. Extended (Open-Meteo): 7 colors. Basic (MET.no): 5 colors. Light-theme colors are ≥ 3:1 on white
-- **`getAxisTitleColors(isDark)`** — Axis titles take the color of the series they measure (°C, km/h of the wind, UV)
-- **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, legend, xaxis
+- **`getAxisTitleColors(isDark)`** — Axis units take the color of the series they measure (°C, km/h of the wind, UV)
+- **`chartHeadHtml(series, colors, strokeDash, isDark)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark), then the units row `.chart-units` (°C / km/h / UV) above their tick columns. Replaces the ApexCharts legend and axis titles
+- **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, xaxis (the legend is off: see `chartHeadHtml`)
 - **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour, scales)`** — Creates multi-axis chart. `scales` (from `App.sharedChartScales`) fixes the axes so they are the same for the 3 models of the day; temperature ticks are whole degrees, wind and UV use the same number of intervals so their labels sit on the grid lines:
   - Y-axis 0: Température (°C, left, orange line)
   - Y-axis 1: Ressenti (°C, if extended, same axis as temp, line; its hidden axis gets the temp bounds, else ApexCharts gives it its own range)
@@ -371,7 +372,7 @@ ApexCharts wrapper for multi-axis weather charts.
   - Y-axis 4: Neige (column, blue)
   - Y-axis 5: Pluie (column, blue)
   - Adds weather SVG icons below X-axis on animation end
-- **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and axis titles follow the theme)
+- **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and the key follow the theme)
 - **`addWeatherIcons(containerId, iconByHour)`** — Overlays weather SVG icons below X-axis labels
 
 ### Components Module
@@ -379,7 +380,7 @@ ApexCharts wrapper for multi-axis weather charts.
 HTML generators (return HTML strings).
 
 - **`Skeleton()`** — Loading skeleton with animated bars
-- **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles" + a "?" button (`App.toggleModelsHelp`) that unfolds a plain-language note on the three models under the cells, agree/diverge chip (when they diverge it names the gap: "AROME en voit 18, Open-Meteo rien", or on a dry day "X annonce 4 °C de plus qu'Y"), facts (temperatures, "Limite du gel" = freezing level vs the point; on a dry day night refreeze and wind), then one cell per model (value, bar, "2° à 3°" / covered period / "Toutes les 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
+- **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles" + a "?" button (`App.toggleModelsHelp`) that unfolds a plain-language note on the three models under the cells, "Les modèles s’accordent" chip when they agree (nothing when they diverge: the range and the cells just below already show it), facts (temperatures, "Limite du gel" = freezing level vs the point; on a dry day night refreeze and wind), then one cell per model (value, bar, "2° à 3°" / covered period / "Toutes les 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
 - **`verdictValue(verdict)`** — `{prefix, value, unit}`: the big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). When the lowest model rounds to zero, `prefix` = "jusqu'à" and `value` = the highest ("jusqu'à 18 cm", not "0 à 18"). Shared with the point sheet and the day bar (spoken label)
 - **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
@@ -504,11 +505,10 @@ The day detail gets a background tint per source via the `data-source` attribute
 
 ### ApexCharts Layout Notes
 
-- `labels.offsetX` : déplace les valeurs des axes (ex: les chiffres "10", "20" de km/h) sans changer l'espace graphe-légendes
-- `grid.padding.left/right` : change l'espace entre le graphe et les légendes (rapproche ou éloigne les légendes du graphe)
-- `title.offsetX` : déplace uniquement le titre de l'axe (ex: "km/h", "°C")
-- **Pour rapprocher les légendes du graphe :** modifier `grid.padding` (valeurs négatives = plus proche)
-- **Pour déplacer les légendes latéralement :** modifier `labels.offsetX`
+- No legend and no axis titles inside the chart: the key and the units are HTML (`chartHeadHtml`, `.chart-key` / `.chart-units` in style.css)
+- `grid.padding` (left -28, right -70): the plot runs under the tick columns, so it keeps the full width
+- `labels.offsetX` places each tick column: °C at 12 px from the left edge, wind and UV under "km/h" and "UV". On an **opposite** (right) axis, a more negative value moves the column **right**
+- Moving a column means moving its unit too (`.chart-unit-wind` / `.chart-unit-uv`, `right` in px): both are measured from the card edges, identical on mobile and desktop
 
 ---
 

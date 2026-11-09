@@ -796,14 +796,63 @@ main {
     display: none !important;
 }
 
-/* Entrées de légende (cliquables : masquent une série) : zone de toucher agrandie */
-.apexcharts-legend-series {
-    padding: 6px 2px !important;
+/* Clé du graphique (Charts.chartHeadHtml) : séries, puis unités au-dessus de leurs graduations */
+.chart-key {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.2rem 0.85rem;
+    padding: 0.15rem 0.75rem 0;
+    font-size: 0.72rem;
+    color: var(--muted);
 }
 
-/* Padding sur la légende pour compenser les marges négatives du chart */
-.apexcharts-legend {
-    padding: 0 28px 0 15px!important;
+.chart-key-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.chart-key-line {
+    width: 14px;
+    border-top: 2.5px solid;
+}
+
+.chart-key-line.is-dashed {
+    border-top: 2px dashed;
+}
+
+.chart-key-bar {
+    width: 8px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+/* Unités : °C au-dessus de la colonne de gauche, km/h et UV au-dessus des colonnes de droite
+   (positions des graduations : labels.offsetX des axes dans Charts.createUnifiedChart) */
+.chart-units {
+    position: relative;
+    height: 1rem;
+    margin-top: 0.7rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1rem;
+}
+
+.chart-units span {
+    position: absolute;
+    left: 12px;
+}
+
+.chart-units .chart-unit-wind {
+    left: auto;
+    right: 44px;
+}
+
+.chart-units .chart-unit-uv {
+    left: auto;
+    right: 14px;
 }
 
 /* ============================================

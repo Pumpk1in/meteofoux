@@ -27,25 +27,23 @@ const Charts = {
             : { temp: '#c2410c', wind: '#15803d', uv: '#b45309' };
     },
 
-    // Marqueurs de légende : cercle pointillé pour les séries dashed, plein pour les autres
-    getLegendMarkers(colors, strokeDash) {
-        const hasDashed = strokeDash.some(d => d > 0);
-        if (!hasDashed) return { width: 10, height: 10 };
-        return {
-            width: 10,
-            height: 10,
-            fillColors: colors.map(() => 'transparent'),
-            customHTML: strokeDash.map((dash, i) => {
-                if (dash > 0) {
-                    return function() {
-                        return '<span style="display:block;width:10px;height:10px;border-radius:50%;border:1px dashed ' + colors[i] + ';box-sizing:border-box;"></span>';
-                    };
-                }
-                return function() {
-                    return '<span style="display:block;width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';"></span>';
-                };
-            })
-        };
+    // Clé du graphique (HTML, au-dessus du tracé) : un repère par série — trait plein ou pointillé
+    // pour les courbes, carré pour les barres — puis les unités au-dessus de leur colonne de graduations.
+    // Rien n'est cliquable : on ne masque pas une série par erreur en touchant la clé.
+    chartHeadHtml(series, colors, strokeDash, isDark) {
+        const items = series.map((s, i) => {
+            const mark = s.type === 'column'
+                ? `<span class="chart-key-bar" style="background:${colors[i]}"></span>`
+                : `<span class="chart-key-line${strokeDash[i] > 0 ? ' is-dashed' : ''}" style="border-color:${colors[i]}"></span>`;
+            return `<span class="chart-key-item">${mark}${s.name}</span>`;
+        }).join('');
+        const t = this.getAxisTitleColors(isDark);
+        return `<div class="chart-key">${items}</div>
+            <div class="chart-units" aria-hidden="true">
+                <span style="color:${t.temp}">°C</span>
+                <span class="chart-unit-wind" style="color:${t.wind}">km/h</span>
+                <span class="chart-unit-uv" style="color:${t.uv}">UV</span>
+            </div>`;
     },
 
     // Options de base pour tous les graphiques (thème sombre)
@@ -162,30 +160,14 @@ const Charts = {
             }
         }
 
-        // OffsetY des titres d'axes selon la taille d'écran
-        // < 480px : très petit (légende 2 lignes, graphique 260px)
-        // 480-768px : intermédiaire (légende 1 ligne, graphique 260px)
-        // >= 768px : PC (légende 1 ligne, graphique 300px)
-        // MET.no (!hasExtendedData) : légende 5 items au lieu de 7, titres plus hauts
-        const width = window.innerWidth;
-        const baseTitleOffsetY = width < 480 ? -90 : (width < 768 ? -100 : -120);
-        const titleOffsetY = hasExtendedData ? baseTitleOffsetY : baseTitleOffsetY - 10;
-        const axisTitle = this.getAxisTitleColors(isDark);
-
+        // Unités des axes : dans la clé HTML (chartHeadHtml), pas en titres ApexCharts
         const yaxis = [
             // Axe Température (gauche)
             {
-                title: {
-                    text: '°C',
-                    rotate: 0,
-                    offsetX: 20,
-                    offsetY: titleOffsetY,
-                    style: { color: axisTitle.temp, fontSize: '11px' }
-                },
                 labels: {
                     formatter: v => Math.round(v) + '°',
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -35
+                    offsetX: -7 // Colonne à 12 px du bord gauche, sous « °C » (.chart-units)
                 },
                 showAlways: true,
                 ...yTempConfig
@@ -202,17 +184,10 @@ const Charts = {
             opposite: true,
             axisBorder: { show: false },
             axisTicks: { show: false },
-            title: {
-                text: 'km/h',
-                rotate: 0,
-                offsetX: -25,
-                offsetY: titleOffsetY,
-                style: { color: axisTitle.wind, fontSize: '11px' }
-            },
             labels: {
                 formatter: v => Math.round(v),
                 style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                offsetX: -73
+                offsetX: -14 // Sous « km/h » (.chart-unit-wind). Axe opposé : plus négatif = plus à droite
             },
             seriesName: 'Vent',
             min: 0,
@@ -236,17 +211,10 @@ const Charts = {
                 opposite: true,
                 axisBorder: { show: false },
                 axisTicks: { show: false },
-                title: {
-                    text: 'UV',
-                    rotate: 0,
-                    offsetX: -20,
-                    offsetY: titleOffsetY,
-                    style: { color: axisTitle.uv, fontSize: '11px' }
-                },
                 labels: {
                     formatter: v => v.toFixed(0),
                     style: { colors: isDark ? '#94a3b8' : '#6b7280', fontSize: '9px' },
-                    offsetX: -30
+                    offsetX: -15 // Sous « UV » (.chart-unit-uv)
                 },
                 seriesName: 'UV',
                 min: 0,
@@ -307,16 +275,7 @@ const Charts = {
             plotOptions: {
                 bar: { columnWidth: '70%', borderRadius: 2 }
             },
-            legend: {
-                show: true,
-                position: 'top',
-                horizontalAlign: 'center',
-                fontSize: '11px',
-                markers: this.getLegendMarkers(colors, strokeDash),
-                itemMargin: { horizontal: 9, vertical: 2 },
-                labels: { colors: isDark ? '#94a3b8' : '#6b7280' },
-                clusterGroupedSeries: false
-            },
+            legend: { show: false }, // Remplacée par la clé HTML (chartHeadHtml)
             xaxis: {
                 type: 'datetime',
                 min: xMinVisible,
@@ -331,6 +290,9 @@ const Charts = {
             },
             yaxis
         };
+
+        const head = document.getElementById(containerId)?.parentElement.querySelector('.chart-head');
+        if (head) head.innerHTML = this.chartHeadHtml(series, colors, strokeDash, isDark);
 
         if (this.instances[containerId]) {
             this.instances[containerId].updateOptions(options);
@@ -1447,8 +1409,6 @@ const Components = {
         };
         const { mode, range, basis } = verdict;
         const { prefix, value, unit } = this.verdictValue(verdict);
-        // "que" élidé devant un nom de modèle à voyelle (qu'AROME, qu'Open-Meteo)
-        const que = name => /^[aeiouyéè]/i.test(name) ? `qu’${name}` : `que ${name}`;
 
         let what;
         if (mode === 'dry') {
@@ -1459,29 +1419,9 @@ const Components = {
             what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
         }
         const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
-        // Quand les modèles divergent, la puce dit qui voit le plus et qui voit le moins
-        let divergeText = '';
-        if (verdict.diverge) {
-            const known = key => basis.filter(b => summaries[b][key] !== null);
-            const pick = (key, better) => known(key).reduce((a, b) => better(summaries[b][key], summaries[a][key]) ? b : a);
-            if (mode === 'dry') {
-                const gap = k => known(k).length < 2 ? 0
-                    : Math.max(...known(k).map(b => summaries[b][k])) - Math.min(...known(k).map(b => summaries[b][k]));
-                const k = gap('tempMax') >= gap('tempMin') ? 'tempMax' : 'tempMin';
-                const hot = pick(k, (x, y) => x > y), cold = pick(k, (x, y) => x < y);
-                divergeText = `${LABELS[hot]} annonce ${Math.round(gap(k))} °C de plus ${que(LABELS[cold])}`;
-            } else {
-                const k = mode === 'snow' ? 'snow' : 'rain';
-                const most = pick(k, (x, y) => x > y), least = pick(k, (x, y) => x < y);
-                const low = summaries[least][k], lowText = this.verdictAmount(mode, low);
-                const lowSays = low === 0 ? 'rien' : Number(lowText.replace(',', '.')) === 0 ? 'presque rien' : lowText;
-                divergeText = `${LABELS[most]} en voit ${this.verdictAmount(mode, summaries[most][k])}, ${LABELS[least]} ${lowSays}`;
-            }
-        }
-        const agreeHtml = verdict.diverge === null ? ''
-            : verdict.diverge
-                ? `<span class="verdict-agree"><i data-lucide="split"></i>${divergeText}</span>`
-                : '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>';
+        // Accord : une puce. Divergence : rien de plus, la fourchette et les cases juste en dessous la montrent déjà
+        const agreeHtml = verdict.diverge === false
+            ? '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>' : '';
         const helpOpen = App.state.modelsHelpOpen;
 
         const facts = [];
@@ -1559,6 +1499,7 @@ const Components = {
         const chartIdPrefix = `chart-${day}-${pointKey}`;
         return `
             <div class="chart-wrapper chart-full">
+                <div class="chart-head"></div>
                 <div id="${chartIdPrefix}-unified" class="chart"></div>
             </div>
         `;
