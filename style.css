@@ -267,31 +267,43 @@ body {
     display: block;
 }
 
-/* Détail du jour - fond coloré selon le modèle choisi */
-[data-source="openmeteo"] .day-detail {
+/* Détail du jour - fond coloré selon le modèle affiché CE jour-là (au-delà de l'horizon d'AROME,
+   le détail passe sur Open-Meteo : la teinte suit) */
+.day-detail[data-source="openmeteo"] {
     background: rgba(8, 42, 74, 0.5);
 }
 
-[data-source="arome"] .day-detail {
+.day-detail[data-source="arome"] {
     background: rgba(50, 17, 85, 0.5);
 }
 
-[data-source="metno"] .day-detail {
+.day-detail[data-source="metno"] {
     background: rgba(67, 40, 15, 0.5);
 }
 
 /* Thème clair : seule la zone de détail prend la teinte du modèle, légère, pour que la page
    reste claire au soleil (l'ancien fond de page teinté à 50 % délavait tout) */
-[data-theme="light"][data-source="openmeteo"] .day-detail {
+[data-theme="light"] .day-detail[data-source="openmeteo"] {
     background: rgba(14, 165, 233, 0.1);
 }
 
-[data-theme="light"][data-source="arome"] .day-detail {
+[data-theme="light"] .day-detail[data-source="arome"] {
     background: rgba(168, 85, 247, 0.1);
 }
 
-[data-theme="light"][data-source="metno"] .day-detail {
+[data-theme="light"] .day-detail[data-source="metno"] {
     background: rgba(245, 146, 40, 0.12);
+}
+
+/* En tête du détail : le modèle dont on voit les heures */
+.detail-source {
+    margin: 0 0 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+}
+
+.detail-source strong {
+    color: var(--text);
 }
 
 /* ============================================

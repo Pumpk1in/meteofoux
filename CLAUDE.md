@@ -383,6 +383,7 @@ HTML generators (return HTML strings).
 - **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles" + a "?" button (`App.toggleModelsHelp`) that unfolds a plain-language note on the three models under the cells, "Les modèles s’accordent" chip when they agree, an amber "Peu fiable : les modèles se contredisent" chip when they contradict (nothing on a mere divergence: the range and the cells just below already show it), facts (temperatures, "Limite du gel plus haut que le point (2860–3280 m)" = freezing level vs the point, conclusion first; on a dry day night refreeze and wind), then one cell per model (value, bar, "2° à 3°" / covered period / "Toutes les 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
 - **`verdictValue(verdict)`** — `{prefix, value, unit}`: the big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). When the lowest model rounds to zero, `prefix` = "jusqu'à" and `value` = the highest ("jusqu'à 18 cm", not "0 à 18"), except when the models contradict: "0 à 17 cm" then shows both ends. Shared with the point sheet and the day bar (spoken label)
 - **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
+- **`sourceLabel(key, summary)`** — Name of a source for a day: "Open-Meteo", "MET.no", and for the Météo-France chain the model that served that day (AROME, ARPEGE, Météo-France)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views
@@ -397,7 +398,7 @@ Main application state & logic.
 {
   currentDay,                    // Selected day (YYYY-MM-DD)
   currentPoint,                  // Selected point key
-  globalSource,                  // 'openmeteo' | 'arome' | 'metno'
+  globalSource,                  // 'openmeteo' | 'arome' | 'metno' (default 'arome')
   theme,                         // 'dark' | 'light'
   days,                          // Array of day strings
   expandedDays,                  // Set of expanded future days
@@ -413,7 +414,7 @@ Main application state & logic.
 - **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states, calls renderCharts()
 
 #### Navigation
-- **`renderNavigation()`** — Day bar, `data-source` attribute, top bar
+- **`renderNavigation()`** — Day bar, top bar
 - **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
 - **`selectPoint(pointKey)`** — Switch active point (loads it if needed), re-render
@@ -425,13 +426,14 @@ Main application state & logic.
 - **`choosePoint(key)`**, **`togglePointsEdit()`** ("Modifier": up/down and delete for custom points), **`movePoint(key, direction)`** (swaps two custom points in place, saves the order), **`addPointFromSheet()`**
 
 #### Data Source & Theme
-- **`selectSource(source)`** — Model shown in detail (from the verdict cells), saved to localStorage, keeps the scroll position
-- **`updateSourceAttribute()`** — `data-source` on `<html>`: tints the day detail by the chosen model
+- **`selectSource(source)`** — Model shown in detail (from the verdict cells), saved to localStorage, keeps the scroll position. Default (first visit): `arome`
+- **`daySource(pointData, summaries)`** — Model whose hours a day's detail shows: the chosen one, except beyond its horizon (AROME/ARPEGE ~D+4) where the first model covering that day takes over, without touching the choice. A source that does not answer stays chosen (the detail says so)
+- **`getSourceData(pointData, source = globalSource)`** — That source's `{hourly, sixHourly, extended}`, empty if missing
 - **`toggleTheme()`** — Switches dark ↔ light, re-renders (only once the point has data), saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Day section: header (desktop), verdict block, then the detail (chart div, cards grid, toggle buttons) tinted by the chosen model. When the chosen source has nothing that day: "n'a pas de prévision pour ce jour" (horizon) or "ne répond pas pour le moment" + Réessayer (source missing from the response)
-- **`renderCharts()`** — Iterates days, calls renderChartForDay
+- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, cards grid, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
+- **`renderCharts()`** — Iterates days, calls renderChartForDay with the source of that day (`daySource`)
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`, and only with `chartDetails`)
 - **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours). Apparent temperature and gusts count only when shown (`chartDetails`): otherwise they would leave empty space at the top
 - **`toggleChartDetails(btn)`** — "Plus de détails": toggles `chartDetails` for every chart, re-creates them (series and axes change), puts focus back on the button of the same day
@@ -497,7 +499,7 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 | `.model-cell.is-arome` | Purple (#c084fc, light #7e22ce) | AROME / ARPEGE |
 | `.model-cell.is-metno` | Orange (#f59f30, light #b45309) | MET.no |
 
-The day detail gets a background tint per source via the `data-source` attribute on `<html>`.
+The day detail gets a background tint per source via its own `data-source` attribute (`.day-detail[data-source]`): the model shown that day, which differs from the chosen one on relay days.
 `prefers-reduced-motion` disables every animation and transition. Touch targets are ≥ 44 px.
 
 ### Responsive Breakpoints

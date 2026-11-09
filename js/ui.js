@@ -342,7 +342,7 @@ const App = {
     state: {
         currentDay: null,
         currentPoint: 'station',
-        globalSource: 'openmeteo',  // 'openmeteo', 'arome', ou 'metno'
+        globalSource: 'arome',      // 'openmeteo', 'arome', ou 'metno' (AROME par défaut : le plus fiable ici)
         theme: 'dark',
         days: [],
         expandedDays: new Set(), // Jours avec vue horaire étendue
@@ -352,8 +352,8 @@ const App = {
     },
 
     // Helper pour obtenir les données selon la source sélectionnée
-    getSourceData(pointData) {
-        return pointData.sources[this.state.globalSource] || { hourly: {}, sixHourly: {}, extended: false };
+    getSourceData(pointData, source = this.state.globalSource) {
+        return pointData.sources[source] || { hourly: {}, sixHourly: {}, extended: false };
     },
 
     async init() {
@@ -371,7 +371,7 @@ const App = {
             document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 
             // Charger la source sauvegardée
-            const savedSource = localStorage.getItem('fmeteo_source') || 'openmeteo';
+            const savedSource = localStorage.getItem('fmeteo_source') || 'arome';
             this.state.globalSource = savedSource;
 
             // Charger le point initial et afficher immédiatement
@@ -412,7 +412,6 @@ const App = {
 
     renderNavigation() {
         this.renderDayNav();
-        this.updateSourceAttribute();
         this.updateTopBar();
 
         lucide.createIcons();
@@ -455,10 +454,6 @@ const App = {
         lucide.createIcons();
     },
 
-    // data-source sur <html> : teinte du détail du jour selon le modèle choisi
-    updateSourceAttribute() {
-        document.documentElement.setAttribute('data-source', this.state.globalSource);
-    },
 
     // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date
     updateTopBar() {
@@ -534,7 +529,6 @@ const App = {
         if (source === this.state.globalSource) return;
         this.state.globalSource = source;
         localStorage.setItem('fmeteo_source', source);
-        this.updateSourceAttribute();
         const scrollY = window.scrollY;
         this.render();
         window.scrollTo(0, scrollY);
@@ -611,8 +605,6 @@ const App = {
         const data = DataService.state.data;
         const isToday = Utils.isToday(this.state.currentDay);
         const pointData = data[this.state.currentPoint];
-        const source = this.state.globalSource;
-        const sourceData = this.getSourceData(pointData);
 
         this.updateTopBar();
 
@@ -622,11 +614,11 @@ const App = {
         // Sur mobile : afficher uniquement le jour sélectionné
         // Sur desktop : afficher tous les jours en scroll
         if (Utils.isMobile()) {
-            const html = this.renderDayContent(this.state.currentDay, pointData, isToday, source, sourceData);
+            const html = this.renderDayContent(this.state.currentDay, pointData, isToday);
             document.getElementById('content').innerHTML = html;
         } else {
             const html = this.state.days
-                .map(day => this.renderDayContent(day, pointData, Utils.isToday(day), source, sourceData))
+                .map(day => this.renderDayContent(day, pointData, Utils.isToday(day)))
                 .join('');
             document.getElementById('content').innerHTML = html;
         }
@@ -665,10 +657,17 @@ const App = {
         requestAnimationFrame(() => this.renderCharts());
     },
 
-    renderDayContent(day, pointData, isToday, source, sourceData) {
+    // Modèle affiché en détail pour un jour : le choix de l'utilisateur, sauf au-delà de son horizon
+    // (AROME/ARPEGE ~J+4) où le premier modèle qui couvre ce jour prend le relais, sans toucher au choix.
+    // Une source qui ne répond pas reste choisie : le détail le dit et propose de réessayer.
+    daySource(pointData, summaries) {
+        const chosen = this.state.globalSource;
+        if (summaries[chosen] || !pointData.sources[chosen]) return chosen;
+        return ['openmeteo', 'arome', 'metno'].find(k => summaries[k]) || chosen;
+    },
+
+    renderDayContent(day, pointData, isToday) {
         const { point, series, elevation } = pointData;
-        const hourlyData = sourceData.hourly;
-        const sixHourlyData = sourceData.sixHourly;
 
         const dayHeaderHtml = `
             <h2 class="day-header">
@@ -682,6 +681,11 @@ const App = {
         const { summaries, verdict } = DataNormalizer.dayVerdict(pointData, day);
         // Sources présentes dans la réponse du proxy : une absente n'a pas répondu (429, panne)
         const available = Object.keys(pointData.sources);
+        // Modèle du détail pour ce jour (relais au-delà de l'horizon du modèle choisi)
+        const source = this.daySource(pointData, summaries);
+        const sourceData = this.getSourceData(pointData, source);
+        const hourlyData = sourceData.hourly;
+        const sixHourlyData = sourceData.sixHourly;
         const verdictHtml = Components.Verdict(verdict, summaries, source, available);
 
         // Créneaux du jour (chronologie commune), avec les données de la source choisie
@@ -689,7 +693,7 @@ const App = {
             .filter(e => Utils.getLocalDay(e.time) === day)
             .map(e => ({ time: e.time, hourly: hourlyData[e.time] || null, sixHourly: sixHourlyData[e.time] || null }));
 
-        // Pas de données de cette source pour ce jour (AROME couvre ~4-5 jours, source indisponible)
+        // Pas de données de cette source pour ce jour : elle ne répond pas, ou aucun modèle ne couvre ce jour
         if (!summaries[source]) {
             const label = { openmeteo: 'Open-Meteo', arome: 'Météo-France', metno: 'MET.no' }[source];
             const message = available.includes(source)
@@ -702,12 +706,17 @@ const App = {
                 <section class="day-section" data-day="${day}" id="day-${day}">
                     ${dayHeaderHtml}
                     ${verdictHtml}
-                    <div class="day-detail">
+                    <div class="day-detail" data-source="${source}">
                         <div class="no-data-message">${message}</div>
                     </div>
                 </section>
             `;
         }
+
+        // En tête du détail : le modèle dont on voit les heures, et pourquoi si ce n'est pas celui choisi
+        const chosen = this.state.globalSource;
+        const sourceLine = `<p class="detail-source">Heures selon <strong>${Components.sourceLabel(source, summaries[source])}</strong>${
+            source !== chosen ? ` · ${Components.sourceLabel(chosen)} ne prévoit pas si loin` : ''}</p>`;
 
         // Préparer les données
         let displayEntries;
@@ -757,7 +766,7 @@ const App = {
             <section class="day-section" data-day="${day}" id="day-${day}">
                 ${dayHeaderHtml}
                 ${verdictHtml}
-                <div class="day-detail">${contentHtml}</div>
+                <div class="day-detail" data-source="${source}">${sourceLine}${contentHtml}</div>
             </section>
         `;
     },
@@ -765,7 +774,6 @@ const App = {
     renderCharts() {
         const data = DataService.state.data;
         const pointData = data[this.state.currentPoint];
-        const sourceData = this.getSourceData(pointData);
 
         // Déterminer quels jours ont besoin d'un graphique
         const daysToRender = Utils.isMobile() ? [this.state.currentDay] : this.state.days;
@@ -773,6 +781,10 @@ const App = {
         daysToRender.forEach((day, dayIndex) => {
             // Vérifier si on dépasse le nombre max de jours avec graphique
             if (CONFIG.charts.maxDays === 0 || dayIndex >= CONFIG.charts.maxDays) return;
+
+            // Même modèle que le détail de ce jour (relais au-delà de l'horizon du modèle choisi)
+            const { summaries } = DataNormalizer.dayVerdict(pointData, day);
+            const sourceData = this.getSourceData(pointData, this.daySource(pointData, summaries));
 
             const chartAvailability = Utils.getChartDataAvailability(day, sourceData.hourly, sourceData.sixHourly);
 
@@ -1388,10 +1400,9 @@ const Components = {
     // puis une case par modèle (preuve du verdict et choix du modèle affiché en détail).
     // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null },
     // available = sources présentes dans la réponse du proxy (une absente n'a pas répondu)
-    Verdict(verdict, summaries, selected, available) {
-        if (!verdict) return '';
-        // La source "arome" est la chaîne Météo-France : AROME jusque vers J+2, puis ARPEGE.
-        // La case porte le nom du modèle qui a vraiment servi ce jour-là.
+    // Nom d'une source pour un jour. La source "arome" est la chaîne Météo-France : AROME jusque
+    // vers J+2, puis ARPEGE ; elle porte le nom du modèle qui a vraiment servi ce jour-là.
+    sourceLabel(key, summary) {
         const MODEL_LABELS = {
             meteofrance_arome_france_hd: 'AROME',
             meteofrance_arome_france: 'AROME',
@@ -1399,10 +1410,13 @@ const Components = {
             meteofrance_seamless: 'Météo-France'
         };
         const SOURCE_LABELS = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' };
+        return (key === 'arome' && MODEL_LABELS[summary?.model]) || SOURCE_LABELS[key];
+    },
+
+    Verdict(verdict, summaries, selected, available) {
+        if (!verdict) return '';
         const LABELS = {};
-        for (const key of Object.keys(SOURCE_LABELS)) {
-            LABELS[key] = (key === 'arome' && MODEL_LABELS[summaries[key]?.model]) || SOURCE_LABELS[key];
-        }
+        for (const key of ['openmeteo', 'arome', 'metno']) LABELS[key] = this.sourceLabel(key, summaries[key]);
         const dec = n => n.toFixed(1).replace('.', ',');
         const deg = n => String(Math.round(n)).replace('-', '−');
         const hourLabel = (ms, isEnd) => {
