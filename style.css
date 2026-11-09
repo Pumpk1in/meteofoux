@@ -1011,15 +1011,16 @@ main {
     right: 14px;
 }
 
-/* « Plus de détails » : lien discret centré sur la ligne des unités (place fixe, même quand la clé
-   passe sur deux lignes), cible de 44 px qui déborde de la ligne sans l'agrandir */
+/* « Plus de détails » : centré sur la ligne des unités (place fixe, même quand la clé passe sur
+   deux lignes), cible de 44 px qui déborde de la ligne sans l'agrandir. Le bouton visible est la
+   pastille à l'intérieur : un simple texte bleu ne se lisait pas comme un bouton */
 .chart-details-btn {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     min-height: 44px;
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-1);
     border: none;
     background: transparent;
     color: var(--accent);
@@ -1030,14 +1031,58 @@ main {
     cursor: pointer;
 }
 
+.chart-details-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-0-5);
+    padding: var(--space-0-5) var(--space-1-5) var(--space-0-5) var(--space-2);
+    border: 1px solid currentColor;
+    border-radius: var(--radius-pill);
+}
+
+/* 320 px, détails dépliés : sans chevron, la pastille ne touche plus « km/h » */
+@media (max-width: 359px) {
+    .chart-details-pill {
+        padding: var(--space-0-5) var(--space-2);
+    }
+
+    .chart-details-pill svg {
+        display: none;
+    }
+}
+
+.chart-details-pill svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.chart-details-btn[aria-expanded="true"] .chart-details-pill svg {
+    transform: rotate(180deg);
+}
+
+@media (hover: hover) {
+    .chart-details-btn:hover .chart-details-pill {
+        background: rgba(56, 189, 248, 0.12);
+    }
+}
+
 [data-theme="light"] .chart-details-btn {
     color: #0369a1; /* --accent est trop pâle sur blanc (2,1:1) */
 }
 
+/* Focus clavier : sur la pastille visible, pas sur la cible de 44 px autour */
 .chart-details-btn:focus-visible {
+    outline: none;
+}
+
+.chart-details-btn:focus-visible .chart-details-pill {
     outline: 2px solid var(--focus);
-    outline-offset: -8px;
-    border-radius: var(--radius-sm);
+    outline-offset: 2px;
 }
 
 /* ============================================

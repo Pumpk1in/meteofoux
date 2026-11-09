@@ -362,7 +362,7 @@ ApexCharts wrapper for multi-axis weather charts.
 - **`instances`** — Stores chart objects by containerId
 - **`getSeriesColors(isDark)`** — Series colors by key (`temp`, `feels`, `wind`, `gusts`, `uv`, `snow`, `rain`). Snow is light cyan, rain mid blue: same family, a clear lightness gap (3:1 between them in dark mode). Light-theme colors are ≥ 3:1 on white. Axis labels: 10 px (≈ Micro), `#4b5563` in light mode (5.6:1 on the tinted detail)
 - **`getAxisTitleColors(isDark)`** — Axis units take the color of the series they measure (°C, km/h of the wind, UV)
-- **`chartHeadHtml(defs, isDark, details)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark), then `.chart-units-row`: the units `.chart-units` (°C / km/h / UV; `.no-uv` when UV is hidden, km/h then takes its place) above their tick columns, and the "Plus de détails" / "Moins de détails" button (`App.toggleChartDetails`) centred between them, so it does not move when the key wraps. Replaces the ApexCharts legend and axis titles. The chart has no card of its own (`.chart-wrapper` is bare): it sits in the tinted detail
+- **`chartHeadHtml(defs, isDark, details)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark; snow and rain only when the day has some), then `.chart-units-row`: the units `.chart-units` (°C / km/h / UV; `.no-uv` when UV is hidden, km/h then takes its place) above their tick columns, and the "Plus de détails" / "Moins de détails" button (`App.toggleChartDetails`, an outlined pill with a chevron inside a 44 px target; no chevron under 360 px) centred between them, so it does not move when the key wraps. Replaces the ApexCharts legend and axis titles. The chart has no card of its own (`.chart-wrapper` is bare): it sits in the tinted detail
 - **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, xaxis (the legend is off: see `chartHeadHtml`)
 - **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour, scales, details)`** — Creates multi-axis chart. `scales` (from `App.sharedChartScales`) fixes the axes so they are the same for the 3 models of the day; temperature ticks are whole degrees, wind and UV use the same number of intervals so their labels sit on the grid lines. `details` adds apparent temperature, gusts (if extended) and UV. Built from one list of series definitions (name, color, stroke, axis), so a series and its axis come and go together (ApexCharts pairs them by index):
   - Température (°C, left axis, orange line)
@@ -373,7 +373,7 @@ ApexCharts wrapper for multi-axis weather charts.
   - A "maintenant" vertical line (x-axis annotation) on the chart that contains the current time
   - Adds weather SVG icons below X-axis on animation end
 - **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and the key follow the theme)
-- **`addWeatherIcons(containerId, iconByHour)`** — Overlays weather SVG icons below X-axis labels
+- **`addWeatherIcons(containerId, iconByHour)`** — Overlays 22 px weather SVG icons below X-axis labels (faint outline in light mode)
 
 ### Components Module
 

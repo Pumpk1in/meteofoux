@@ -27,7 +27,9 @@ const Charts = {
     // pour les courbes, carré pour les barres — puis les unités au-dessus de leur colonne de graduations.
     // Les entrées ne sont pas cliquables ; seul le bouton « Plus de détails » ajoute ressenti, rafales, UV.
     chartHeadHtml(defs, isDark, details) {
-        const items = defs.map(d => {
+        // Neige / pluie : dans la clé seulement si le jour en a (pas de « Neige » un jour de pluie).
+        // La série reste dans le graphique : ses axes et leurs index ne bougent pas
+        const items = defs.filter(d => d.type !== 'column' || d.data.some(p => p[1] > 0)).map(d => {
             const mark = d.type === 'column'
                 ? `<span class="chart-key-bar" style="background:${d.color}"></span>`
                 : `<span class="chart-key-line${d.dash > 0 ? ' is-dashed' : ''}" style="border-color:${d.color}"></span>`;
@@ -44,7 +46,7 @@ const Charts = {
                     <span class="chart-unit-wind" style="color:${t.wind}">km/h</span>
                     ${hasUv ? `<span class="chart-unit-uv" style="color:${t.uv}">UV</span>` : ''}
                 </div>
-                <button class="chart-details-btn" aria-expanded="${details}" onclick="App.toggleChartDetails(this)">${details ? 'Moins de détails' : 'Plus de détails'}</button>
+                <button class="chart-details-btn" aria-expanded="${details}" onclick="App.toggleChartDetails(this)"><span class="chart-details-pill">${details ? 'Moins de détails' : 'Plus de détails'}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></button>
             </div>`;
     },
 
@@ -334,10 +336,11 @@ const Charts = {
             const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
             img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `weather/svg/${icon}.svg`);
             img.setAttribute('href', `weather/svg/${icon}.svg`);
-            img.setAttribute('x', x - 6);
-            img.setAttribute('y', y + 4);
-            img.setAttribute('width', 18);
-            img.setAttribute('height', 18);
+            // 22 px (18 avant : trop petites au soleil), même centre qu'avant
+            img.setAttribute('x', x - 8);
+            img.setAttribute('y', y + 3);
+            img.setAttribute('width', 22);
+            img.setAttribute('height', 22);
             img.classList.add('weather-icon-annotation');
 
             xaxisGroup.appendChild(img);
