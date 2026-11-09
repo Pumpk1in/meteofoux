@@ -435,7 +435,7 @@ Main application state & logic.
 - **`toggleTheme()`** — Switches dark ↔ light, re-renders (only once the point has data), saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop: the date only, the point is in the top bar), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, hourly rows, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
+- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop: the date only, the point is in the top bar), verdict block, then the detail (`.day-detail[data-source]`, in the colour of the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, hourly rows, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
 - **`renderCharts()`** — Iterates days, calls renderChartForDay with the source of that day (`daySource`)
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`, and only with `chartDetails`)
 - **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours). Apparent temperature and gusts count only when shown (`chartDetails`): otherwise they would leave empty space at the top
@@ -477,8 +477,8 @@ Main application state & logic.
 ```
 
 Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
-icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and the page
-itself is not tinted by the source. See `DESIGN.md` for the visual system.
+icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and nothing is tinted
+by the source: the day detail keeps a neutral background with a 3px border in the model's colour. See `DESIGN.md` for the visual system.
 
 ### Key Layout Classes
 
@@ -489,7 +489,7 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
 | `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |
-| `.day-detail` | Chart + hourly rows, tinted by the chosen model |
+| `.day-detail` | Chart + hourly rows, in the colour of the model shown (tint in dark mode, border in light mode) |
 | `.rows` > `.rows-head` + `.card` | Hourly rows: fixed columns (`--col-*`), one background per row, 0.4rem apart; two columns from 768 px (`--n`) |
 | `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
 | `.skeleton-loader` | Loading state with pulse animation |
@@ -502,7 +502,7 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 | `.model-cell.is-arome` | Purple (#c084fc, light #7e22ce) | AROME / ARPEGE |
 | `.model-cell.is-metno` | Orange (#f59f30, light #b45309) | MET.no |
 
-The day detail gets a background tint per source via its own `data-source` attribute (`.day-detail[data-source]`): the model shown that day, which differs from the chosen one on relay days.
+The day detail gets the source colour (background tint in dark mode, 3px border in light mode) via its own `data-source` attribute (`.day-detail[data-source]`): the model shown that day, which differs from the chosen one on relay days.
 `prefers-reduced-motion` disables every animation and transition. Touch targets are ≥ 44 px.
 
 ### Responsive Breakpoints

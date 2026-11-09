@@ -162,12 +162,13 @@ names something: a source, a point, or a weather quantity.
 
 ### Secondary: source identity
 - **Open-Meteo** (`source-openmeteo`), **AROME** (`source-arome`), **MET.no** (`source-metno`):
-  the model cell's label and border, and a tint of the day detail (chart and hourly rows). In dark
-  mode the tint is assumed (`rgba(14,110,220,.3)`, `rgba(130,50,235,.3)`, `rgba(225,115,15,.26)`;
-  `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode it stays faint
-  (10-12%): a stronger tint muddied the reading in the sun (tested 2026-11-09; a neutral background
-  with a thick border in the source colour is the idea to try next). When the source changes, the
-  detail changes colour.
+  the model cell's label and border, and the day detail (chart and hourly rows). In dark mode the
+  detail takes an assumed tint (`rgba(14,110,220,.3)`, `rgba(130,50,235,.3)`, `rgba(225,115,15,.26)`;
+  `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode a tint over the
+  grey page muddied the reading in the sun, so the detail stays neutral (page background, white rows)
+  and gets a 3px border in the model's deep hue (`#0369a1`, `#7e22ce`, `#b45309`), the same as its
+  selected cell; the model name in "Heures selon …" takes it too (`#a14a08` for MET.no text, 4.8:1
+  on the grey). When the source changes, the detail changes colour.
 
 ### Tertiary: point identity
 - **Station**, **Observatoire**, **Marin-Pascal**, **Vescal** (`point-*`): the fill of the active
