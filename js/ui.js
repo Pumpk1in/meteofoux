@@ -97,7 +97,8 @@ const Charts = {
 
     // Graphique unifié : Température, Vent, Précipitations, UV
     // hasExtendedData = true pour Open-Meteo (ressenti, rafales), false pour MET.no
-    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}) {
+    // scales = App.sharedChartScales() : axes communs aux modèles du jour (null : axes propres à data)
+    createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}, scales = null) {
         // Couleurs selon le thème
         const colors = this.getSeriesColors(isDark, hasExtendedData);
 
@@ -130,13 +131,35 @@ const Charts = {
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
         let yTempConfig = { seriesName: 'Temp' };
+        // Axes du vent et des UV : même nombre d'intervalles que les températures, pour que leurs
+        // graduations tombent sur les lignes de la grille
+        const windScale = {}, uvScale = { max: 10 };
 
-        const temps = data.temp.filter(v => v !== null);
-        const tempRange = Math.max(...temps) - Math.min(...temps);
-        if (tempRange < 3) {
-            const mid = (Math.max(...temps) + Math.min(...temps)) / 2;
-            yTempConfig.min = Math.floor(mid - 5);
-            yTempConfig.max = Math.ceil(mid + 5);
+        if (scales) {
+            // Bornes entières, pas entier : des graduations rondes (pas deux fois "1°")
+            let lo = Math.floor(scales.tempMin), hi = Math.ceil(scales.tempMax);
+            if (hi - lo < 3) {
+                const mid = (scales.tempMin + scales.tempMax) / 2;
+                lo = Math.floor(mid - 5);
+                hi = Math.ceil(mid + 5);
+            }
+            const step = Math.max(1, Math.ceil((hi - lo) / 5));
+            const ticks = Math.ceil((hi - lo) / step);
+            yTempConfig = { seriesName: 'Temp', min: lo, max: lo + ticks * step, tickAmount: ticks };
+
+            // Vent : maximum commun aux modèles, pas rond
+            const windStep = [5, 10, 20, 25, 50, 100].find(s => s * ticks >= scales.windMax) || 100;
+            Object.assign(windScale, { max: windStep * ticks, tickAmount: ticks });
+            // UV : pas de 2 (0 à 10 sur 5 intervalles, 0 à 8 sur 4...)
+            Object.assign(uvScale, { max: 2 * ticks, tickAmount: ticks });
+        } else {
+            const temps = data.temp.map(d => d[1]).filter(v => v !== null);
+            const tempRange = Math.max(...temps) - Math.min(...temps);
+            if (tempRange < 3) {
+                const mid = (Math.max(...temps) + Math.min(...temps)) / 2;
+                yTempConfig.min = Math.floor(mid - 5);
+                yTempConfig.max = Math.ceil(mid + 5);
+            }
         }
 
         // OffsetY des titres d'axes selon la taille d'écran
@@ -170,7 +193,8 @@ const Charts = {
         ];
 
         if (hasExtendedData) {
-            yaxis.push({ show: false, seriesName: 'Temp' }); // Ressenti même axe
+            // Ressenti même axe (bornes recopiées : sinon ApexCharts lui calcule sa propre plage)
+            yaxis.push({ show: false, seriesName: 'Temp', ...(scales ? { min: yTempConfig.min, max: yTempConfig.max } : {}) });
         }
 
         // Axe Vent (droite)
@@ -192,17 +216,18 @@ const Charts = {
             },
             seriesName: 'Vent',
             min: 0,
+            ...windScale,
             showAlways: true
         });
 
         if (hasExtendedData) {
-            yaxis.push({ show: false, seriesName: 'Vent' }); // Rafales même axe
+            yaxis.push({ show: false, seriesName: 'Vent', min: 0, ...windScale }); // Rafales même axe
         }
 
-        // Calculer max dynamique pour neige et pluie
-        const snowValues = data.snow.map(d => d[1]).filter(v => v !== null);
-        const rainValues = data.rain.map(d => d[1]).filter(v => v !== null);
-        const snowMax = Math.max(1.9, ...snowValues) * 1.2; // Au moins 1.5, avec 20% de marge
+        // Calculer max dynamique pour neige et pluie (communs aux modèles si scales est fourni)
+        const snowValues = scales ? [scales.snowMax] : data.snow.map(d => d[1]).filter(v => v !== null);
+        const rainValues = scales ? [scales.rainMax] : data.rain.map(d => d[1]).filter(v => v !== null);
+        const snowMax = Math.max(1.9, ...snowValues) * 1.2; // Au moins 1.9, avec 20% de marge
         const rainMax = Math.max(10, ...rainValues) * 1.2; // Au moins 10, avec 20% de marge
 
         // Axes UV et Précipitations (ordre: UV, Neige, Pluie)
@@ -225,7 +250,7 @@ const Charts = {
                 },
                 seriesName: 'UV',
                 min: 0,
-                max: 10,
+                ...uvScale,
                 showAlways: true
             },
             { show: false, min: 0, max: snowMax, showAlways: true }, // Axe Neige
@@ -837,8 +862,39 @@ const App = {
         // Ressenti et rafales : seulement en horaire, et si la source les fournit (pas MET.no)
         const hasExtendedData = sourceData.extended && dataType === 'hourly';
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
-            Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour);
+            Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour,
+                this.sharedChartScales(day, dataType));
         }
+    },
+
+    // Échelles communes aux modèles d'un jour : passer d'une case à l'autre ne change pas les axes,
+    // une heure à 1 cm a la même hauteur chez les trois. Températures et vent : tous les modèles.
+    // Neige et pluie : seulement ceux tracés au même pas (une barre de 6 h cumule six heures).
+    sharedChartScales(day, dataType) {
+        const pointData = DataService.state.data[this.state.currentPoint];
+        const temps = [], winds = [], snows = [], rains = [];
+        for (const src of Object.values(pointData.sources)) {
+            const type = Utils.getChartDataAvailability(day, src.hourly, src.sixHourly).type;
+            if (type === 'none') continue;
+            const extended = src.extended && type === 'hourly';
+            DataNormalizer.toChartData(day, src, type).forEach(d => {
+                if (d.temp !== null && d.temp !== undefined) temps.push(d.temp);
+                if (extended && d.apparent_temperature != null) temps.push(d.apparent_temperature);
+                if (d.windSpeed != null) winds.push(Utils.msToKmh(d.windSpeed));
+                if (extended && d.wind_gusts != null) winds.push(Utils.msToKmh(d.wind_gusts));
+                if (type === dataType) {
+                    snows.push(d.snow || 0);
+                    rains.push(d.rain || 0);
+                }
+            });
+        }
+        if (!temps.length) return null;
+        return {
+            tempMin: Math.min(...temps), tempMax: Math.max(...temps),
+            windMax: winds.length ? Math.max(...winds) : 0,
+            snowMax: snows.length ? Math.max(...snows) : 0,
+            rainMax: rains.length ? Math.max(...rains) : 0
+        };
     },
 
     // === Feuille des points (ouverte depuis le titre) ===

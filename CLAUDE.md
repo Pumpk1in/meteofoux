@@ -363,9 +363,9 @@ ApexCharts wrapper for multi-axis weather charts.
 - **`getSeriesColors(isDark, hasExtendedData)`** — Returns color array. Extended (Open-Meteo): 7 colors. Basic (MET.no): 5 colors. Light-theme colors are ≥ 3:1 on white
 - **`getAxisTitleColors(isDark)`** — Axis titles take the color of the series they measure (°C, km/h of the wind, UV)
 - **`getBaseOptions(isDark)`** — Base ApexCharts config: theme, grid, tooltip, legend, xaxis
-- **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour)`** — Creates multi-axis chart:
+- **`createUnifiedChart(containerId, data, isDark, hasExtendedData, iconByHour, scales)`** — Creates multi-axis chart. `scales` (from `App.sharedChartScales`) fixes the axes so they are the same for the 3 models of the day; temperature ticks are whole degrees, wind and UV use the same number of intervals so their labels sit on the grid lines:
   - Y-axis 0: Température (°C, left, orange line)
-  - Y-axis 1: Ressenti (°C, if extended, same axis as temp, line)
+  - Y-axis 1: Ressenti (°C, if extended, same axis as temp, line; its hidden axis gets the temp bounds, else ApexCharts gives it its own range)
   - Y-axis 2: Vent (km/h, right, cyan line) + Rafales (if extended, line)
   - Y-axis 3: UV (right, opposite)
   - Y-axis 4: Neige (column, blue)
@@ -431,6 +431,7 @@ Main application state & logic.
 - **`renderDayContent(day, pointData, isToday, source, sourceData)`** — Day section: header (desktop), verdict block, then the detail (chart div, cards grid, toggle buttons) tinted by the chosen model. When the chosen source has nothing that day: "n'a pas de prévision pour ce jour" (horizon) or "ne répond pas pour le moment" + Réessayer (source missing from the response)
 - **`renderCharts()`** — Iterates days, calls renderChartForDay
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`)
+- **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours)
 
 #### Custom Points (Leaflet Map)
 - **`loadLeaflet()`** — Dynamically loads Leaflet CSS/JS
