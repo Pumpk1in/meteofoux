@@ -649,6 +649,7 @@ const App = {
                 });
                 const btn = todayGrid.querySelector('.btn-more');
                 if (btn) btn.textContent = 'Replier les heures';
+                todayGrid.querySelector('.rows').setAttribute('style', Components.rowsCount(todayGrid.querySelectorAll('.card').length));
             }
         }
 
@@ -1311,6 +1312,7 @@ const App = {
             });
             btn.textContent = 'Replier les heures';
             this.state.todayHoursExpanded = true;
+            block.querySelector('.rows').setAttribute('style', Components.rowsCount(block.querySelectorAll('.card').length));
         } else {
             // Replier : cacher les cartes qui étaient cachées
             visibleExtraCards.forEach(card => {
@@ -1320,6 +1322,7 @@ const App = {
             const count = block.querySelectorAll('.hidden-card').length;
             btn.textContent = `Voir heures suivantes (${count}+)`;
             this.state.todayHoursExpanded = false;
+            block.querySelector('.rows').setAttribute('style', Components.rowsCount(block.querySelectorAll('.card:not(.hidden-card)').length));
         }
     },
 
@@ -1542,14 +1545,37 @@ const Components = {
         `;
     },
 
+    // Étiquette d'une carte de 6 h : la période et ses heures locales. Les pas sont calés sur l'heure
+    // UTC (0/6/12/18 h) : "Matin" va de 7 à 13 h l'hiver, de 8 à 14 h l'été
+    periodCardLabel(d) {
+        const from = d.getHours(), to = (from + 6) % 24 || 24;
+        return `${Utils.periodLabel(d.getUTCHours())} · ${from}–${to} h`;
+    },
+
+    // En-tête des colonnes d'une liste de bandes (les unités y sont, pas dans chaque bande).
+    // Deux exemplaires : sur ordinateur la liste tient en deux colonnes, chacune a le sien
+    rowsHead(isPeriod) {
+        const head = extra => `<div class="rows-head${isPeriod ? ' is-period' : ''}${extra}" aria-hidden="true">
+            ${isPeriod ? '' : '<span></span>'}<span></span><span class="col-temp">${isPeriod ? 'Min à max' : 'Temp.'}</span>
+            <span>Neige, pluie</span><span class="col-num">Vent km/h</span><span class="col-num">Nuages</span>
+        </div>`;
+        return head('') + head(' is-second');
+    },
+
+    // Nombre de lignes de la grille sur ordinateur : l'en-tête + la moitié des bandes visibles,
+    // pour que la liste se lise de haut en bas, colonne de gauche puis colonne de droite
+    rowsCount(visible) {
+        return `--n: ${Math.ceil(visible / 2) + 1}`;
+    },
+
     CardsGrid(entries, isToday) {
         const visibleCount = Utils.visibleCardCount();
         const cardsHtml = entries.map((entry, index) => {
             const d = Utils.parseTime(entry.time);
-            const label = isToday ? Utils.formatTimeLabel(d) : Utils.periodLabel(d.getUTCHours());
+            const label = isToday ? `${d.getHours()} h` : this.periodCardLabel(d);
             const cardData = DataNormalizer.toCardData(entry);
             const extraClass = (isToday && index >= visibleCount) ? 'hidden-card' : '';
-            return this.WeatherCard(label, cardData, extraClass);
+            return this.WeatherCard(label, cardData, extraClass, !isToday);
         }).join('');
 
         const showMoreBtn = (isToday && entries.length > visibleCount)
@@ -1562,34 +1588,28 @@ const Components = {
 
         return `
             <div class="cards-grid">
-                <div class="grid">${cardsHtml}</div>
+                <div class="rows" style="${this.rowsCount(isToday ? Math.min(visibleCount, entries.length) : entries.length)}">${this.rowsHead(!isToday)}${cardsHtml}</div>
                 ${showMoreBtn}
             </div>
         `;
     },
 
-    // Grille spéciale pour demain : périodes par défaut, toggle vers hourly
+    // Liste spéciale pour les jours suivants : périodes par défaut, toggle vers les heures
     CardsGridTomorrow(periodEntries, hourlyEntries, day) {
-        // Cartes périodes (Nuit, Matin, Midi, Soir)
         const periodCardsHtml = periodEntries.map(entry => {
             const d = Utils.parseTime(entry.time);
-            const label = Utils.periodLabel(d.getUTCHours());
-            const cardData = DataNormalizer.toCardData(entry);
-            return this.WeatherCard(label, cardData, '');
+            return this.WeatherCard(this.periodCardLabel(d), DataNormalizer.toCardData(entry), '', true);
         }).join('');
 
-        // Cartes horaires (toutes les heures)
         const hourlyCardsHtml = hourlyEntries.map(entry => {
             const d = Utils.parseTime(entry.time);
-            const label = Utils.formatTimeLabel(d);
-            const cardData = DataNormalizer.toCardData(entry);
-            return this.WeatherCard(label, cardData, '');
+            return this.WeatherCard(`${d.getHours()} h`, DataNormalizer.toCardData(entry), '', false);
         }).join('');
 
         return `
             <div class="cards-grid cards-grid-tomorrow" data-day="${day}">
-                <div class="grid grid-periods">${periodCardsHtml}</div>
-                <div class="grid grid-hourly" style="display: none;">${hourlyCardsHtml}</div>
+                <div class="rows grid-periods" style="${this.rowsCount(periodEntries.length)}">${this.rowsHead(true)}${periodCardsHtml}</div>
+                <div class="rows grid-hourly" style="display: none; ${this.rowsCount(hourlyEntries.length)}">${this.rowsHead(false)}${hourlyCardsHtml}</div>
                 <div class="show-more-wrapper">
                     <button class="btn-more btn-toggle-tomorrow" onclick="App.toggleTomorrowView(this, '${day}')">
                         Voir toutes les heures (${hourlyEntries.length})
@@ -1599,65 +1619,43 @@ const Components = {
         `;
     },
 
-    WeatherCard(label, data, extraClass = '') {
-        const { icon, temp, windDir, windSpeed, snow, rain, precipProb, snowQuality, cloudCover } = data;
+    // Une bande : heure (ou période, au-dessus), icône, température, neige/pluie, vent, nuages
+    WeatherCard(label, data, extraClass = '', isPeriod = false) {
+        const { icon, temp, tempMin, tempMax, windDir, windSpeed, snow, rain, snowQuality, cloudCover } = data;
 
         const dec = n => n.toFixed(1).replace('.', ',');
+        const deg = n => String(Math.round(n)).replace('-', '−');
 
-        let snowQualityHtml = '';
-        if (snow > 0 && snowQuality) {
-            snowQualityHtml = snowQuality === 'wet'
-                ? ` <span class="snow-quality snow-sticky">humide</span>`
-                : ` <span class="snow-quality snow-dry">sèche</span>`;
-        }
+        // Une heure : sa température. Un pas de 6 h : son minimum et son maximum
+        const tempText = tempMin !== null && tempMax !== null
+            ? (Math.round(tempMin) === Math.round(tempMax) ? `${deg(tempMax)}°` : `<span>${deg(tempMin)}° à</span> <span>${deg(tempMax)}°</span>`)
+            : (temp !== null ? `${deg(temp)}°` : '--');
 
-        let snowHtml = '';
+        let precipHtml = '';
         if (snow > 0) {
-            const snowDisplay = snow <= DataNormalizer.MIN_PRECIP
-                ? `<small>&lt; </small>${dec(DataNormalizer.MIN_PRECIP)} <small>cm</small>`
-                : `<strong>${dec(snow)}</strong> <small>cm</small>`;
-            snowHtml = `<i data-lucide="snowflake"></i> ${snowDisplay}`;
+            // Même règle que la pluie : au dixième, "< 0,1" pour une trace
+            const value = snow < 0.05 ? '<small>&lt; </small><strong>0,1</strong>' : `<strong>${dec(snow)}</strong>`;
+            const quality = snowQuality === 'wet' ? 'humide' : snowQuality === 'dry' ? 'sèche' : '';
+            precipHtml += `<span class="snow" title="Cumul de neige"><span class="precip-value">${value} <small>cm</small></span>${quality ? ` <span class="snow-quality">${quality}</span>` : ''}</span>`;
+        }
+        if (rain > 0) {
+            const value = rain < 0.05 ? '<small>&lt; </small><strong>0,1</strong>' : `<strong>${dec(rain)}</strong>`;
+            precipHtml += ` <span class="rain" title="Cumul de pluie"><span class="precip-value">${value} <small>mm</small></span></span>`;
         }
 
-        const tempDisplay = temp !== null ? Math.round(temp) : '--';
         const windKmh = Utils.msToKmh(windSpeed);
-        const windDisplay = (windDir !== null && windKmh !== null)
-            ? `${Utils.windDirection(windDir)}. ${windKmh}`
+        const windText = (windDir !== null && windKmh !== null)
+            ? `<small>${Utils.windDirection(windDir)}</small> ${windKmh}`
             : '--';
 
-        // Couverture nuageuse
-        let cloudHtml = '';
-        if (cloudCover !== null) {
-            cloudHtml = `
-                <div class="cloud-cover" title="Couverture nuageuse">
-                    <i data-lucide="cloudy" class="lucide"></i>
-                    <span>${Math.round(cloudCover)}<small>%</small></span>
-                </div>`;
-        }
-
         return `
-        <div class="card ${extraClass}">
-            <div class="time-icon">
-                <time>${label}</time>
-                <img class="icon" src="weather/svg/${icon}.svg" alt="${Utils.symbolLabel(icon)}">
-            </div>
-            <div class="temp">${tempDisplay}<span class="unit">°C</span></div>
-            <div class="data">
-                <div class="wind" title="Direction et vitesse vent">
-                    <i data-lucide="wind" class="lucide"></i>
-                    <span><strong>${windDisplay}</strong> <small>km/h</small></span>
-                </div>
-                ${cloudHtml}
-                ${snow > 0 ? `
-                    <div class="snow" title="Cumul de neige">
-                        <span>${snowHtml}${snowQualityHtml}</span>
-                    </div>` : ''}
-                ${rain > 0 ? `
-                    <div class="rain" title="Cumul de pluie">
-                        <i data-lucide="cloud-rain-wind" class="lucide"></i>
-                        <span>${rain < 0.05 ? '<small>&lt; </small><strong>0,1</strong>' : `<strong>${dec(rain)}</strong>`} <small>mm</small></span>
-                    </div>` : ''}
-            </div>
+        <div class="card${isPeriod ? ' is-period' : ''} ${extraClass}">
+            <time>${label}</time>
+            <img class="icon" src="weather/svg/${icon}.svg" alt="${Utils.symbolLabel(icon)}">
+            <div class="temp">${tempText}</div>
+            <div class="card-precip">${precipHtml}</div>
+            <div class="wind" title="Direction et vitesse du vent (km/h)">${windText}</div>
+            <div class="cloud-cover" title="Couverture nuageuse">${cloudCover !== null ? `${Math.round(cloudCover)}<small>%</small>` : ''}</div>
         </div>`;
     }
 };

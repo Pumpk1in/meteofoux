@@ -390,9 +390,6 @@ const DataService = {
 
 // Normalisation des data
 const DataNormalizer = {
-    // Seuil minimum pour afficher les précipitations
-    MIN_PRECIP: 0.5,
-
     toCardData(entry) {
         const d = entry.data;
         if (!d) return null;
@@ -400,6 +397,9 @@ const DataNormalizer = {
         return {
             icon: d.icon || 'clearsky_day',
             temp: d.temp,
+            // Pas de 6 h : la carte affiche "min à max" (une seule valeur cachait qu'il s'agit du max)
+            tempMin: d.tempMin ?? null,
+            tempMax: d.tempMax ?? null,
             windDir: d.windDir,
             windSpeed: d.windSpeed,
             snow: d.snow || 0,
@@ -425,6 +425,8 @@ const DataNormalizer = {
             time: entry.time,
             data: {
                 temp: six.tempMax,
+                tempMin: six.tempMin,
+                tempMax: six.tempMax,
                 windSpeed: six.windSpeed,
                 windDir: six.windDir,
                 snow: six.snow,

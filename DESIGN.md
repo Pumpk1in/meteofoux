@@ -97,8 +97,8 @@ components:
   weather-card:
     backgroundColor: "{colors.panneau-givre}"
     textColor: "{colors.givre-texte}"
-    rounded: "{rounded.md}"
-    padding: "0.75rem"
+    rounded: "0.6rem"
+    padding: "0.45rem 0.5rem"
   summary-bar:
     backgroundColor: "rgba(255, 255, 255, 0.05)"
     typography: "{typography.body}"
@@ -211,11 +211,11 @@ Hierarchy is carried entirely by size and weight, with the temperature as the lo
 screen.
 
 ### Hierarchy
-- **Display** (700, 1.4rem; 1.2rem under 600px): the temperature on each weather card.
+- **Display** (700, 1rem; 0.95rem for a period range): the temperature on each hourly row.
 - **Title** (600, 1.1rem; 1rem under 600px): the date in the top bar and the day header
   (capitalized).
 - **Body** (400, 0.85rem; 0.8rem under 600px): the summary bar, loading text, modal fields.
-- **Label** (400, 0.75rem): card times, card data rows, point badge, footer.
+- **Label** (400, 0.75rem): row times, point badge, footer. Row figures (snow, rain, wind, clouds) are 0.85rem, their units 0.7rem muted; column headers 0.65rem muted.
 - **Micro** (600, 0.62rem, uppercase): point pills. Smaller still: snow quality (0.65rem), the
   source toggle label (0.46rem, 700, uppercase), chart axis labels (9-10px).
 
@@ -231,30 +231,31 @@ holds the scrollable point pills above the day buttons on mobile (100px tall), a
 centred row from 768px (60px tall).
 
 Each day is a section: header (hidden under 600px), summary bar, chart (fits the column width; a
-`.chart-scroll` horizontal-scroll style exists in the CSS but is not used), then the card grid: 2 columns from 400px, 4 columns from
-600px. Today shows 4 cards then "Voir heures suivantes"; future days show 4 periods (Nuit, Matin,
-Midi, Soir) with a toggle to every hour. On mobile only the selected day renders; on desktop every
+`.chart-scroll` horizontal-scroll style exists in the CSS but is not used), then the hourly rows: one row per hour (or per 6 h period), fixed
+columns aligned across rows like a table (hour, icon, temperature, snow/rain, wind, clouds), units in
+a header above the list. One column on mobile; two from 768px, filled top to bottom (first half of
+the day on the left). Today shows 4 hours then "Voir heures suivantes"; future days show 4 periods
+(Nuit, Matin, Midi, Soir, with their local hours) with a toggle to every hour. On mobile only the selected day renders; on desktop every
 day stacks.
 
-Spacing runs on small rem steps (0.3, 0.5, 0.75, 1, 2rem): tight inside cards, 0.75rem between
-cards, 1rem between blocks of a section, 2rem between sections.
+Spacing runs on small rem steps (0.3, 0.5, 0.75, 1, 2rem): tight inside rows, 0.4rem between
+rows, 1rem between blocks of a section, 2rem between sections.
 
 ## Elevation & Depth
 
 The incumbent system is flat and layered: depth comes from stacked translucency, not shadow. The
-page gradient, then the source-tinted day section, then the frosted card (`panneau-givre`), then
-the darker data block inside the card (`rgba(0,0,0,.17)`). Fixed bars use a backdrop blur (10px),
+page gradient, then the source-tinted day section, then the frosted row (`panneau-givre`). Fixed bars use a backdrop blur (10px),
 the modal overlay a 4px blur.
 
-The only shadow is functional: a dragged point pill (`0 4px 15px rgba(0,0,0,.4)`). Cards lift 2px
-on hover.
+The only shadow is functional: a dragged point pill (`0 4px 15px rgba(0,0,0,.4)`). Rows do not react
+to hover: they are not clickable.
 
 This is recorded as current practice, **not as a rule**: the user left depth open for the redesign.
 
 ## Shapes
 
 Soft, friendly corners throughout, on a graded scale: 0.25rem for skeleton lines, 0.5rem for
-buttons, inputs and the data block, 0.75rem for cards, the chart panel and the summary bar, 1rem
+buttons and inputs, 0.6rem for hourly rows, 0.75rem for the chart panel and the summary bar, 1rem
 for day sections and the modal. Point pills and "show more" buttons are full pills (2rem); the
 delete badge and day dots are circles. Borders are 1px hairlines in `trait-givre`; the add-point
 pill uses a dashed border. `.day-section` declares its radius twice (8px, then 1rem; 1rem wins).
@@ -288,13 +289,15 @@ full-strength label). Each tap cycles Open-Meteo → AROME → MET.no.
 A rounded strip (0.75rem) of icon + figure pairs: min/max temperature, snow, rain, freezing level,
 and the covered period when the day is partial. Unavailable items fade to muted at 60% opacity.
 
-### Weather cards
-- **Corner Style:** 0.75rem.
-- **Background:** `panneau-givre`, no border.
-- **Content:** time (label, muted), 48px MET.no weather icon (40px under 600px), temperature
-  (display), then a darker inset data block (0.5rem radius) listing wind direction and speed,
-  cloud cover, snow with its quality, rain.
-- **Hover:** lifts 2px and brightens.
+### Hourly rows
+- **Corner Style:** 0.6rem; rows 0.4rem apart, at least 48px tall.
+- **Background:** `panneau-givre`, no border: the background is what separates the rows.
+- **Content:** hour on the left ("14 h"), or the period name above the row ("Matin · 7–13 h");
+  28px MET.no weather icon; temperature (display; a period shows "min° à max°"); snow in cyan
+  and rain in blue, the chart bars' colours, to the tenth, then the snow quality; wind direction
+  and speed; cloud cover. Units sit in the column header, except cm / mm.
+- **Small screens:** everything fits at 320px; a long period range wraps after "à", the snow
+  quality drops under its figure, a figure never leaves its unit.
 
 ### Chart panel
 A frosted panel (0.75rem radius, hairline border) holding the ApexCharts multi-axis chart, with

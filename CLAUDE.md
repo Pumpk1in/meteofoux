@@ -314,7 +314,7 @@ Formatting and calculation helpers.
 - **`formatDateShort(dateStr)`** — Short French date (e.g., "mer. 12 février")
 - **`formatTimeLabel(date)`** — Time HH:MM
 - **`periodLabel(hour)`** — Maps hour → period: Nuit (0–5), Matin (6–11), Midi (12–17), Soir (18–23)
-- **`visibleCardCount()`** — Returns 4 (number of cards shown initially)
+- **`visibleCardCount()`** — Returns 4 (number of hourly rows shown initially today)
 - **`parseTime(timeStr)`** — Parse GMT timestamp, appends Z if needed
 - **`getLocalDay(timeStr)`** — Extract YYYY-MM-DD local date
 - **`getDayOfWeek(dateStr)`** — 0=Sunday
@@ -341,9 +341,8 @@ API calls and data processing. Stores state per point key.
 
 Formats raw data for UI consumption.
 
-- **`MIN_PRECIP`** — 0.5 (minimum displayable precipitation)
-- **`toCardData(entry)`** — Formats a prepared entry (`entry.data`) → card display object: `{icon, temp, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}`. Same for every source
-- **`prepareEntry(entry, isToday)`** — `entry = {time, hourly, sixHourly}` (chosen source). Returns `{time, data}`: the hour (today, or the "all hours" view), else the 6h step (temperature = max of the step)
+- **`toCardData(entry)`** — Formats a prepared entry (`entry.data`) → row display object: `{icon, temp, tempMin, tempMax, windDir, windSpeed, snow, rain, precipProb, freezingPoint, snowQuality, isDay, cloudCover}` (`tempMin` / `tempMax` only for a 6 h step, else null). Same for every source
+- **`prepareEntry(entry, isToday)`** — `entry = {time, hourly, sixHourly}` (chosen source). Returns `{time, data}`: the hour (today, or the "all hours" view), else the 6h step (temperature = max of the step, plus `tempMin` / `tempMax`)
 - **`toChartData(day, sourceData, dataType)`** — Converts to ApexCharts format: array of `{time, temp, apparent_temperature, windSpeed, wind_gusts, snow, rain, uv_index, icon}`. Same for every source
 - **`computeTotals(entries)`** — `entries = [{time, data, hours}]` (an hour, or a 6h step where the source has no hours: MET.no beyond D+2). Sums snow/rain, finds min/max temps (a 6h step brings its min and max). Also returns `period` `{from, to}` (ms) when the entries cover less than 23 h of the day (MET.no has no past hours, AROME stops mid-day), `null` otherwise. A MET.no 6h step counts for 6 hours
 - **`daySummary(day, series, sourceData)`** — One source, one day: `computeTotals` plus `freezing {min, max}`, `nightMin`, `windMax` (m/s), `cloudCover`, `snowQuality`, `sixHourly`, `model` (majority model of the day). `null` when the source has nothing that day
@@ -385,9 +384,12 @@ HTML generators (return HTML strings).
 - **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
 - **`sourceLabel(key, summary)`** — Name of a source for a day: "Open-Meteo", "MET.no", and for the Météo-France chain the model that served that day (AROME, ARPEGE, Météo-France)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
-- **`CardsGrid(entries, isToday)`** — Grid of WeatherCards. Shows 4 initially, hides extras with "Voir heures suivantes" button for today
-- **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Dual grid: 4 periods (default visible) + all hourly (hidden). Toggle button switches between views
-- **`WeatherCard(label, data, extraClass)`** — Individual card: time label, weather icon (48x48 SVG, alt from `Utils.symbolLabel`), temperature, wind direction + speed, cloud cover %, snow amount (1 decimal, comma) + quality (`humide` / `sèche`), rain amount (`< 0,1` below 0.05 mm). 6 h steps without data get no card
+- **`CardsGrid(entries, isToday)`** — List of hourly rows (`.rows`): today's hours (4 shown, the rest behind "Voir heures suivantes"), or a day's 6 h periods
+- **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Two lists: the periods (`.grid-periods`, shown) and all hours (`.grid-hourly`, hidden). Toggle button switches between views
+- **`rowsHead(isPeriod)`** — Column header of a list ("Temp." or "Min à max", "Neige, pluie", "Vent km/h", "Nuages"): the units live there, not in each row. Rendered twice; the second (`.is-second`) only shows on desktop, above the right column
+- **`rowsCount(visible)`** — The list's inline style `--n` = header + half the visible rows: on desktop (≥ 768 px) the list is a two-column grid filled **top to bottom** (first half of the day on the left). `App.toggleMore` and `render()` update it when today's hours unfold
+- **`periodCardLabel(d)`** — Label of a 6 h step: period and local hours ("Matin · 7–13 h"). The steps are aligned on UTC 0/6/12/18, so local hours shift with the season
+- **`WeatherCard(label, data, extraClass, isPeriod)`** — One row (`.card`, a grid with fixed columns aligned across rows): hour ("14 h") on the left, or the period name above the row; weather icon (28 px SVG, alt from `Utils.symbolLabel`); temperature (a period: "min° à max°", one value if both round alike; it may wrap after "à" at 320 px); snow (cyan) and rain (blue), the chart's colours, to the tenth, `< 0,1` below 0.05, snow quality (`humide` / `sèche`) after it; wind direction + speed; cloud cover %. 6 h steps without data get no row
 
 ### App Module
 
@@ -432,7 +434,7 @@ Main application state & logic.
 - **`toggleTheme()`** — Switches dark ↔ light, re-renders (only once the point has data), saves to localStorage
 
 #### Rendering
-- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, cards grid, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
+- **`renderDayContent(day, pointData, isToday)`** — Day section: header (desktop), verdict block, then the detail (`.day-detail[data-source]`, tinted by the model of that day, see `daySource`): "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day), chart div, hourly rows, toggle buttons. When the source has nothing that day: "ne répond pas pour le moment" + Réessayer (source missing from the response), or "n'a pas de prévision pour ce jour" if no model covers it
 - **`renderCharts()`** — Iterates days, calls renderChartForDay with the source of that day (`daySource`)
 - **`renderChartForDay(day, dataType, sourceData)`** — Formats chart data, calls Charts.createUnifiedChart (apparent temperature and gusts only if `sourceData.extended`, and only with `chartDetails`)
 - **`sharedChartScales(day, dataType)`** — Axis bounds common to the models of the day: temperature (and apparent temperature) and wind (and gusts) over all sources; snow and rain only over sources charted at the same step (a 6 h bar sums six hours). Apparent temperature and gusts count only when shown (`chartDetails`): otherwise they would leave empty space at the top
@@ -487,7 +489,8 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
 | `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |
-| `.day-detail` | Chart + cards, tinted by the chosen model |
+| `.day-detail` | Chart + hourly rows, tinted by the chosen model |
+| `.rows` > `.rows-head` + `.card` | Hourly rows: fixed columns (`--col-*`), one background per row, 0.4rem apart; two columns from 768 px (`--n`) |
 | `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
 | `.skeleton-loader` | Loading state with pulse animation |
 
@@ -504,9 +507,7 @@ The day detail gets a background tint per source via its own `data-source` attri
 
 ### Responsive Breakpoints
 
-- **≥768px** — Desktop: bottom-nav horizontal, all days visible
-- **≥600px** — Tablet: 4-column card grid
-- **≥400px** — Mobile: 2-column card grid
+- **≥768px** — Desktop: bottom-nav horizontal, all days visible, hourly rows in two columns
 - **<400px** — Small mobile: adjusted chart height, hidden day-header
 
 ### ApexCharts Layout Notes
