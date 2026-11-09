@@ -506,7 +506,7 @@ The day detail gets a background tint per source via the `data-source` attribute
 ### ApexCharts Layout Notes
 
 - No legend and no axis titles inside the chart: the key and the units are HTML (`chartHeadHtml`, `.chart-key` / `.chart-units` in style.css)
-- `grid.padding` (left -28, right -70): the plot runs under the tick columns, so it keeps the full width
+- `grid.padding` (left -9, right -66, top -12): the data is centred in the card (the first hour label stays inside it), the °C column sits left of the data, the km/h and UV columns over its right end; `top` trims the gap under the units. Chart height 210 / 250 px (mobile / desktop): the key is outside the chart
 - `labels.offsetX` places each tick column: °C at 12 px from the left edge, wind and UV under "km/h" and "UV". On an **opposite** (right) axis, a more negative value moves the column **right**
 - Moving a column means moving its unit too (`.chart-unit-wind` / `.chart-unit-uv`, `right` in px): both are measured from the card edges, identical on mobile and desktop
 

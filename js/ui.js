@@ -62,7 +62,8 @@ const Charts = {
             grid: {
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                 strokeDashArray: 3,
-                padding: { left: -28, right: -70, top: 0, bottom: 0 }
+                // Données centrées dans la carte (la 1re heure n'en déborde plus) ; top : moins de vide sous les unités
+                padding: { left: -9, right: -66, top: -12, bottom: 0 }
             },
             tooltip: {
                 theme: isDark ? 'dark' : 'light',
@@ -235,7 +236,8 @@ const Charts = {
             chart: {
                 ...this.getBaseOptions(isDark).chart,
                 type: 'line',
-                height: Utils.isMobile() ? 260 : 300,
+                // La clé est en HTML au-dessus : 50 px de moins pour garder la hauteur de tracé d'avant
+                height: Utils.isMobile() ? 210 : 250,
                 id: containerId,
                 stacked: false,
                 zoom: {
