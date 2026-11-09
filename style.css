@@ -152,9 +152,13 @@ body {
 }
 
 .point-title-date {
+    max-width: 100%;
+    overflow: hidden;
     font-size: 0.75rem;
     font-weight: 400;
     color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .point-dot {
@@ -291,10 +295,14 @@ body {
     text-align: center;
     padding: 2rem 1rem;
     color: var(--muted);
-    background: rgba(168, 85, 247, 0.08);
-    border: 1px dashed rgba(168, 85, 247, 0.3);
+    border: 1px dashed var(--border-strong);
     border-radius: 8px;
     margin: 0;
+}
+
+.no-data-message .btn-more {
+    display: block;
+    margin: 1rem auto 0;
 }
 
 .no-data-message p {
@@ -1306,11 +1314,53 @@ footer details p {
    ============================================ */
 .error {
     text-align: center;
-    padding: 2rem;
-    color: #ef4444;
+    padding: 1.5rem 1.25rem;
+    color: var(--text);
     background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: 1rem;
     margin: 1rem;
+}
+
+.error p {
+    margin: 0 0 0.75rem;
+    line-height: 1.45;
+}
+
+.error .error-detail {
+    margin: 1rem 0 0;
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+/* ============================================
+   FIABILITÉ : fraîcheur, rafraîchissement, échec
+   ============================================ */
+:root { --warn: #fbbf24; }
+[data-theme="light"] { --warn: #b45309; }
+
+/* Prévisions anciennes (cache servi faute de sources, ou plus d'une heure) */
+.point-title-date.is-stale {
+    color: var(--warn);
+    font-weight: 600;
+}
+
+/* Rafraîchissement : le contenu reste lisible, estompé, jusqu'à la nouvelle réponse */
+#content.is-refreshing {
+    opacity: 0.55;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+/* Message en tête du contenu (rafraîchissement impossible) */
+.notice {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--warn);
+    border-radius: 0.75rem;
+    background: rgba(251, 191, 36, 0.1);
+    font-size: 0.85rem;
+    line-height: 1.4;
 }
 
 /* ============================================

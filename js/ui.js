@@ -405,14 +405,17 @@ const App = {
 
             // Charger les autres points en arrière-plan (la feuille des points se complète au fur et à mesure)
             DataService.loadRemaining(false, () => this.refreshPointSheet());
+
+            // "mis à jour il y a X min" reste juste si l'onglet reste ouvert
+            setInterval(() => this.updateTopBar(), 60000);
         } catch (e) {
             console.error("Erreur chargement:", e);
             document.getElementById('content').innerHTML = `
-                <div class="error">
-                    <p>Erreur de chargement: ${e.message}</p>
-                    <button class="btn-more" onclick="location.reload()" style="margin-top: 1rem;">
-                        Réessayer
-                    </button>
+                <div class="error" role="alert">
+                    <p><strong>Impossible de charger les prévisions.</strong></p>
+                    <p>Vérifiez la connexion, puis réessayez. Si le problème persiste, les services météo sont peut-être momentanément indisponibles.</p>
+                    <button class="btn-more" onclick="location.reload()">Réessayer</button>
+                    <p class="error-detail">Détail : ${Utils.escapeHtml(e.message)}</p>
                 </div>`;
         }
     },
@@ -492,8 +495,25 @@ const App = {
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
             const formatted = Utils.formatDateShort(this.state.currentDay);
-            dateEl.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+            const freshness = this.freshness(DataService.state.data[this.state.currentPoint]?.meta);
+            dateEl.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1)
+                + (freshness ? ` · ${freshness.text}` : '');
+            dateEl.classList.toggle('is-stale', !!freshness?.stale);
         }
+    },
+
+    // Âge des prévisions affichées. Anciennes : le proxy a servi son cache faute de réponse des
+    // sources, ou les données ont plus d'une heure (onglet resté ouvert, réseau coupé)
+    freshness(meta) {
+        if (!meta?.generated_at) return null;
+        const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(meta.generated_at)) / 60000));
+        const age = minutes < 1 ? 'à l’instant'
+            : minutes < 60 ? `il y a ${minutes} min`
+            : `il y a ${Math.floor(minutes / 60)} h`;
+        const stale = !!meta.stale || minutes >= 60;
+        // Court : la ligne tient sur un téléphone à côté de la date
+        const text = !stale ? `màj ${age}` : minutes < 1 ? 'données en cache' : `données d’${age}`;
+        return { stale, text };
     },
 
     selectDay(day) {
@@ -556,23 +576,51 @@ const App = {
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
     },
 
+    // Rafraîchit sans rien effacer : les prévisions restent affichées (estompées) jusqu'à la
+    // nouvelle réponse ; en cas d'échec (réseau faible sur les pistes), elles sont conservées
     async refreshData() {
         const btn = document.getElementById('refresh-btn');
+        const content = document.getElementById('content');
+        if (btn.classList.contains('refreshing')) return;
         btn.classList.add('refreshing');
+        content.classList.add('is-refreshing');
+        content.setAttribute('aria-busy', 'true');
 
-        // Afficher le skeleton pendant le chargement
-        document.getElementById('content').innerHTML = Components.Skeleton();
-        lucide.createIcons();
-
+        const current = CONFIG.points.find(p => p.key === this.state.currentPoint);
         try {
-            DataService.state.data = {};
-            await DataService.loadFirst(true, this.state.currentPoint);
+            await DataService.loadSinglePoint(current, true);
             this.renderDayNav();
             this.render();
-            await DataService.loadRemaining(true, () => this.refreshPointSheet());
+        } catch (e) {
+            console.error('Rafraîchissement impossible :', e);
+            const freshness = this.freshness(DataService.state.data[current.key]?.meta);
+            this.showNotice(`Rafraîchissement impossible (réseau ou service météo indisponible). `
+                + `Les prévisions affichées sont conservées${freshness ? ` (${freshness.text.replace('màj ', 'mises à jour ')})` : ''}.`);
         } finally {
             btn.classList.remove('refreshing');
+            content.classList.remove('is-refreshing');
+            content.removeAttribute('aria-busy');
         }
+
+        // Les autres points, en arrière-plan ; un échec garde simplement leurs anciennes données
+        for (const point of CONFIG.points.filter(p => p.key !== current.key)) {
+            try {
+                await DataService.loadSinglePoint(point, true);
+                this.refreshPointSheet();
+            } catch (e) {
+                console.warn(`Rafraîchissement de ${point.key} impossible :`, e.message);
+            }
+        }
+    },
+
+    // Message en tête du contenu (remplacé au prochain rendu)
+    showNotice(text) {
+        document.querySelector('#content .notice')?.remove();
+        const notice = document.createElement('div');
+        notice.className = 'notice';
+        notice.setAttribute('role', 'status');
+        notice.textContent = text;
+        document.getElementById('content').prepend(notice);
     },
 
     render() {
@@ -648,7 +696,9 @@ const App = {
 
         // Verdict du jour selon tous les modèles disponibles (bloc en tête du jour)
         const { summaries, verdict } = DataNormalizer.dayVerdict(pointData, day);
-        const verdictHtml = Components.Verdict(verdict, summaries, source);
+        // Sources présentes dans la réponse du proxy : une absente n'a pas répondu (429, panne)
+        const available = Object.keys(pointData.sources);
+        const verdictHtml = Components.Verdict(verdict, summaries, source, available);
 
         // Créneaux du jour (chronologie commune), avec les données de la source choisie
         const dayEntries = series
@@ -657,17 +707,19 @@ const App = {
 
         // Pas de données de cette source pour ce jour (AROME couvre ~4-5 jours, source indisponible)
         if (!summaries[source]) {
-            const label = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' }[source];
-            const hint = source === 'arome' ? 'AROME ne prévoit qu’à 4 ou 5 jours. ' : '';
+            const label = { openmeteo: 'Open-Meteo', arome: 'Météo-France', metno: 'MET.no' }[source];
+            const message = available.includes(source)
+                ? `<p>${label} n’a pas de prévision pour ce jour</p>
+                   <small>${source === 'arome' ? 'AROME puis ARPEGE ne prévoient qu’à 4 jours environ. ' : ''}Choisissez un autre modèle ci-dessus.</small>`
+                : `<p>${label} ne répond pas pour le moment</p>
+                   <small>Les autres modèles restent affichés ci-dessus.</small>
+                   <button class="btn-more" onclick="App.refreshData()">Réessayer</button>`;
             return `
                 <section class="day-section" data-day="${day}" id="day-${day}">
                     ${dayHeaderHtml}
                     ${verdictHtml}
                     <div class="day-detail">
-                        <div class="no-data-message">
-                            <p>${label} n’a pas de prévision pour ce jour</p>
-                            <small>${hint}Choisissez un autre modèle ci-dessus.</small>
-                        </div>
+                        <div class="no-data-message">${message}</div>
                     </div>
                 </section>
             `;
@@ -1280,8 +1332,9 @@ const Components = {
 
     // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,
     // puis une case par modèle (preuve du verdict et choix du modèle affiché en détail).
-    // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null }
-    Verdict(verdict, summaries, selected) {
+    // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null },
+    // available = sources présentes dans la réponse du proxy (une absente n'a pas répondu)
+    Verdict(verdict, summaries, selected, available) {
         if (!verdict) return '';
         // La source "arome" est la chaîne Météo-France : AROME jusque vers J+2, puis ARPEGE.
         // La case porte le nom du modèle qui a vraiment servi ce jour-là.
@@ -1343,7 +1396,8 @@ const Components = {
                     <button class="model-cell is-${key}" disabled>
                         <span class="model-name">${LABELS[key]}</span>
                         <span class="model-value">—</span>
-                        <span class="model-sub">${key === 'arome' ? 'Ne prévoit pas si loin' : 'Pas de données'}</span>
+                        <span class="model-sub">${!available.includes(key) ? 'Ne répond pas'
+                            : key === 'arome' ? 'Ne prévoit pas si loin' : 'Pas de prévision ce jour'}</span>
                     </button>`;
             }
             const amount = mode === 'snow' ? s.snow : s.rain;

@@ -354,7 +354,8 @@ const DataService = {
         });
         const series = [...times].sort().map(time => ({ time }));
 
-        return { point, series, elevation, sources };
+        // meta : generated_at (fraîcheur), stale (cache servi faute de sources), http_* (statuts)
+        return { point, series, elevation, sources, meta: rawData.meta || {} };
     },
 
     indexByTime(data, mapper) {
