@@ -141,6 +141,24 @@ const Utils = {
     // Nombre de cartes visibles avant le bouton "Voir heures suivantes"
     visibleCardCount: () => 4,
 
+    // Description d'une icône MET.no (texte alternatif) : "lightsnowshowers_day" → "Averses de neige faibles"
+    symbolLabel(code) {
+        if (!code) return '';
+        let base = code.replace(/_(day|night|polartwilight)$/, '');
+        const thunder = base.includes('andthunder') ? ' et orage' : '';
+        base = base.replace('andthunder', '');
+        const SKY = { clearsky: 'Ciel dégagé', fair: 'Beau temps', partlycloudy: 'Éclaircies', cloudy: 'Nuageux', fog: 'Brouillard' };
+        if (SKY[base]) return SKY[base];
+        // "lights" : faute de frappe d'origine de MET.no (lightssleetshowers..., lightssnowshowers...)
+        const m = base.match(/^(lights?|heavy)?(rain|sleet|snow)(showers)?$/);
+        if (!m) return 'Temps prévu';
+        const kind = { rain: 'pluie', sleet: 'pluie et neige mêlées', snow: 'neige' }[m[2]];
+        const intensity = !m[1] ? '' : m[1].startsWith('light') ? ' faible' : ' forte';
+        return m[3]
+            ? `Averses de ${kind}${intensity && intensity + 's'}${thunder}`
+            : `${kind.charAt(0).toUpperCase()}${kind.slice(1)}${intensity}${thunder}`;
+    },
+
     // Échappe le texte destiné à être injecté en HTML (noms de points saisis par l'utilisateur)
     escapeHtml: (str) => String(str).replace(/[&<>"']/g, c =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),

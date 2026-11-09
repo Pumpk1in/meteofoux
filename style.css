@@ -25,7 +25,7 @@
     --card: rgba(255, 255, 255, 1);
     --card-hover: #f8fafc;
     --text: #1e293b;
-    --muted: #596a81;
+    --muted: #4a5568;
     --text-soft: #334155;
     --border: rgba(0, 0, 0, 0.08);
     --border-strong: rgba(0, 0, 0, 0.18);
@@ -176,8 +176,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 0.5rem;
     border: 1px solid var(--border);
     background: rgba(30, 41, 59, 0.4);
@@ -218,8 +218,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 0.5rem;
     border: 1px solid var(--border);
     background: rgba(30, 41, 59, 0.4);
@@ -270,16 +270,18 @@ body {
     background: rgba(67, 40, 15, 0.5);
 }
 
-[data-theme="light"][data-source="openmeteo"] body {
-    background: rgba(115, 179, 235, 0.5);
+/* Thème clair : seule la zone de détail prend la teinte du modèle, légère, pour que la page
+   reste claire au soleil (l'ancien fond de page teinté à 50 % délavait tout) */
+[data-theme="light"][data-source="openmeteo"] .day-detail {
+    background: rgba(14, 165, 233, 0.1);
 }
 
-[data-theme="light"][data-source="arome"] body{
-    background: rgba(150, 110, 216, 0.5);
+[data-theme="light"][data-source="arome"] .day-detail {
+    background: rgba(168, 85, 247, 0.1);
 }
 
-[data-theme="light"][data-source="metno"] body {
-    background: rgba(221, 155, 93, 0.5);
+[data-theme="light"][data-source="metno"] .day-detail {
+    background: rgba(245, 146, 40, 0.12);
 }
 
 /* ============================================
@@ -726,6 +728,11 @@ main {
     display: none !important;
 }
 
+/* Entrées de légende (cliquables : masquent une série) : zone de toucher agrandie */
+.apexcharts-legend-series {
+    padding: 6px 2px !important;
+}
+
 /* Padding sur la légende pour compenser les marges négatives du chart */
 .apexcharts-legend {
     padding: 0 28px 0 15px!important;
@@ -841,12 +848,17 @@ main {
 }
 
 .cloud-cover .lucide {
-    stroke: #94a3b8;
+    stroke: var(--muted);
+}
+
+/* Unités (km/h, mm, cm, %) : plus petites que la valeur, mais lisibles */
+.data small {
+    font-size: 0.7rem;
 }
 
 .snow-quality {
-    font-size: 0.65rem;
-    opacity: 0.9;
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
 .snow-dry {
@@ -857,8 +869,12 @@ main {
     color: #8dd7a5;
 }
 
+[data-theme="light"] .snow-dry {
+    color: #0369a1;
+}
+
 [data-theme="light"] .snow-sticky {
-    color: #64a879;
+    color: #2f7a4a;
 }
 
 /* ============================================
@@ -880,7 +896,7 @@ main {
 }
 
 [data-theme="light"] .lucide[data-lucide="wind"] {
-    stroke: #92c9a2;
+    stroke: #2f7a4a;
 }
 
 .lucide[data-lucide="snowflake"] {
@@ -899,6 +915,20 @@ main {
     stroke: #7dd3fc;
 }
 
+/* Thème clair : icônes foncées, ≥ 3:1 sur fond blanc (les teintes pastel disparaissaient au soleil) */
+[data-theme="light"] .lucide[data-lucide="snowflake"],
+[data-theme="light"] .lucide[data-lucide="thermometer-snowflake"] {
+    stroke: #0369a1;
+}
+
+[data-theme="light"] .lucide[data-lucide="cloud-rain-wind"] {
+    stroke: #1d4ed8;
+}
+
+[data-theme="light"] .lucide[data-lucide="thermometer"] {
+    stroke: #b91c1c;
+}
+
 /* ============================================
    BUTTONS
    ============================================ */
@@ -911,6 +941,7 @@ main {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--text);
+    min-height: 44px;
     padding: 0.6rem 1.2rem;
     border-radius: 2rem;
     font-size: 0.8rem;
@@ -1159,18 +1190,20 @@ footer details {
 }
 
 footer summary {
-    color:rgb(67, 194, 188);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    color: var(--accent);
     cursor: pointer;
-    text-align: center;
-    opacity: 0.7;
 }
 
 footer summary:hover {
-    opacity: 1;
+    text-decoration: underline;
 }
 
 [data-theme="light"] footer summary {
-    color: rgb(15, 118, 110);
+    color: #0369a1;
 }
 
 footer details p {
@@ -1304,8 +1337,14 @@ footer details p {
     to { transform: translateY(0); }
 }
 
+/* Mouvement réduit demandé par le système : plus d'animations ni de transitions nulle part
+   (feuille, fenêtre d'ajout, squelette de chargement, rotation du bouton rafraîchir) */
 @media (prefers-reduced-motion: reduce) {
-    .sheet, .sheet-backdrop { animation: none; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 .sheet-header {
@@ -1582,8 +1621,12 @@ button.sheet-row:hover,
 }
 
 .modal-close {
+    width: 44px;
+    height: 44px;
+    margin: -0.5rem -0.6rem -0.5rem 0;
     background: none;
     border: none;
+    border-radius: 0.6rem;
     color: var(--muted);
     font-size: 1.5rem;
     cursor: pointer;
@@ -1619,16 +1662,18 @@ button.sheet-row:hover,
 
 .modal-field input {
     width: 100%;
+    min-height: 44px;
     padding: 0.5rem 0.7rem;
     border-radius: 0.5rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     background: var(--bg);
     color: var(--text);
-    font-size: 0.9rem;
-    outline: none;
+    font-size: 1rem;  /* 16 px : iOS ne zoome pas la page au focus */
 }
 
-.modal-field input:focus {
+.modal-field input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
     border-color: var(--accent);
 }
 
@@ -1661,10 +1706,11 @@ button.sheet-row:hover,
 }
 
 .btn-gps-toggle {
+    min-height: 44px;
     background: none;
     border: none;
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     cursor: pointer;
     padding: 0;
 }
@@ -1719,6 +1765,7 @@ button.sheet-row:hover,
 }
 
 .modal-btn {
+    min-height: 44px;
     padding: 0.5rem 1.2rem;
     border-radius: 0.5rem;
     border: 1px solid var(--border);
@@ -1736,10 +1783,11 @@ button.sheet-row:hover,
     color: var(--text);
 }
 
+/* Bleu foncé : le blanc sur le bleu ciel de l'accent n'atteignait que 2,1:1 */
 .modal-btn-confirm {
-    background: var(--accent);
+    background: #0369a1;
     color: white;
-    border-color: var(--accent);
+    border-color: #0369a1;
     font-weight: 600;
 }
 

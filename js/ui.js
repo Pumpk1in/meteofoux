@@ -6,19 +6,25 @@
 // Gestionnaire de graphiques ApexCharts
 const Charts = {
     instances: {},
-    instanceMeta: {}, // Stocke hasExtendedData par containerId
 
     // Couleurs des séries selon le thème
     getSeriesColors(isDark, hasExtendedData) {
         if (hasExtendedData) {
             return isDark
                 ? ['#f97316', '#fdba74', '#98dfb6', '#39b36c', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#ea580c', '#ff933e', '#16a34a', '#6abf70', '#fbbf24', '#0ea5e9', '#2563eb']; // light
+                : ['#c2410c', '#ea580c', '#15803d', '#16a34a', '#b45309', '#0891b2', '#1d4ed8']; // light : ≥ 3:1 sur blanc
         } else {
             return isDark
                 ? ['#f97316', '#98dfb6', '#fbbf24', '#e0f2fe', '#3b82f6']  // dark
-                : ['#ea580c', '#16a34a', '#fbbf24', '#0ea5e9', '#2563eb']; // light
+                : ['#c2410c', '#15803d', '#b45309', '#0891b2', '#1d4ed8']; // light
         }
+    },
+
+    // Titres d'axes : la couleur de la série qu'ils mesurent (°C, km/h du vent, UV)
+    getAxisTitleColors(isDark) {
+        return isDark
+            ? { temp: '#f97316', wind: '#98dfb6', uv: '#fbbf24' }
+            : { temp: '#c2410c', wind: '#15803d', uv: '#b45309' };
     },
 
     // Marqueurs de légende : cercle pointillé pour les séries dashed, plein pour les autres
@@ -121,9 +127,6 @@ const Charts = {
         const strokeWidth = hasExtendedData ? [3, 1.5, 2, 1.5, 2, 0, 0] : [3, 2, 2, 0, 0];
         const strokeDash = hasExtendedData ? [0, 4, 0, 4, 0, 0, 0] : [0, 0, 0, 0, 0];
 
-        // Stocker la métadonnée pour updateTheme
-        this.instanceMeta[containerId] = { hasExtendedData, strokeDash };
-
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
         let yTempConfig = { seriesName: 'Temp' };
@@ -144,6 +147,7 @@ const Charts = {
         const width = window.innerWidth;
         const baseTitleOffsetY = width < 480 ? -90 : (width < 768 ? -100 : -120);
         const titleOffsetY = hasExtendedData ? baseTitleOffsetY : baseTitleOffsetY - 10;
+        const axisTitle = this.getAxisTitleColors(isDark);
 
         const yaxis = [
             // Axe Température (gauche)
@@ -153,7 +157,7 @@ const Charts = {
                     rotate: 0,
                     offsetX: 20,
                     offsetY: titleOffsetY,
-                    style: { color: '#f97316', fontSize: '10px' }
+                    style: { color: axisTitle.temp, fontSize: '11px' }
                 },
                 labels: {
                     formatter: v => Math.round(v) + '°',
@@ -179,7 +183,7 @@ const Charts = {
                 rotate: 0,
                 offsetX: -25,
                 offsetY: titleOffsetY,
-                style: { color: '#06b6d4', fontSize: '10px' }
+                style: { color: axisTitle.wind, fontSize: '11px' }
             },
             labels: {
                 formatter: v => Math.round(v),
@@ -212,7 +216,7 @@ const Charts = {
                     rotate: 0,
                     offsetX: -20,
                     offsetY: titleOffsetY,
-                    style: { color: '#fbbf24', fontSize: '10px' }
+                    style: { color: axisTitle.uv, fontSize: '11px' }
                 },
                 labels: {
                     formatter: v => v.toFixed(0),
@@ -315,27 +319,6 @@ const Charts = {
     destroyAll() {
         Object.values(this.instances).forEach(chart => chart.destroy());
         this.instances = {};
-        this.instanceMeta = {};
-    },
-
-    // Met à jour le thème de tous les graphiques
-    updateTheme(isDark) {
-        Object.entries(this.instances).forEach(([containerId, chart]) => {
-            const meta = this.instanceMeta[containerId] || { hasExtendedData: true };
-            const colors = this.getSeriesColors(isDark, meta.hasExtendedData);
-            const strokeDash = meta.strokeDash || (meta.hasExtendedData ? [0, 4, 0, 4, 0, 0, 0] : [0, 0, 0, 0, 0]);
-            chart.updateOptions({
-                theme: { mode: isDark ? 'dark' : 'light' },
-                grid: { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
-                tooltip: { theme: isDark ? 'dark' : 'light' },
-                colors,
-                legend: {
-                    labels: { colors: isDark ? '#94a3b8' : '#6b7280' },
-                    markers: this.getLegendMarkers(colors, strokeDash)
-                },
-                xaxis: { labels: { style: { colors: isDark ? '#94a3b8' : '#6b7280' } } }
-            });
-        });
     },
 
     // Ajoute les icônes météo sous les labels de l'axe X
@@ -564,7 +547,10 @@ const App = {
         this.state.theme = this.state.theme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', this.state.theme);
         localStorage.setItem('fmeteo_theme', this.state.theme);
-        Charts.updateTheme(this.state.theme === 'dark');
+        // Les graphiques sont recréés : séries ET titres d'axes changent de teinte avec le thème
+        const scrollY = window.scrollY;
+        this.render();
+        window.scrollTo(0, scrollY);
         // Mettre à jour la couleur du navigateur mobile
         const themeColor = this.state.theme === 'dark' ? '#0f172a' : '#f8fafc';
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
@@ -1458,18 +1444,20 @@ const Components = {
     WeatherCard(label, data, extraClass = '') {
         const { icon, temp, windDir, windSpeed, snow, rain, precipProb, snowQuality, cloudCover } = data;
 
+        const dec = n => n.toFixed(1).replace('.', ',');
+
         let snowQualityHtml = '';
         if (snow > 0 && snowQuality) {
             snowQualityHtml = snowQuality === 'wet'
-                ? ` • <span class="snow-quality snow-sticky">hum.</span>`
-                : ` • <span class="snow-quality snow-dry">sec.</span>`;
+                ? ` <span class="snow-quality snow-sticky">humide</span>`
+                : ` <span class="snow-quality snow-dry">sèche</span>`;
         }
 
         let snowHtml = '';
         if (snow > 0) {
             const snowDisplay = snow <= DataNormalizer.MIN_PRECIP
-                ? `<small>< </small>${DataNormalizer.MIN_PRECIP}<small>cm</small>`
-                : `<strong>${snow.toFixed(2)}<small>cm</small></strong>`;
+                ? `<small>&lt; </small>${dec(DataNormalizer.MIN_PRECIP)} <small>cm</small>`
+                : `<strong>${dec(snow)}</strong> <small>cm</small>`;
             snowHtml = `<i data-lucide="snowflake"></i> ${snowDisplay}`;
         }
 
@@ -1493,7 +1481,7 @@ const Components = {
         <div class="card ${extraClass}">
             <div class="time-icon">
                 <time>${label}</time>
-                <img class="icon" src="weather/svg/${icon}.svg" alt="icon">
+                <img class="icon" src="weather/svg/${icon}.svg" alt="${Utils.symbolLabel(icon)}">
             </div>
             <div class="temp">${tempDisplay}<span class="unit">°C</span></div>
             <div class="data">
@@ -1506,10 +1494,10 @@ const Components = {
                     <div class="snow" title="Cumul de neige">
                         <span>${snowHtml}${snowQualityHtml}</span>
                     </div>` : ''}
-                ${rain > 0 ? `
+                ${rain >= 0.05 ? `
                     <div class="rain" title="Cumul de pluie">
                         <i data-lucide="cloud-rain-wind" class="lucide"></i>
-                        <span><strong>${rain.toFixed(2)}</strong> <small>mm</small></span>
+                        <span><strong>${dec(rain)}</strong> <small>mm</small></span>
                     </div>` : ''}
             </div>
         </div>`;
