@@ -475,7 +475,12 @@ const DataNormalizer = {
         divergeSnowCm: 2,     // écart minimal entre modèles pour dire qu'ils divergent (neige)
         divergeRainMm: 3,     // idem pour la pluie
         divergeRatio: 1.5,    // ... et rapport minimal entre le plus fort et le plus faible
-        divergeTempC: 3       // jour sec : écart de min ou de max entre modèles
+        divergeTempC: 3,      // jour sec : écart de min ou de max entre modèles
+        // Contradiction : les modèles ne racontent pas la même journée (0 contre 17 cm), prévision
+        // peu fiable. Novembre 2026 : 7 jours de neige/pluie sur 26, les écarts du type 6 / 13 mm n'y sont pas
+        contradictSnowCm: 5,  // écart minimal (neige)
+        contradictRainMm: 10, // idem pour la pluie
+        contradictRatio: 4    // ... et rapport minimal entre le plus fort et le plus faible
     },
 
     // Résumé d'un jour pour UNE source : totaux, isotherme 0 °C, et ce dont le verdict a besoin
@@ -571,7 +576,7 @@ const DataNormalizer = {
         const tempMin = mins.length ? Math.min(...mins) : null;
         const tempMax = maxs.length ? Math.max(...maxs) : null;
 
-        let range, diverge = null;
+        let range, diverge = null, contradict = false;
         if (mode === 'dry') {
             range = { lo: tempMin, hi: tempMax };
             if (list.length > 1) diverge = spread(mins) >= T.divergeTempC || spread(maxs) >= T.divergeTempC;
@@ -581,6 +586,8 @@ const DataNormalizer = {
             if (list.length > 1) {
                 diverge = (range.hi - range.lo) >= (mode === 'snow' ? T.divergeSnowCm : T.divergeRainMm)
                     && range.hi / Math.max(range.lo, 0.1) >= T.divergeRatio;
+                contradict = (range.hi - range.lo) >= (mode === 'snow' ? T.contradictSnowCm : T.contradictRainMm)
+                    && range.hi / Math.max(range.lo, 0.1) >= T.contradictRatio;
             }
         }
 
@@ -603,6 +610,7 @@ const DataNormalizer = {
             basis,  // sources retenues pour la fourchette et l'accord
             range,
             diverge,
+            contradict,  // écart tel que la prévision est peu fiable (neige ou pluie seulement)
             tempMin,
             tempMax,
             freezing,

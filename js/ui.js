@@ -1369,7 +1369,8 @@ const Components = {
     },
 
     // Le gros chiffre du verdict : fourchette entre modèles de la grandeur qui décide de la journée
-    // (températures un jour sec). Quand le plus faible est à zéro, "jusqu'à 18" plutôt que "0 à 18"
+    // (températures un jour sec). Quand le plus faible est à zéro, "jusqu'à 18" plutôt que "0 à 18",
+    // sauf si les modèles se contredisent : "0 à 17" montre alors les deux bouts
     // (prefix, à afficher avant value)
     verdictValue(verdict) {
         const deg = n => String(Math.round(n)).replace('-', '−');
@@ -1378,8 +1379,9 @@ const Components = {
         const lo = this.verdictAmount(mode, range.lo), hi = this.verdictAmount(mode, range.hi);
         const unit = mode === 'snow' ? 'cm' : 'mm';
         if (basis.length === 1 || lo === hi) return { prefix: '', value: hi, unit };
-        if (Number(lo.replace(',', '.')) === 0) return { prefix: 'jusqu’à', value: hi, unit };
-        return { prefix: '', value: `${lo} à ${hi}`, unit };
+        const loIsZero = Number(lo.replace(',', '.')) === 0;
+        if (loIsZero && !verdict.contradict) return { prefix: 'jusqu’à', value: hi, unit };
+        return { prefix: '', value: `${loIsZero ? '0' : lo} à ${hi}`, unit };  // "0 à 26,8", pas "0,0 à 26,8"
     },
 
     // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,
@@ -1419,9 +1421,12 @@ const Components = {
             what = mode === 'snow' ? `de neige${quality}${verdict.alsoRain ? ', et de la pluie' : ''}` : 'de pluie';
         }
         const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
-        // Accord : une puce. Divergence : rien de plus, la fourchette et les cases juste en dessous la montrent déjà
-        const agreeHtml = verdict.diverge === false
-            ? '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>' : '';
+        // Accord : une puce. Contradiction (0 contre 17 cm) : une alerte, la prévision est peu fiable.
+        // Simple divergence : rien de plus, la fourchette et les cases juste en dessous la montrent déjà
+        const agreeHtml = verdict.contradict
+            ? '<span class="verdict-agree is-warn"><i data-lucide="triangle-alert"></i>Peu fiable : les modèles se contredisent</span>'
+            : verdict.diverge === false
+                ? '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>' : '';
         const helpOpen = App.state.modelsHelpOpen;
 
         const facts = [];
@@ -1436,11 +1441,12 @@ const Components = {
             facts.push(['wind', `Vent ${kmh < 20 ? 'faible' : kmh < 40 ? 'modéré' : 'fort'}, ${kmh} km/h au plus`]);
         }
         if (verdict.freezing.position) {
-            // Isotherme 0 °C, en mots simples : l'altitude au-dessus de laquelle il gèle
+            // Isotherme 0 °C, en mots simples : l'altitude au-dessus de laquelle il gèle.
+            // La conclusion d'abord (par rapport au point), les altitudes ensuite
             const pos = { above: 'plus haut que le point', below: 'plus bas que le point', around: 'à hauteur du point' }[verdict.freezing.position];
             const r10 = v => Math.round(v / 10) * 10;
             const lo = r10(verdict.freezing.min), hi = r10(verdict.freezing.max);
-            facts.push(['thermometer-snowflake', `Limite du gel ${lo === hi ? `vers ${hi}` : `entre ${lo} et ${hi}`} m, ${pos}`]);
+            facts.push(['thermometer-snowflake', `Limite du gel ${pos} (${lo === hi ? hi : `${lo}–${hi}`} m)`]);
         }
 
         const cells = Object.keys(LABELS).map(key => {

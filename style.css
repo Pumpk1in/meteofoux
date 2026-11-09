@@ -557,6 +557,13 @@ main {
     flex-shrink: 0;
 }
 
+/* Modèles qui se contredisent : prévision peu fiable */
+.verdict-agree.is-warn {
+    border-color: var(--warn);
+    color: var(--warn);
+    font-weight: 600;
+}
+
 /* "?" collé à "selon les 3 modèles" : cible de 44 px sans agrandir la ligne */
 .verdict-help-btn {
     display: inline-flex;
