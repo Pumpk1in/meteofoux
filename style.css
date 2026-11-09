@@ -11,6 +11,7 @@
     --text-soft: #cbd5e1;
     --border-strong: rgba(255, 255, 255, 0.18);
     --accent: #38bdf8;
+    --focus: var(--accent);   /* Contour de focus clavier */
     --accent2: #a78bfa;
     --accent3: #f472b6;
     --border: rgba(255, 255, 255, 0.08);
@@ -27,6 +28,7 @@
     --text: #1e293b;
     --muted: #4a5568;
     --text-soft: #334155;
+    --focus: #0369a1;         /* --accent ne fait que 2,1:1 sur blanc */
     --border: rgba(0, 0, 0, 0.08);
     --border-strong: rgba(0, 0, 0, 0.18);
 }
@@ -128,7 +130,7 @@ body {
 }
 
 .point-title:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
@@ -380,7 +382,7 @@ body {
 }
 
 .day-btn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
@@ -465,13 +467,27 @@ main {
     font-weight: 600;
 }
 
+/* Point en tête du jour (ordinateur) : pastille neutre + point de couleur, comme le titre en haut.
+   Du blanc sur la couleur du point tombait à 1,5:1 (jaune) - 3:1 (bleu de la Station) */
 .point-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.75rem;
-    padding: 0.3rem 0.6rem;
+    padding: 0.3rem 0.65rem;
     border-radius: 2rem;
-    background: var(--point-color);
-    color: white;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-soft);
     font-weight: 500;
+}
+
+.point-badge::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--point-color);
 }
 
 /* ============================================
@@ -563,7 +579,7 @@ main {
 }
 
 .verdict-help-btn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: -6px;
 }
 
@@ -651,7 +667,7 @@ main {
 }
 
 .model-cell:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
@@ -878,7 +894,7 @@ main {
 }
 
 .chart-details-btn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: -8px;
     border-radius: 0.5rem;
 }
@@ -1116,6 +1132,14 @@ main {
 /* Thème clair : blanc plein au survol (la règle sombre le rendait plus transparent, donc plus foncé) */
 [data-theme="light"] .btn-more:hover {
     background: #ffffff;
+}
+
+/* Même contour de focus clavier que le reste de l'interface (au lieu de l'anneau du navigateur) */
+.btn-more:focus-visible,
+.refresh-btn:focus-visible,
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
 }
 
 /* ============================================
@@ -1413,6 +1437,11 @@ footer details p {
     main {
         padding: 1.5rem;
     }
+
+    /* Barre du haut alignée sur le contenu (900 px centrés, 1,5rem de marge intérieure) */
+    .top-bar {
+        padding: 0 max(1.5rem, calc(50% - 450px + 1.5rem));
+    }
 }
 
 /* ============================================
@@ -1421,6 +1450,10 @@ footer details p {
 @media (max-width: 600px) {
     main {
         padding: 0.8rem;
+    }
+
+    .top-bar {
+        padding: 0 0.8rem; /* Aligné sur le contenu */
     }
 
     .day-detail {
@@ -1633,7 +1666,7 @@ button.sheet-row:hover,
 .sheet-icon-btn:focus-visible,
 .sheet-edit:focus-visible,
 .sheet-add:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
@@ -1873,7 +1906,7 @@ button.sheet-row:hover,
 }
 
 .modal-field input:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus);
     outline-offset: 1px;
     border-color: var(--accent);
 }

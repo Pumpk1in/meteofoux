@@ -465,6 +465,7 @@ Main application state & logic.
 --card: rgba(255,255,255, 0.075);  --card-hover: rgba(255,255,255, 0.09);
 --text: #e5e7eb;         --muted: #94a3b8;         --text-soft: #cbd5e1;
 --accent: #38bdf8;       --accent2: #a78bfa;       --accent3: #f472b6;
+--focus: var(--accent);  /* keyboard focus outline; light theme: #0369a1 (--accent is 2.1:1 on white) */
 --border: rgba(255,255,255, 0.08);                 --border-strong: rgba(255,255,255, 0.18);
 --warn: #fbbf24;
 --top-bar-height: 60px;  --bottom-nav-height: 64px;
@@ -478,7 +479,8 @@ itself is not tinted by the source. See `DESIGN.md` for the visual system.
 
 | Class | Description |
 |-------|-------------|
-| `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme |
+| `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme. Its side padding follows `main`, so title and buttons line up with the content |
+| `.point-badge` | Point in the desktop day header: neutral pill + the point's color as a dot (white text on the point color fell to 1.5:1) |
 | `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (48 px) with `.day-indicator` |
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |

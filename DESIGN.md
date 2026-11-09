@@ -156,7 +156,8 @@ names something: a source, a point, or a weather quantity.
 
 ### Primary
 - **Bleu poudreuse** (`bleu-poudreuse`): the single interface accent. Active day, loaders, focus
-  border of inputs, the confirm button. It is also Open-Meteo's identity hue, which is why the
+  border of inputs, the confirm button. Keyboard focus outlines use `--focus`: this blue in dark
+  mode, its darker variant `#0369a1` in light mode (≥ 3:1 on white). It is also Open-Meteo's identity hue, which is why the
   default source and the interface accent read as one.
 
 ### Secondary: source identity
