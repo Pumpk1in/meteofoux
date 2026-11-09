@@ -54,6 +54,20 @@ function get_model_value($data, $key, $index, $models_priority) {
 }
 
 /**
+ * Le modèle qui fournit la valeur que get_model_value() retient : le premier de la chaîne
+ * qui n'est pas null. null si aucun modèle de la chaîne n'en a (repli non suffixé compris).
+ * Sert à dire au front quel modèle a vraiment servi (la chaîne "AROME" passe à ARPEGE vers J+2).
+ */
+function get_model_source($data, $key, $index, $models_priority) {
+    foreach ($models_priority as $model) {
+        if (isset($data[$key . '_' . $model][$index]) && $data[$key . '_' . $model][$index] !== null) {
+            return $model;
+        }
+    }
+    return null;
+}
+
+/**
  * Détermine si les précipitations tombent sous forme de neige
  * Critère : température humide <= SNOW_WET_BULB_THRESHOLD.
  *
@@ -577,8 +591,19 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
             $is_day = ($hour >= 7 && $hour < 17);
         }
 
+        // Aucun modèle de la chaîne n'a de données à cette heure (au-delà de son horizon) :
+        // la ligne reste vide plutôt que d'annoncer 0 mm, un ciel clair et un isotherme
+        // "corrigé" à l'altitude du point
+        if ($temp === null) {
+            $precip = null;
+            $freezing_point = null;
+            $freezing_corrected = false;
+            $weather_code = null;
+        }
+
         $rows[] = [
             'time' => $time,
+            'model' => get_model_source($hourly, 'temperature_2m', $i, $prio_hd),
             'temperature' => $temp,
             'apparent_temperature' => $apparent,
             'dew_point' => $dew,
@@ -692,6 +717,7 @@ function metno_rows($metno, $period = 'next_1_hours') {
 function derive_hourly(array $rows) {
     $enriched = [
         'time' => [],
+        'model' => [],  // Modèle qui a servi à cette heure (chaîne Open-Meteo), null sinon
         'temperature' => [],
         'apparent_temperature' => [],
         'dew_point' => [],
@@ -719,17 +745,24 @@ function derive_hourly(array $rows) {
         $temp = $row['temperature'];
         $dew = $row['dew_point'];
 
-        $classified = classify_precipitation($row['precipitation'], $temp, $dew, $row['humidity'], $row['wind_speed']);
-        $rain = $classified['rain'];
-        $snowfall = $classified['snowfall_roebber'];
-
-        if ($row['symbol_code'] !== null && $snowfall <= 0 && $rain <= 0) {
-            $symbol = $row['symbol_code'];
+        if ($row['precipitation'] === null) {
+            // Ligne sans données (au-delà de l'horizon de la source) : rien à classer ni à dessiner
+            $classified = ['rain' => null, 'snowfall_roebber' => null, 'roebber_slr' => null];
+            $rain = $snowfall = $symbol = null;
         } else {
-            $symbol = determine_symbol($snowfall, $rain, $row['weather_code'], (bool)$row['is_day'], $row['showers'], $row['thunder']);
+            $classified = classify_precipitation($row['precipitation'], $temp, $dew, $row['humidity'], $row['wind_speed']);
+            $rain = $classified['rain'];
+            $snowfall = $classified['snowfall_roebber'];
+
+            if ($row['symbol_code'] !== null && $snowfall <= 0 && $rain <= 0) {
+                $symbol = $row['symbol_code'];
+            } else {
+                $symbol = determine_symbol($snowfall, $rain, $row['weather_code'], (bool)$row['is_day'], $row['showers'], $row['thunder']);
+            }
         }
 
         $enriched['time'][] = $row['time'];
+        $enriched['model'][] = $row['model'] ?? null;
         $enriched['temperature'][] = $temp;
         $enriched['apparent_temperature'][] = $row['apparent_temperature'];
         $enriched['dew_point'][] = $dew;
@@ -737,18 +770,18 @@ function derive_hourly(array $rows) {
         $enriched['wind_speed'][] = $row['wind_speed'] !== null ? round($row['wind_speed'], 1) : null;
         $enriched['wind_direction'][] = $row['wind_direction'];
         $enriched['wind_gusts'][] = $row['wind_gusts'] !== null ? round($row['wind_gusts'], 1) : null;
-        $enriched['precipitation'][] = round($row['precipitation'], 4);
+        $enriched['precipitation'][] = $row['precipitation'] !== null ? round($row['precipitation'], 4) : null;
         $enriched['rain'][] = $rain;
         $enriched['snowfall'][] = $snowfall;
         $enriched['snowfall_roebber'][] = $classified['snowfall_roebber'];
-        $enriched['roebber_slr'][] = round($classified['roebber_slr'], 1);
+        $enriched['roebber_slr'][] = $classified['roebber_slr'] !== null ? round($classified['roebber_slr'], 1) : null;
         $enriched['precipitation_probability'][] = $row['precipitation_probability'];
         $enriched['freezing_point'][] = $row['freezing_point'];
         $enriched['freezing_point_corrected'][] = $row['freezing_point_corrected'];
         $enriched['cloud_cover'][] = $row['cloud_cover'];
         $enriched['weather_code'][] = $row['weather_code'];
         $enriched['symbol_code'][] = $symbol;
-        $enriched['snow_quality'][] = get_snow_quality($snowfall, $temp, $dew);
+        $enriched['snow_quality'][] = $snowfall !== null ? get_snow_quality($snowfall, $temp, $dew) : null;
         $enriched['uv_index'][] = $row['uv_index'] !== null ? round($row['uv_index'], 1) : null;
         $enriched['is_day'][] = $row['is_day'] ? 1 : 0;
     }
@@ -909,20 +942,24 @@ function aggregate_hourly_to_6h($hourly) {
         $avg_dew = !empty($dew_points) ? array_sum($dew_points) / count($dew_points) : null;
         $snow_quality = get_snow_quality($snowfall_sum, $avg_temp, $avg_dew);
         
+        // Aucune heure du pas n'a de données (au-delà de l'horizon de la source) : le pas sort
+        // vide, sans cumul à 0 ni icone de ciel clair
+        $has_data = !empty($temps);
+
         $six_hourly['time'][] = $timestamp;
         $six_hourly['temperature_min'][] = !empty($temps) ? round(min($temps), 1) : null;
         $six_hourly['temperature_max'][] = !empty($temps) ? round(max($temps), 1) : null;
         $six_hourly['wind_speed_max'][] = !empty($wind_speeds) ? round(max($wind_speeds), 1) : null;
         $six_hourly['wind_direction'][] = !empty($wind_dirs) ? round(array_sum($wind_dirs) / count($wind_dirs)) : null;
-        $six_hourly['precipitation'][] = round($precip_sum, 4);
-        $six_hourly['rain'][] = round($rain_sum, 4);
-        $six_hourly['snowfall'][] = round($snowfall_sum, 4);
-        $six_hourly['snowfall_roebber'][] = round($snowfall_roebber_sum, 2);
+        $six_hourly['precipitation'][] = $has_data ? round($precip_sum, 4) : null;
+        $six_hourly['rain'][] = $has_data ? round($rain_sum, 4) : null;
+        $six_hourly['snowfall'][] = $has_data ? round($snowfall_sum, 4) : null;
+        $six_hourly['snowfall_roebber'][] = $has_data ? round($snowfall_roebber_sum, 2) : null;
         $six_hourly['precipitation_probability'][] = $prob_max;
         $six_hourly['freezing_point'][] = $average_freezing_point;
         $six_hourly['freezing_point_corrected'][] = $freezing_any_corrected;
-        $six_hourly['weather_code'][] = $dominant_wmo;
-        $six_hourly['symbol_code'][] = $symbol;
+        $six_hourly['weather_code'][] = $has_data ? $dominant_wmo : null;
+        $six_hourly['symbol_code'][] = $has_data ? $symbol : null;
         $six_hourly['snow_quality'][] = $snow_quality;
         $six_hourly['uv_index_max'][] = $uv_max > 0 ? round($uv_max, 1) : null;
         $six_hourly['cloud_cover'][] = !empty($cloud_covers) ? round(array_sum($cloud_covers) / count($cloud_covers)) : null;

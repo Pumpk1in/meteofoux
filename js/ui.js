@@ -695,9 +695,9 @@ const App = {
             const nowMs = new Date().getTime();
             displayEntries = dayEntries.filter(e => e.hourly && Utils.parseTime(e.time).getTime() >= nowMs - 3600000);
         } else {
-            // Les 4 périodes (6h)
+            // Les 4 périodes (6h) ; un pas sans données (fin d'horizon de la source) n'a pas de carte
             displayEntries = dayEntries
-                .filter(e => e.sixHourly && Utils.parseTime(e.time).getUTCHours() % 6 === 0)
+                .filter(e => e.sixHourly && e.sixHourly.tempMax !== null && Utils.parseTime(e.time).getUTCHours() % 6 === 0)
                 .slice(0, 4);
             // ET toutes les heures (pour le toggle), si la source en a pour ce jour
             hourlyEntries = dayEntries.filter(e => e.hourly && e.hourly.temp !== null);
@@ -1297,7 +1297,19 @@ const Components = {
     // verdict = DataNormalizer.computeVerdict(), summaries = { source: daySummary | null }
     Verdict(verdict, summaries, selected) {
         if (!verdict) return '';
-        const LABELS = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' };
+        // La source "arome" est la chaîne Météo-France : AROME jusque vers J+2, puis ARPEGE.
+        // La case porte le nom du modèle qui a vraiment servi ce jour-là.
+        const MODEL_LABELS = {
+            meteofrance_arome_france_hd: 'AROME',
+            meteofrance_arome_france: 'AROME',
+            meteofrance_arpege_seamless: 'ARPEGE',
+            meteofrance_seamless: 'Météo-France'
+        };
+        const SOURCE_LABELS = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' };
+        const LABELS = {};
+        for (const key of Object.keys(SOURCE_LABELS)) {
+            LABELS[key] = (key === 'arome' && MODEL_LABELS[summaries[key]?.model]) || SOURCE_LABELS[key];
+        }
         const dec = n => n.toFixed(1).replace('.', ',');
         const deg = n => String(Math.round(n)).replace('-', '−');
         const hourLabel = (ms, isEnd) => {

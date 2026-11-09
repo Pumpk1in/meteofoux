@@ -373,6 +373,36 @@ check('reindexation', array_keys($m), [0, 1, 2]);
 $m = merge_metno_timeseries([], $new, $cutoff);
 check('cache vide', count($m), 2);
 
+section('Chaine AROME : modele de chaque heure, et rien d invente au-dela de l horizon');
+// AROME s'arrete vers J+2, ARPEGE prend le relais jusque vers J+4, puis plus rien. La source
+// "arome" doit dire quel modele a servi, et une heure sans aucun modele ne doit pas devenir
+// "0 mm, ciel clair, isotherme a l'altitude du point".
+$arome_raw = ['hourly' => [
+    'time' => ['2026-11-10T23:00', '2026-11-11T00:00', '2026-11-14T00:00'],
+    'temperature_2m_meteofrance_arome_france_hd' => [5.0, null, null],
+    'temperature_2m_meteofrance_arpege_seamless' => [4.8, 3.3, null],
+    'dew_point_2m_meteofrance_arome_france_hd' => [4.0, null, null],
+    'dew_point_2m_meteofrance_arpege_seamless' => [4.0, 2.0, null],
+    'precipitation_meteofrance_arome_france_hd' => [0.4, null, null],
+    'precipitation_meteofrance_arpege_seamless' => [0.2, 0, null],
+    'freezing_level_height_meteofrance_arpege_seamless' => [2900, 2800, null],
+]];
+$h = enrich_openmeteo_hourly($arome_raw, 1794, arome_priorities());
+check('modele de chaque heure (AROME HD, puis ARPEGE, puis aucun)', $h['model'],
+    ['meteofrance_arome_france_hd', 'meteofrance_arpege_seamless', null]);
+check('heure ARPEGE : son 0 mm est une vraie valeur', $h['precipitation'][1], 0.0);
+check('heure sans modele : pas de precipitation inventee', $h['precipitation'][2], null);
+check('heure sans modele : ni pluie ni neige inventees', [$h['rain'][2], $h['snowfall'][2]], [null, null]);
+check('heure sans modele : pas d isotherme invente', [$h['freezing_point'][2], $h['freezing_point_corrected'][2]], [null, false]);
+check('heure sans modele : pas d icone inventee', $h['symbol_code'][2], null);
+// Un pas de 6 h dont aucune heure n'a de donnees sort vide, lui aussi
+$beyond = ['hourly' => ['time' => array_map(fn($k) => sprintf('2026-11-14T%02d:00', $k), range(0, 5))]];
+$six = aggregate_hourly_to_6h(enrich_openmeteo_hourly($beyond, 1794, arome_priorities()));
+check('pas de 6 h sans donnees : temperatures vides', [$six['temperature_min'][0], $six['temperature_max'][0]], [null, null]);
+check('pas de 6 h sans donnees : pas de cumul invente',
+    [$six['precipitation'][0], $six['rain'][0], $six['snowfall'][0], $six['snowfall_roebber'][0]], [null, null, null, null]);
+check('pas de 6 h sans donnees : ni icone ni isotherme', [$six['symbol_code'][0], $six['freezing_point'][0]], [null, null]);
+
 // ================= RESULTAT =================
 
 echo "\n" . str_repeat('-', 46) . "\n";

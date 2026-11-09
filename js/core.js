@@ -277,6 +277,7 @@ const DataService = {
         const createHourlyData = (agg) => this.indexByTime(agg?.hourly, (data, idx) => {
 
             return {
+                model: data.model?.[idx] ?? null,  // modèle qui a servi (la chaîne AROME passe à ARPEGE vers J+2)
                 temp: data.temperature[idx],
                 apparent_temperature: data.apparent_temperature?.[idx] ?? data.temperature[idx],
                 dewPoint: data.dew_point[idx],
@@ -478,8 +479,11 @@ const DataNormalizer = {
         }
 
         let nightMin = null, windMax = null;
-        const clouds = [], qualities = [];
+        const clouds = [], qualities = [], models = {};
         entries.forEach(({ time, data, hours }) => {
+            if (data.model && data.temp !== null && data.temp !== undefined) {
+                models[data.model] = (models[data.model] || 0) + 1;
+            }
             const low = hours === 6 ? data.tempMin : data.temp;
             if (low !== null && low !== undefined && Utils.parseTime(time).getHours() < 6) {
                 nightMin = nightMin === null ? low : Math.min(nightMin, low);
@@ -500,7 +504,9 @@ const DataNormalizer = {
             snowQuality: qualities.length
                 ? (qualities.filter(q => q === 'dry').length > qualities.length / 2 ? 'dry' : 'wet')
                 : null,
-            sixHourly: entries.some(e => e.hours === 6)
+            sixHourly: entries.some(e => e.hours === 6),
+            // Modèle qui a servi le plus d'heures ce jour-là (null si la source ne le dit pas)
+            model: Object.keys(models).sort((a, b) => models[b] - models[a])[0] || null
         };
     },
 
