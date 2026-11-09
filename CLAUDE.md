@@ -88,6 +88,8 @@ METEOFOUX/
 ├── DESIGN.md               # Visual system: tokens, components, rules (Impeccable)
 ├── .impeccable/            # Design sidecar, confirmed screen brief (surfaces/), critiques
 ├── index.php               # SPA entry point (HTML + filemtime asset versioning)
+├── partials/
+│   └── skeleton.html       # Loading skeleton, shared by the first paint and App.showSkeleton()
 ├── meteo-proxy.php         # HTTP plumbing: params, cache, cURL, output
 ├── lib/
 │   └── weather.php         # All weather logic (pure, no I/O) — the testable core
@@ -379,7 +381,7 @@ ApexCharts wrapper for multi-axis weather charts.
 
 HTML generators (return HTML strings).
 
-- **`Skeleton()`** — Loading skeleton: animated chart bars, then 4 hourly rows on the real row grid (`.rows.skeleton-rows`, `--n: 2`). Same markup inlined in `index.php` for the first paint
+- **`Skeleton()`** — Loading skeleton, from `partials/skeleton.html` (via `<template id="skeleton-template">` in `index.php`, which also inlines it in `#content` for the first paint). It mirrors a day block for block with the page's own classes (`.verdict`, `.model-cell`, `.day-detail`, `.chart-wrapper`, `.rows`), so the data lands within a few pixels of it: verdict figure, sentence (two lines on mobile), two facts, three model cells, the detail in the chosen model's colour, the chart at its real height (210 / 250 px), the column header and 4 rows. `.skeleton.sk` = a block in place of a line of text (0.8em + 0.2em margins = the line height). `index.php` also renders 7 placeholder day buttons
 - **`Verdict(verdict, summaries, selected, available)`** — Block at the top of each day: big number of the decisive quantity across models, "de neige humide, selon les 3 modèles" + a "?" button (`App.toggleModelsHelp`) that unfolds a plain-language note on the three models under the cells, "Les modèles s’accordent" chip when they agree, an amber "Peu fiable : les modèles se contredisent" chip when they contradict (nothing on a mere divergence: the range and the cells just below already show it), facts (temperatures, "Limite du gel plus haut que le point (2860–3280 m)" = freezing level vs the point, conclusion first; on a dry day night refreeze and wind), then one cell per model, AROME first (the default), then Open-Meteo and MET.no (value, bar, "2° à 3°" / covered period / "Toutes les 6 h"). The cells select the model shown in detail (`App.selectSource`). The Météo-France cell is labelled AROME, ARPEGE or Météo-France from the day's `model`. Missing source: "Ne répond pas" (not in `available`) vs "Ne prévoit pas si loin"
 - **`verdictValue(verdict)`** — `{prefix, value, unit}`: the big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). When the lowest model rounds to zero, `prefix` = "jusqu'à" and `value` = the highest ("jusqu'à 18 cm", not "0 à 18"), except when the models contradict: "0 à 17 cm" then shows both ends. Shared with the point sheet and the day bar (spoken label)
 - **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
@@ -387,7 +389,7 @@ HTML generators (return HTML strings).
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — List of hourly rows (`.rows`): today's hours (4 shown, the rest behind "Voir heures suivantes"), or a day's 6 h periods
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Two lists: the periods (`.grid-periods`, shown) and all hours (`.grid-hourly`, hidden). Toggle button switches between views
-- **`rowsHead(isPeriod)`** — Column header of a list ("Temp." or "Min à max", "Neige, pluie", "Vent km/h", "Nuages"): the units live there, not in each row. Rendered twice; the second (`.is-second`) only shows on desktop, above the right column
+- **`rowsHead(isPeriod)`** — Column header of a list ("Temp." or "Min à max", "Neige, pluie", "Vent km/h", "Nuages"): the units live there, not in each row. "Vent km/h" stays on one line (`nowrap`, overflowing left of its narrow column; no overlap from 340 px, "Neige, pluie" still wraps at 320 px). Rendered twice; the second (`.is-second`) only shows on desktop, above the right column
 - **`rowsCount(visible)`** — The list's inline style `--n` = header + half the visible rows: on desktop (≥ 768 px) the list is a two-column grid filled **top to bottom** (first half of the day on the left). `App.toggleMore` and `render()` update it when today's hours unfold
 - **`periodCardLabel(d)`** — Label of a 6 h step: period and local hours ("Matin · 7–13 h"). The steps are aligned on UTC 0/6/12/18, so local hours shift with the season
 - **`WeatherCard(label, data, extraClass, isPeriod)`** — One row (`.card`, a grid with fixed columns aligned across rows): hour ("14 h") on the left, or the period name above the row; weather icon (28 px SVG, alt from `Utils.symbolLabel`); temperature (a period: "min° à max°", one value if both round alike; it may wrap after "à" at 320 px); snow (cyan) and rain (blue), the chart's colours, to the tenth, `< 0,1` below 0.05, snow quality (`humide` / `sèche`) after it; wind direction + speed; cloud cover %. 6 h steps without data get no row
@@ -454,7 +456,8 @@ Main application state & logic.
 - **`confirmDeletePoint(key)`** — Delete point, switch to the first point if current, re-render (sheet included)
 
 #### Interactions
-- **`refreshData()`** — Force-refresh without wiping anything: the content stays on screen (dimmed, `aria-busy`) until the current point answers; on failure the old data stays with a notice. The other points are then refreshed in the background. One refresh at a time
+- **`refreshData()`** — Force-refresh: the page skeleton (`showSkeleton`) until the current point answers; on failure the old data comes back with a notice. The other points are then refreshed in the background. One refresh at a time
+- **`showSkeleton()`** — Puts the skeleton in `#content` (`aria-busy`, charts destroyed), the detail in the chosen model's colour (`tintSkeleton`, also applied to the first-paint skeleton in `init`). `render()` clears `aria-busy`
 - **`showNotice(text)`** — Message at the top of the content (replaced on the next render)
 - **`toggleMore(btn)`** — Expand "Voir heures suivantes" for today
 - **`toggleTomorrowView(btn, day)`** — Toggle between 4 periods & all hourly for future days
@@ -492,7 +495,7 @@ by the source: the day detail keeps a neutral background with a 3px border in th
 | `.day-detail` | Chart + hourly rows, in the colour of the model shown (tint in dark mode, border in light mode) |
 | `.rows` > `.rows-head` + `.card` | Hourly rows: fixed columns (`--col-*`), one background per row, 0.4rem apart; two columns from 768 px (`--n`) |
 | `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
-| `.skeleton-loader` | Loading state with pulse animation |
+| `.skeleton-loader` | Loading skeleton (`partials/skeleton.html`): the page's own classes with `.skeleton` blocks, pulse animation |
 
 ### Source Color Indicators
 

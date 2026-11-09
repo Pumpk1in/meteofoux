@@ -1,0 +1,43 @@
+<!-- Squelette de chargement : la page d'un jour, bloc pour bloc, avec les classes de la vraie page
+     (mêmes hauteurs, pas de saut à l'arrivée des données). Inséré par index.php dans #content au
+     démarrage et dans <template id="skeleton-template"> pour App.showSkeleton() (rafraîchissement,
+     point pas encore chargé). Le détail prend la couleur du modèle choisi (data-source, posé en JS). -->
+<div class="skeleton-loader" aria-hidden="true">
+    <section class="day-section">
+        <h2 class="day-header"><span class="skeleton sk" style="width: 11rem"></span></h2>
+        <div class="verdict">
+            <p class="verdict-main"><span class="skeleton sk-display"></span></p>
+            <p class="verdict-sub"><span class="skeleton sk" style="width: 92%"></span><span class="skeleton sk sk-mobile" style="width: 55%"></span></p>
+            <ul class="verdict-facts">
+                <li><span class="skeleton sk" style="width: 6rem"></span></li>
+                <li><span class="skeleton sk" style="width: 15rem; max-width: 85%"></span></li>
+            </ul>
+            <div class="verdict-models">
+                <div class="model-cell"><span class="skeleton sk sk-micro" style="width: 3.5rem"></span><span class="skeleton sk" style="width: 4rem"></span><span class="model-bar"></span><span class="skeleton sk sk-micro" style="width: 3rem"></span></div>
+                <div class="model-cell"><span class="skeleton sk sk-micro" style="width: 4.5rem"></span><span class="skeleton sk" style="width: 4rem"></span><span class="model-bar"></span><span class="skeleton sk sk-micro" style="width: 3rem"></span></div>
+                <div class="model-cell"><span class="skeleton sk sk-micro" style="width: 3.5rem"></span><span class="skeleton sk" style="width: 4rem"></span><span class="model-bar"></span><span class="skeleton sk sk-micro" style="width: 3rem"></span></div>
+            </div>
+        </div>
+        <div class="day-detail" data-source="arome">
+            <p class="detail-source"><span class="skeleton sk" style="width: 9rem"></span></p>
+            <div class="chart-wrapper chart-full">
+                <div class="chart-head">
+                    <div class="chart-key"><span class="skeleton sk sk-micro" style="width: 12rem"></span></div>
+                    <div class="chart-units-row"></div>
+                </div>
+                <div class="sk-chart">
+                    <span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span>
+                </div>
+            </div>
+            <!-- Sur ordinateur : l'en-tête + 2 bandes par colonne (variable n de la grille) -->
+            <div class="rows skeleton-rows" style="--n: 3">
+                <div class="rows-head"><span class="skeleton sk sk-micro" style="grid-column: 3 / -1; width: 70%; justify-self: end"></span></div>
+                <div class="rows-head is-second"><span class="skeleton sk sk-micro" style="grid-column: 3 / -1; width: 70%; justify-self: end"></span></div>
+                <div class="card"><span class="skeleton sk-time"></span><span class="skeleton sk-icon"></span><span class="skeleton sk-temp"></span><span class="skeleton sk-precip"></span><span class="skeleton sk-wind"></span><span class="skeleton sk-cloud"></span></div>
+                <div class="card"><span class="skeleton sk-time"></span><span class="skeleton sk-icon"></span><span class="skeleton sk-temp"></span><span class="skeleton sk-precip"></span><span class="skeleton sk-wind"></span><span class="skeleton sk-cloud"></span></div>
+                <div class="card"><span class="skeleton sk-time"></span><span class="skeleton sk-icon"></span><span class="skeleton sk-temp"></span><span class="skeleton sk-precip"></span><span class="skeleton sk-wind"></span><span class="skeleton sk-cloud"></span></div>
+                <div class="card"><span class="skeleton sk-time"></span><span class="skeleton sk-icon"></span><span class="skeleton sk-temp"></span><span class="skeleton sk-precip"></span><span class="skeleton sk-wind"></span><span class="skeleton sk-cloud"></span></div>
+            </div>
+        </div>
+    </section>
+</div>

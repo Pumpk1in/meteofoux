@@ -51,89 +51,24 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
 </header>
 
 <!-- Contenu principal -->
-<main id="content">
-    <!-- Skeleton loader initial (remplacé par JS) -->
-    <div class="skeleton-loader">
-        <div class="skeleton-text">
-            <i data-lucide="loader-2" class="lucide lucide-spin"></i>
-            <span>Chargement des prévisions...</span>
-        </div>
-        <div class="skeleton-section">
-            <div class="skeleton-summary">
-                <div class="skeleton-summary-item skeleton" style="width: 80px"></div>
-                <div class="skeleton-summary-item skeleton" style="width: 70px"></div>
-                <div class="skeleton-summary-item skeleton" style="width: 75px"></div>
-                <div class="skeleton-summary-item skeleton" style="width: 65px"></div>
-            </div>
-            <div class="skeleton-chart">
-                <div class="skeleton-bar skeleton" style="height: 40%"></div>
-                <div class="skeleton-bar skeleton" style="height: 65%"></div>
-                <div class="skeleton-bar skeleton" style="height: 55%"></div>
-                <div class="skeleton-bar skeleton" style="height: 80%"></div>
-                <div class="skeleton-bar skeleton" style="height: 70%"></div>
-                <div class="skeleton-bar skeleton" style="height: 50%"></div>
-                <div class="skeleton-bar skeleton" style="height: 75%"></div>
-                <div class="skeleton-bar skeleton" style="height: 60%"></div>
-                <div class="skeleton-bar skeleton" style="height: 45%"></div>
-                <div class="skeleton-bar skeleton" style="height: 70%"></div>
-                <div class="skeleton-bar skeleton" style="height: 85%"></div>
-                <div class="skeleton-bar skeleton" style="height: 55%"></div>
-                <div class="skeleton-bar skeleton" style="height: 40%"></div>
-                <div class="skeleton-bar skeleton" style="height: 60%"></div>
-                <div class="skeleton-bar skeleton" style="height: 75%"></div>
-                <div class="skeleton-bar skeleton" style="height: 50%"></div>
-                <div class="skeleton-bar skeleton" style="height: 65%"></div>
-                <div class="skeleton-bar skeleton" style="height: 45%"></div>
-                <div class="skeleton-bar skeleton" style="height: 55%"></div>
-                <div class="skeleton-bar skeleton" style="height: 70%"></div>
-                <div class="skeleton-bar skeleton" style="height: 60%"></div>
-                <div class="skeleton-bar skeleton" style="height: 50%"></div>
-                <div class="skeleton-bar skeleton" style="height: 65%"></div>
-                <div class="skeleton-bar skeleton" style="height: 45%"></div>
-            </div>
-            <!-- Mêmes colonnes que les bandes horaires (--n : 2 bandes par colonne sur ordinateur) -->
-            <div class="rows skeleton-rows" style="--n: 2">
-                <div class="card">
-                    <span class="skeleton sk-time"></span>
-                    <span class="skeleton sk-icon"></span>
-                    <span class="skeleton sk-temp"></span>
-                    <span class="skeleton sk-precip"></span>
-                    <span class="skeleton sk-wind"></span>
-                    <span class="skeleton sk-cloud"></span>
-                </div>
-                <div class="card">
-                    <span class="skeleton sk-time"></span>
-                    <span class="skeleton sk-icon"></span>
-                    <span class="skeleton sk-temp"></span>
-                    <span class="skeleton sk-precip"></span>
-                    <span class="skeleton sk-wind"></span>
-                    <span class="skeleton sk-cloud"></span>
-                </div>
-                <div class="card">
-                    <span class="skeleton sk-time"></span>
-                    <span class="skeleton sk-icon"></span>
-                    <span class="skeleton sk-temp"></span>
-                    <span class="skeleton sk-precip"></span>
-                    <span class="skeleton sk-wind"></span>
-                    <span class="skeleton sk-cloud"></span>
-                </div>
-                <div class="card">
-                    <span class="skeleton sk-time"></span>
-                    <span class="skeleton sk-icon"></span>
-                    <span class="skeleton sk-temp"></span>
-                    <span class="skeleton sk-precip"></span>
-                    <span class="skeleton sk-wind"></span>
-                    <span class="skeleton sk-cloud"></span>
-                </div>
-            </div>
-        </div>
-    </div>
+<main id="content" aria-busy="true">
+    <?php readfile(__DIR__ . '/partials/skeleton.html'); ?>
 </main>
+
+<!-- Le même squelette, repris par App.showSkeleton() (rafraîchissement, point pas encore chargé) -->
+<template id="skeleton-template"><?php readfile(__DIR__ . '/partials/skeleton.html'); ?></template>
 
 <!-- Barre de navigation en bas (mobile) / en haut du contenu (desktop) -->
 <nav class="bottom-nav">
     <div class="day-nav" id="day-nav">
-        <!-- Navigation jours générée dynamiquement -->
+        <!-- 7 jours en attente, remplacés par App.renderDayNav() -->
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
+        <div class="day-btn is-skeleton" aria-hidden="true"><span class="skeleton sk" style="width: 1.6rem"></span><span class="skeleton sk sk-micro" style="width: 2.2rem"></span><span class="skeleton sk sk-micro sk-mobile" style="width: 1rem"></span></div>
     </div>
 </nav>
 

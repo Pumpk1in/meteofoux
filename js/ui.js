@@ -386,6 +386,9 @@ const App = {
             // Charger la source sauvegardée
             const savedSource = localStorage.getItem('fmeteo_source') || 'arome';
             this.state.globalSource = savedSource;
+            this.tintSkeleton();
+            // Le titre nomme déjà le point mémorisé pendant le chargement (son altitude vient avec les données)
+            this.updateTopBar();
 
             // Charger le point initial et afficher immédiatement
             await DataService.loadFirst(false, this.state.currentPoint);
@@ -400,6 +403,7 @@ const App = {
             setInterval(() => this.updateTopBar(), 60000);
         } catch (e) {
             console.error("Erreur chargement:", e);
+            document.getElementById('content').removeAttribute('aria-busy');
             document.getElementById('content').innerHTML = `
                 <div class="error" role="alert">
                     <p><strong>Impossible de charger les prévisions.</strong></p>
@@ -533,8 +537,7 @@ const App = {
 
         // Si le point n'est pas encore chargé, afficher skeleton et attendre
         if (!DataService.state.data[pointKey]) {
-            document.getElementById('content').innerHTML = Components.Skeleton();
-            lucide.createIcons();
+            this.showSkeleton();
             const point = CONFIG.points.find(p => p.key === pointKey);
             await DataService.loadSinglePoint(point);
         }
@@ -570,18 +573,17 @@ const App = {
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
     },
 
-    // Rafraîchit sans rien effacer : les prévisions restent affichées (estompées) jusqu'à la
-    // nouvelle réponse ; en cas d'échec (réseau faible sur les pistes), elles sont conservées
+    // Rafraîchit : le squelette de la page pendant l'attente ; en cas d'échec (réseau faible sur les
+    // pistes), les prévisions d'avant reviennent, avec un message
     async refreshData() {
         const btn = document.getElementById('refresh-btn');
-        const content = document.getElementById('content');
         // Un seul rafraîchissement à la fois, arrière-plan compris (sinon deux tournées forcées
         // de tous les points en parallèle : appels doublés vers les API, risque de 429)
         if (this._refreshing) return;
         this._refreshing = true;
         btn.classList.add('refreshing');
-        content.classList.add('is-refreshing');
-        content.setAttribute('aria-busy', 'true');
+        this.showSkeleton();
+        window.scrollTo(0, 0);
 
         const current = CONFIG.points.find(p => p.key === this.state.currentPoint);
         try {
@@ -590,13 +592,12 @@ const App = {
             this.render();
         } catch (e) {
             console.error('Rafraîchissement impossible :', e);
+            this.render();
             const freshness = this.freshness(DataService.state.data[current.key]?.meta);
             this.showNotice(`Rafraîchissement impossible (réseau ou service météo indisponible). `
                 + `Les prévisions affichées sont conservées${freshness ? ` (${freshness.text.replace('màj ', 'mises à jour ')})` : ''}.`);
         } finally {
             btn.classList.remove('refreshing');
-            content.classList.remove('is-refreshing');
-            content.removeAttribute('aria-busy');
         }
 
         // Les autres points, en arrière-plan ; un échec garde simplement leurs anciennes données
@@ -609,6 +610,19 @@ const App = {
             }
         }
         this._refreshing = false;
+    },
+
+    // Squelette de la page pendant un chargement, le détail aux couleurs du modèle choisi
+    showSkeleton() {
+        Charts.destroyAll();
+        const content = document.getElementById('content');
+        content.innerHTML = Components.Skeleton();
+        content.setAttribute('aria-busy', 'true');
+        this.tintSkeleton();
+    },
+
+    tintSkeleton() {
+        document.querySelector('#content .skeleton-loader .day-detail')?.setAttribute('data-source', this.state.globalSource);
     },
 
     // Message en tête du contenu (remplacé au prochain rendu)
@@ -627,6 +641,7 @@ const App = {
         const pointData = data[this.state.currentPoint];
 
         this.updateTopBar();
+        document.getElementById('content').removeAttribute('aria-busy');
 
         // Détruire les anciens graphiques avant de recréer le DOM
         Charts.destroyAll();
@@ -1359,41 +1374,10 @@ const App = {
 
 // Composants UI
 const Components = {
-    // Skeleton loader pour le chargement initial et refresh
+    // Squelette de chargement : partials/skeleton.html, repris du <template> d'index.php (une seule
+    // source pour le démarrage, le rafraîchissement et un point pas encore chargé)
     Skeleton() {
-        // Générer des hauteurs variées pour les barres du graphique
-        const barHeights = [40, 65, 55, 80, 70, 50, 75, 60, 45, 70, 85, 55, 40, 60, 75, 50, 65, 45, 55, 70, 60, 50, 65, 45];
-        const barsHtml = barHeights.map(h => `<div class="skeleton-bar skeleton" style="height: ${h}%"></div>`).join('');
-
-        // 4 bandes, sur les colonnes des bandes horaires
-        const rowsHtml = Array(4).fill(`
-            <div class="card">
-                <span class="skeleton sk-time"></span>
-                <span class="skeleton sk-icon"></span>
-                <span class="skeleton sk-temp"></span>
-                <span class="skeleton sk-precip"></span>
-                <span class="skeleton sk-wind"></span>
-                <span class="skeleton sk-cloud"></span>
-            </div>`).join('');
-
-        return `
-            <div class="skeleton-loader">
-                <div class="skeleton-text">
-                    <i data-lucide="loader-2" class="lucide lucide-spin"></i>
-                    <span>Chargement des prévisions...</span>
-                </div>
-                <div class="skeleton-section">
-                    <div class="skeleton-summary">
-                        <div class="skeleton-summary-item skeleton" style="width: 80px"></div>
-                        <div class="skeleton-summary-item skeleton" style="width: 70px"></div>
-                        <div class="skeleton-summary-item skeleton" style="width: 75px"></div>
-                        <div class="skeleton-summary-item skeleton" style="width: 65px"></div>
-                    </div>
-                    <div class="skeleton-chart">${barsHtml}</div>
-                    <div class="rows skeleton-rows" style="--n: 2">${rowsHtml}</div>
-                </div>
-            </div>
-        `;
+        return document.getElementById('skeleton-template').innerHTML;
     },
 
     // Format d'une quantité du verdict : cm de neige arrondis, mm de pluie au dixième
