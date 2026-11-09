@@ -84,13 +84,16 @@ body {
 
 .top-bar-left {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
 }
 
-/* Titre = point choisi et son altitude ; il ouvre la feuille des points */
+/* Titre = point choisi et son altitude ; il ouvre la feuille des points.
+   Il prend toute la largeur libre : la fraîcheur (« données d'il y a 2 h », en gras) n'est plus coupée */
 .point-title-heading {
+    flex: 1;
     margin: 0;
     min-width: 0;
     font-size: inherit;
@@ -171,6 +174,7 @@ body {
 
 .top-bar-right {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 0.6rem;
 }
