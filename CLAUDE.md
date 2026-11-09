@@ -516,9 +516,10 @@ The day detail gets the source colour (background tint in dark mode, 3px border 
 ### ApexCharts Layout Notes
 
 - No legend and no axis titles inside the chart: the key and the units are HTML (`chartHeadHtml`, `.chart-key` / `.chart-units` in style.css)
-- `grid.padding` (left -9, right -66, top -12): the data is centred in the card (the first hour label stays inside it), the °C column sits left of the data, the km/h and UV columns over its right end; `top` trims the gap under the units. Chart height 210 / 250 px (mobile / desktop): the key is outside the chart. **Without UV** (details off) ApexCharts reserves less room on the right, so the chart uses its own padding (left -15, right -25) and offsets (°C -12, wind 0); same margins in both modes
-- `labels.offsetX` places each tick column: °C at 12 px from the left edge, wind and UV under "km/h" and "UV". On an **opposite** (right) axis, a more negative value moves the column **right**
-- Moving a column means moving its unit too (`.chart-unit-wind` / `.chart-unit-uv`, `right` in px): both are measured from the card edges, identical on mobile and desktop
+- The tick columns sit in the margins, outside the data: °C on the left, km/h (then UV, with the details) on the right, 9 px from the card's inner edge on both sides, and the plot stops 4 px before them on mobile (11-12 px on desktop, wider bars). Before 2026-11-10 the right columns were drawn over the end of the data and the right margin stayed empty
+- `grid.padding` moves **only the plot**, not the tick columns: with UV (details) left -9, right -47; **without UV** ApexCharts reserves less room on the right, so the chart uses its own padding (left -11, right -21). `top` -12 trims the gap under the units. Chart height 210 / 250 px (mobile / desktop): the key is outside the chart
+- `labels.offsetX` places each tick column: °C -12 (-7 with UV), wind -20 (-46 with UV, just left of the UV column), UV -24. On an **opposite** (right) axis, a more negative value moves the column **right**; its labels are left-aligned, so a 3-digit wind ("100") extends towards the edge, not over the data
+- Moving a column means moving its unit too (`.chart-unit-wind` / `.chart-unit-uv`, `right` in px: the unit's right edge = its column's right edge, 9 px; km/h at 28 px with UV): both are measured from the card edges, identical on mobile and desktop
 
 ---
 

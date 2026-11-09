@@ -995,19 +995,20 @@ main {
     left: 12px;
 }
 
+/* Bord droit de l'unité = bord droit de sa colonne (à 9 px du bord, comme °C à gauche) */
 .chart-units .chart-unit-wind {
     left: auto;
-    right: 44px;
+    right: 28px;
 }
 
 .chart-units .chart-unit-uv {
     left: auto;
-    right: 14px;
+    right: 9px;
 }
 
 /* UV masqué : km/h prend sa place, tout à droite */
 .chart-units.no-uv .chart-unit-wind {
-    right: 14px;
+    right: 9px;
 }
 
 /* « Plus de détails » : centré sur la ligne des unités (place fixe, même quand la clé passe sur

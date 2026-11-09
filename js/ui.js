@@ -67,8 +67,10 @@ const Charts = {
             grid: {
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                 strokeDashArray: 3,
-                // Données centrées dans la carte (la 1re heure n'en déborde plus) ; top : moins de vide sous les unités
-                padding: { left: -9, right: -66, top: -12, bottom: 0 }
+                // Avec UV (détails) : les colonnes km/h et UV dans la marge de droite, comme °C à gauche, et
+                // le tracé s'arrête 4 px avant (il passait sous les graduations, la marge restait vide).
+                // padding.right ne déplace que le tracé, pas les colonnes. top : moins de vide sous les unités
+                padding: { left: -9, right: -47, top: -12, bottom: 0 }
             },
             tooltip: {
                 theme: isDark ? 'dark' : 'light',
@@ -171,9 +173,9 @@ const Charts = {
                 labels: {
                     formatter: v => Math.round(v),
                     style: labelStyle,
-                    // Sous « km/h » (.chart-unit-wind), qui prend la place de « UV » quand l'UV est masqué.
-                    // Axe opposé : plus négatif = plus à droite
-                    offsetX: showUv ? -14 : 0
+                    // Sous « km/h » (.chart-unit-wind) : tout à droite sans UV, juste avant la colonne UV sinon.
+                    // Axe opposé : plus négatif = plus à droite ; libellés calés à gauche (« 100 » s'étend vers le bord)
+                    offsetX: showUv ? -46 : -20
                 },
                 seriesName: 'Vent',
                 min: 0,
@@ -189,7 +191,7 @@ const Charts = {
                 labels: {
                     formatter: v => v.toFixed(0),
                     style: labelStyle,
-                    offsetX: -15 // Sous « UV » (.chart-unit-uv)
+                    offsetX: -24 // Sous « UV » (.chart-unit-uv), tout à droite, à 9 px du bord comme °C à gauche
                 },
                 seriesName: 'UV',
                 min: 0,
@@ -271,8 +273,9 @@ const Charts = {
                 bar: { columnWidth: '70%', borderRadius: 2 }
             },
             legend: { show: false }, // Remplacée par la clé HTML (chartHeadHtml)
-            // Sans l'axe UV, ApexCharts réserve moins de place à droite : sans ce réglage, le tracé déborde
-            ...(showUv ? {} : { grid: { ...this.getBaseOptions(isDark).grid, padding: { left: -15, right: -25, top: -12, bottom: 0 } } }),
+            // Sans l'axe UV, ApexCharts réserve moins de place à droite : son propre réglage. Le tracé s'arrête
+            // 4 px avant les colonnes °C et km/h, symétriques (9 px du bord de la carte)
+            ...(showUv ? {} : { grid: { ...this.getBaseOptions(isDark).grid, padding: { left: -11, right: -21, top: -12, bottom: 0 } } }),
             xaxis: {
                 type: 'datetime',
                 min: xMinVisible,
