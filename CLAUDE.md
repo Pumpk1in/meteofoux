@@ -409,7 +409,7 @@ Main application state & logic.
 ```
 
 #### Lifecycle
-- **`init()`** — Load custom points, restore theme & source from localStorage, load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
+- **`init()`** — Load custom points, restore the last point viewed, theme & source from localStorage, load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
 - **`setupDays()`** — Extract unique days from series, filter ≥ today, slice to 7 max. After 18:00 the app opens on tomorrow
 - **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states, calls renderCharts()
 
@@ -417,7 +417,7 @@ Main application state & logic.
 - **`renderNavigation()`** — Day bar, top bar
 - **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max), the unit (cm / mm / max) on its own line under it on mobile (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
-- **`selectPoint(pointKey)`** — Switch active point (loads it if needed), re-render
+- **`selectPoint(pointKey)`** — Switch active point (loads it if needed), save it to localStorage, re-render
 - **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness
 - **`freshness(meta)`** — "màj il y a X min", or "données d'il y a X h" (amber) when the proxy served its cache or the data is over an hour old
 
@@ -581,5 +581,6 @@ icons and the chart.
 |-----|---------|
 | `fmeteo_theme` | `'dark'` or `'light'` |
 | `fmeteo_source` | `'openmeteo'`, `'arome'`, or `'metno'` |
+| `fmeteo_point` | Key of the last point viewed, reopened at startup (first point of the list if it no longer exists) |
 | `fmeteo_custom_points` | JSON array of custom geographic points |
 | `fmeteo_points_order` | JSON array of point keys (drag-reorder) |

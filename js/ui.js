@@ -366,7 +366,10 @@ const App = {
         try {
             // Charger les points personnalisés avant tout
             CustomPoints.init();
-            this.state.currentPoint = CONFIG.points[0].key;
+            // Rouvrir le dernier point consulté, s'il existe encore
+            const savedPoint = localStorage.getItem('fmeteo_point');
+            this.state.currentPoint = CONFIG.points.some(p => p.key === savedPoint)
+                ? savedPoint : CONFIG.points[0].key;
 
             // Charger le thème sauvegardé
             const savedTheme = localStorage.getItem('fmeteo_theme') || 'dark';
@@ -381,7 +384,7 @@ const App = {
             this.state.globalSource = savedSource;
 
             // Charger le point initial et afficher immédiatement
-            await DataService.loadFirst();
+            await DataService.loadFirst(false, this.state.currentPoint);
             this.setupDays();
             this.renderNavigation();
             this.render();
@@ -519,6 +522,7 @@ const App = {
 
     async selectPoint(pointKey) {
         this.state.currentPoint = pointKey;
+        localStorage.setItem('fmeteo_point', pointKey);
         this.updateTopBar();
 
         // Si le point n'est pas encore chargé, afficher skeleton et attendre
@@ -1246,6 +1250,7 @@ const App = {
             await DataService.loadSinglePoint(result.point);
             this.closeAddPointModal();
             this.state.currentPoint = result.point.key;
+            localStorage.setItem('fmeteo_point', result.point.key);
             this.renderNavigation();
             this.render();
         } catch (e) {
@@ -1267,6 +1272,7 @@ const App = {
         // Si on regarde le point supprimé, basculer sur le premier
         if (this.state.currentPoint === key) {
             this.state.currentPoint = CONFIG.points[0].key;
+            localStorage.setItem('fmeteo_point', this.state.currentPoint);
         }
 
         this.renderNavigation();
