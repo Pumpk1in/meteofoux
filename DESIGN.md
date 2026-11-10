@@ -180,10 +180,11 @@ names something: a source, a point, or a weather quantity.
   the model cell's label and border, and the day detail (chart and hourly rows). In dark mode the
   detail takes an assumed tint (`rgba(14,110,220,.3)`, `rgba(130,50,235,.3)`, `rgba(225,115,15,.26)`;
   `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode a tint over the
-  grey page muddied the reading in the sun, so the detail stays neutral (page background, white rows)
-  and gets a 3px border in the model's deep hue (`source-*-deep`: `#0369a1`, `#7e22ce`, `#b45309`),
-  the same as its selected cell; the model name in "Heures selon …" takes it too (`#a14a08` for
-  MET.no text, 4.8:1 on the grey). When the source changes, the detail changes colour.
+  grey page muddied the reading in the sun, so the detail stays neutral (white, with light grey
+  `#ececec` rows, the darkest grey that keeps the snow cyan at 4.5:1) and gets a 3px border in the
+  model's deep hue (`source-*-deep`: `#0369a1`, `#7e22ce`, `#b45309`), the same as its selected
+  cell; the model name in "Heures selon …" takes it too. When the source changes, the detail changes
+  colour.
 
 ### Tertiary: point identity
 - **Station**, **Observatoire**, **Marin-Pascal**, **Vescal** (`point-*`): the dot before the point
@@ -213,7 +214,7 @@ names something: a source, a point, or a weather quantity.
 - **Panneau givre** (`panneau-givre`) and **Trait givre** (`trait-givre`): the translucent row fill
   and the hairline border.
 - Light theme: `jour-fond` → `jour-fond-haut` background, `jour-texte`, `jour-muted`, opaque white
-  panels (verdict, rows).
+  panels (verdict, day detail), light grey `#ececec` rows inside the detail.
 
 ### Named Rules
 **The Colour Means Something Rule.** Every hue identifies a source, a point or a weather
@@ -270,7 +271,7 @@ a section, 32 px between sections. Only negative margins tuned against ApexChart
 
 Flat and layered: depth comes from stacked translucency, never from shadow (there is none). The page
 gradient, then the verdict panel (a faint white layer) and the day detail (the model's tint in dark
-mode, the page itself framed by the model's border in light mode), then the frosted rows. Fixed bars
+mode, a white panel framed by the model's border in light mode), then the frosted rows. Fixed bars
 use a 10px backdrop blur; the point sheet sits on a 55% black backdrop, the add-point modal on a 4px
 blur. Rows do not react to hover: they are not clickable.
 
@@ -330,7 +331,7 @@ Bare inside the detail, no panel of its own.
   stops just before them.
 
 ### Hourly rows
-- **Shape:** 8px radius, 6px apart, at least 48px tall; `panneau-givre` (white in light mode), no
+- **Shape:** 8px radius, 6px apart, at least 48px tall; `panneau-givre` (`#ececec` in light mode), no
   border: the background is what separates the rows.
 - **Content:** hour on the left ("14 h"), or the period name above the row ("Matin · 7–13 h");
   28px weather icon; temperature (a period shows "min° à max°"); snow in cyan and rain in blue, to

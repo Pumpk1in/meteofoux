@@ -367,21 +367,22 @@ body {
 }
 
 /* Thème clair : pas de teinte (sur le gris de la page, elle ternissait et gênait la lecture au
-   soleil). Fond neutre, et la couleur du modèle en bordure épaisse : la même teinte foncée que sa
-   case dans le verdict. Le nom du modèle en tête du détail la reprend */
+   soleil). Fond blanc, et la couleur du modèle en bordure épaisse : la même teinte foncée que sa
+   case dans le verdict. Le nom du modèle en tête du détail la reprend. Les bandes horaires passent
+   en gris clair pour se détacher du blanc (#ececec : le cyan de la neige y garde 4,5:1) */
 [data-theme="light"] .day-detail[data-source] {
-    background: transparent;
+    background: #fff;
     border: 3px solid var(--detail-color);
+    --card: #ececec;
 }
 
 [data-theme="light"] .day-detail[data-source] .detail-source strong {
-    color: var(--detail-text, var(--detail-color));
+    color: var(--detail-color);
 }
 
 [data-theme="light"] .day-detail[data-source="openmeteo"] { --detail-color: #0369a1; }
 [data-theme="light"] .day-detail[data-source="arome"] { --detail-color: #7e22ce; }
-/* Texte un cran plus foncé que la bordure : #b45309 ne fait que 4:1 sur le gris de la page */
-[data-theme="light"] .day-detail[data-source="metno"] { --detail-color: #b45309; --detail-text: #a14a08; }
+[data-theme="light"] .day-detail[data-source="metno"] { --detail-color: #b45309; }
 
 /* En tête du détail : le modèle dont on voit les heures */
 .detail-source {
