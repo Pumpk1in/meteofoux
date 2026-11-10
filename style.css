@@ -571,12 +571,12 @@ main {
 }
 
 /* Balayage d'un point à l'autre (mobile, App.initSwipe) : le défilement vertical et le zoom restent
-   au navigateur, le glissement horizontal revient à la page. Le point voisin, posé à côté, n'élargit
-   pas la page */
+   au navigateur, le glissement horizontal revient à la page. Les voisins, posés à côté, n'élargissent
+   ni n'allongent la page */
 @media (max-width: 767px) {
     main {
         position: relative;
-        overflow-x: clip;
+        overflow: clip;
         touch-action: pan-y; /* navigateurs sans pinch-zoom ci-dessous */
         touch-action: pan-y pinch-zoom;
     }

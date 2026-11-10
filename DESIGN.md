@@ -352,9 +352,10 @@ closes it.
 ### Swipe between points
 On mobile, a horizontal swipe on the content moves to the next domain point (left: higher, right:
 lower), on the same day and at the same place in the page, so one reading is compared across
-altitudes. The page follows the finger and the neighbour's real day slides in beside it (its chart's
-place kept; on arrival the chart fades in over 0.2s, without its usual entry animation: the page has
-just moved); past 30% of the width, or with a flick, it goes, otherwise it
+altitudes. The page follows the finger and the neighbour's real day slides in beside it, chart
+included (both neighbours are prepared off screen while the phone is idle), and simply stays on
+arrival. Swiped right after a change, before they are ready, the neighbour comes without its chart
+(its place kept), which fades in over 0.2s on arrival; past 30% of the width, or with a flick, it goes, otherwise it
 springs back with the sheet's curve (0.28s, `cubic-bezier(0.22, 1, 0.36, 1)`). No loop: Station and
 Observatoire resist. The title switches to the target point once letting go would land there. Not
 from the plot of the chart (dragging there reads the hours; its key above and its row of hours and

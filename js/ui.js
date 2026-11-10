@@ -419,7 +419,7 @@ const App = {
             this.render();
 
             // Charger les autres points en arrière-plan (la feuille des points se complète au fur et à mesure)
-            DataService.loadRemaining(false, () => this.refreshPointSheet());
+            DataService.loadRemaining(false, key => { this.refreshPointSheet(); this.scheduleNeighbors(key); });
 
             // "mis à jour il y a X min" reste juste si l'onglet reste ouvert
             setInterval(() => this.updateTopBar(), 60000);
@@ -633,6 +633,7 @@ const App = {
             try {
                 await DataService.loadSinglePoint(point, true);
                 this.refreshPointSheet();
+                this.scheduleNeighbors(point.key);
             } catch (e) {
                 console.warn(`Rafraîchissement de ${point.key} impossible :`, e.message);
             }
@@ -827,10 +828,9 @@ const App = {
                 const i = CONFIG.domain.indexOf(this.state.currentPoint);
                 g.prevKey = CONFIG.domain[i - 1];
                 g.nextKey = CONFIG.domain[i + 1];
-                g.current = [...content.children];
-                g.prev = g.prevKey && peek(g.prevKey);
-                g.next = g.nextKey && peek(g.nextKey);
-                lucide.createIcons();
+                g.current = [...content.children].filter(el => !el.classList.contains('swipe-peek'));
+                g.prev = panelFor(g.prevKey, 'prev');
+                g.next = panelFor(g.nextKey, 'next');
                 g.shown = this.state.currentPoint;
             }
             g.samples.push({ x: e.clientX, t: e.timeStamp });
@@ -860,30 +860,42 @@ const App = {
             const key = go ? (toward < 0 ? gesture.nextKey : gesture.prevKey) : null;
             place(gesture, key ? toward * content.clientWidth : 0, true);
 
+            const panel = key && (toward < 0 ? gesture.next : gesture.prev);
             let done = false;
             const finish = () => {
                 if (done) return;
                 done = true;
                 this._swiping = false;
-                if (key) {
-                    // Le rendu remplace la page et ses voisins ; même position dans la page. Le
-                    // graphique n'est tracé qu'à l'image suivante (render) : d'ici là, la page garde sa
-                    // hauteur, sinon le navigateur ramènerait le défilement plus haut
+                if (panel?.dataset.drawn) {
+                    // Le voisin devient la page, graphique compris : rien à redessiner. L'ancienne page
+                    // s'en va ; l'autre voisin aussi, les nouveaux se préparent
+                    gesture.current.forEach(el => { Charts.destroyIn(el); el.remove(); });
+                    panel.replaceWith(...panel.childNodes);
+                    this.state.currentPoint = key;
+                    localStorage.setItem('fmeteo_point', key);
+                    this.updateTopBar();
+                    this.renderDayNav();
+                    this.scheduleNeighbors();
+                } else if (key) {
+                    // Voisin pas encore dessiné : le rendu remplace la page, même position dans la page.
+                    // Le graphique n'est tracé qu'à l'image suivante : d'ici là, la page garde sa hauteur
+                    // (sinon le navigateur ramènerait le défilement plus haut), et il paraît en fondu
                     const scrollY = window.scrollY;
                     content.style.minHeight = `${content.offsetHeight}px`;
                     Charts.animate = false;
                     this.selectPoint(key);
                     window.scrollTo(0, scrollY);
+                    content.querySelector('.chart-wrapper')?.classList.add('chart-enter');
                     // Après le tracé (même image que celui de render, demandé avant)
                     requestAnimationFrame(() => {
                         content.style.minHeight = '';
                         Charts.animate = true;
                     });
                 } else {
-                    gesture.prev?.remove();
-                    gesture.next?.remove();
                     gesture.current.forEach(el => el.style.transform = el.style.transition = '');
                     this.updateTopBar();
+                    // Voisins construits pendant le geste, sans graphique : à préparer pour de bon
+                    if ([gesture.prev, gesture.next].some(p => p && !p.dataset.drawn)) this.scheduleNeighbors();
                 }
             };
             gesture.current[0]?.addEventListener('transitionend', finish, { once: true });
@@ -983,7 +995,7 @@ const App = {
         let contentHtml;
         if (showChart) {
             // Afficher le graphique
-            contentHtml = Components.ChartSection(day, this.state.currentPoint);
+            contentHtml = Components.ChartSection(day, pointData.point.key);
 
             if (!isToday && preparedHourlyEntries.length > 0) {
                 // Jours avec données hourly : afficher périodes par défaut + hourly caché avec toggle
@@ -1507,6 +1519,7 @@ const App = {
         this.state.modelsHelpOpen = !this.state.modelsHelpOpen;
         btn.setAttribute('aria-expanded', String(this.state.modelsHelpOpen));
         btn.closest('.verdict').querySelector('.verdict-help').hidden = !this.state.modelsHelpOpen;
+        this.scheduleNeighbors();
     },
 
     // "Plus de détails" : ressenti, rafales et UV, pour tous les graphiques (séries et axes changent : on les refait)
@@ -1517,6 +1530,7 @@ const App = {
         this.renderCharts();
         // La clé est régénérée : le focus revient sur le bouton du même jour
         document.querySelector(`.day-section[data-day="${day}"] .chart-details-btn`)?.focus({ preventScroll: true });
+        this.scheduleNeighbors();
     },
 
     toggleMore(btn) {
@@ -1544,6 +1558,7 @@ const App = {
             this.state.todayHoursExpanded = false;
             block.querySelector('.rows').setAttribute('style', Components.rowsCount(block.querySelectorAll('.card:not(.hidden-card)').length));
         }
+        this.scheduleNeighbors();
     },
 
     toggleTomorrowView(btn, day) {
@@ -1570,6 +1585,7 @@ const App = {
 
         // Recréer les icônes Lucide pour les nouvelles cartes visibles
         lucide.createIcons();
+        this.scheduleNeighbors();
     }
 };
 
