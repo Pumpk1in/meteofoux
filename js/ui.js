@@ -62,7 +62,9 @@ const Charts = {
                 background: 'transparent',
                 fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                 toolbar: { show: false },
-                zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
+                // Pas de zoom : aucune commande n'y menait, et son mode « déplacement » redessinait tout le
+                // graphique au premier glissé sur le tracé (l'infobulle ne suivait pas le doigt)
+                zoom: { enabled: false },
                 animations: { enabled: this.animate, speed: 400 },
                 offsetX: 0,
                 offsetY: 0,
@@ -227,24 +229,6 @@ const Charts = {
                 height: Utils.isMobile() ? 210 : 250,
                 id: containerId,
                 stacked: false,
-                zoom: {
-                    enabled: true,
-                    type: 'x',
-                    autoScaleYaxis: false
-                },
-                toolbar: {
-                    show: true,
-                    autoSelected: 'pan',
-                    tools: {
-                        download: false,
-                        selection: false,
-                        zoom: false,
-                        zoomin: false,
-                        zoomout: false,
-                        pan: true,
-                        reset: false
-                    }
-                },
                 events: {
                     // Sans animation d'entrée, les icônes dès le tracé
                     mounted: function() {
@@ -779,13 +763,19 @@ const App = {
     // Vers la gauche on monte, vers la droite on descend ; pas de boucle : aux deux bouts, la page
     // résiste. Le titre annonce le point où l'on arrivera en lâchant. Le jour et la position dans la
     // page ne changent pas : on compare le même endroit d'un point à l'autre.
-    // Pas depuis le tracé du graphique, où l'on glisse pour lire les heures (sa légende au-dessus et
-    // la rangée des heures et des icônes en dessous, si), ni depuis un point perso (ils restent dans
-    // la feuille des points)
+    // Depuis le tracé du graphique aussi, sauf après un appui dessus : on y glisse alors pour lire les
+    // heures, jusqu'à toucher ailleurs. Pas depuis un point perso (ils restent dans la feuille des points)
     initSwipe() {
         const content = document.getElementById('content');
         const COMMIT = 0.3, FLICK = 0.5; // part de la largeur ; vitesse en px/ms
         let g = null;                    // geste en cours
+        let engaged = null;              // graphique (.chart) touché d'un appui : on y lit les heures
+        let mute = false;                // le graphique ne voit pas ce geste (son infobulle suivrait le doigt)
+
+        // Avant ApexCharts (phase de capture) ; les événements de souris d'un appui, eux, lui parviennent
+        ['touchstart', 'touchmove'].forEach(type => content.addEventListener(type, e => {
+            if (mute) e.stopPropagation();
+        }, { capture: true, passive: true }));
 
         // Le voisin préparé ; sinon (geste juste après un changement) construit maintenant, sans son
         // graphique, dont la place est gardée : les heures ne remontent pas puis redescendent à l'arrivée
@@ -809,13 +799,21 @@ const App = {
         };
 
         content.addEventListener('pointerdown', e => {
+            // Un second doigt ne touche pas au geste en cours (pincer : le navigateur l'annule lui-même)
+            if (e.pointerType === 'mouse' || !e.isPrimary) return;
             g = null;
-            if (e.pointerType === 'mouse' || !e.isPrimary || this._swiping || !Utils.isMobile()) return;
+            mute = false;
+            if (this._swiping || !Utils.isMobile()) return;
+            // Le tracé : la bande verticale de sa grille (pas la légende au-dessus, ni les heures en dessous)
+            const chart = e.target.closest('.chart');
+            const plot = chart?.querySelector('.apexcharts-grid')?.getBoundingClientRect();
+            const onPlot = plot && e.clientY >= plot.top && e.clientY <= plot.bottom ? chart : null;
+            if (onPlot && onPlot === engaged) return;
+            engaged = null;
             if (!CONFIG.domain.includes(this.state.currentPoint) || !DataService.state.data[this.state.currentPoint]) return;
             if (content.hasAttribute('aria-busy')) return;
-            const plot = e.target.closest('.chart')?.querySelector('.apexcharts-grid')?.getBoundingClientRect();
-            if (plot && e.clientY >= plot.top && e.clientY <= plot.bottom) return;
-            g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [] };
+            mute = !!onPlot;
+            g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [], chart: onPlot };
         });
 
         content.addEventListener('pointermove', e => {
@@ -850,7 +848,8 @@ const App = {
             if (!g || e.pointerId !== g.id) return;
             const gesture = g;
             g = null;
-            if (!gesture.locked) return;
+            // Un appui sur le tracé (son infobulle s'affiche) : les glissés suivants y lisent les heures
+            if (!gesture.locked) { if (!cancelled) engaged = gesture.chart; return; }
 
             // Vitesse sur les derniers déplacements : un geste vif suffit, même court, s'il va dans
             // le sens où la page est déjà partie

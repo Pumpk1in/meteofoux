@@ -983,11 +983,6 @@ main {
     from { opacity: 0; }
 }
 
-/* Cacher la toolbar ApexCharts (pan activé par défaut) */
-.apexcharts-toolbar {
-    display: none !important;
-}
-
 /* Icônes météo sous l'axe, en thème clair : les nuages blancs se perdaient sur le fond teinté */
 [data-theme="light"] .weather-icon-annotation {
     filter: drop-shadow(0 0 1px rgba(15, 23, 42, 0.5));
