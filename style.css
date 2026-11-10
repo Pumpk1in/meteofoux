@@ -571,6 +571,19 @@ body {
     color: var(--muted);
 }
 
+/* Rafraîchissement en cours (App.refreshData) : les valeurs d'avant s'estompent et pulsent, les
+   jours restent lisibles. Mouvement réduit : estompées, sans pulsation */
+.day-nav.is-loading .day-indicator,
+.day-nav.is-loading .day-unit {
+    animation: day-pending 1.2s ease-in-out infinite alternate;
+    opacity: 0.12;
+}
+
+@keyframes day-pending {
+    from { opacity: 0.3; }
+    to { opacity: 0.08; }
+}
+
 /* ============================================
    MAIN CONTENT
    ============================================ */

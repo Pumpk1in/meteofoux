@@ -594,6 +594,10 @@ const App = {
         if (this._refreshing) return;
         this._refreshing = true;
         btn.classList.add('refreshing');
+        // La barre des jours garde les valeurs d'avant : estompées tant que le point n'a pas répondu
+        const dayNav = document.getElementById('day-nav');
+        dayNav.classList.add('is-loading');
+        dayNav.setAttribute('aria-busy', 'true');
         this.showSkeleton();
         window.scrollTo(0, 0);
 
@@ -610,6 +614,8 @@ const App = {
                 + `Les prévisions affichées sont conservées${freshness ? ` (${freshness.text.replace('màj ', 'mises à jour ')})` : ''}.`);
         } finally {
             btn.classList.remove('refreshing');
+            dayNav.classList.remove('is-loading');
+            dayNav.removeAttribute('aria-busy');
         }
 
         // Les autres points, en arrière-plan ; un échec garde simplement leurs anciennes données
