@@ -769,10 +769,11 @@ const App = {
         const content = document.getElementById('content');
         const COMMIT = 0.3, FLICK = 0.5; // part de la largeur ; vitesse en px/ms
         let g = null;                    // geste en cours
+        let tap = null;                  // doigt posé sur un tracé, pas encore glissé : un appui s'il se lève
         let engaged = null;              // graphique (.chart) touché d'un appui : on y lit les heures
         let mute = false;                // le graphique ne voit pas ce geste (son infobulle suivrait le doigt)
 
-        // Avant ApexCharts (phase de capture) ; les événements de souris d'un appui, eux, lui parviennent
+        // Avant ApexCharts (phase de capture) ; un appui lui est transmis à part, au lever du doigt
         ['touchstart', 'touchmove'].forEach(type => content.addEventListener(type, e => {
             if (mute) e.stopPropagation();
         }, { capture: true, passive: true }));
@@ -801,22 +802,24 @@ const App = {
         content.addEventListener('pointerdown', e => {
             // Un second doigt ne touche pas au geste en cours (pincer : le navigateur l'annule lui-même)
             if (e.pointerType === 'mouse' || !e.isPrimary) return;
-            g = null;
+            g = tap = null;
             mute = false;
             if (this._swiping || !Utils.isMobile()) return;
             // Le tracé : la bande verticale de sa grille (pas la légende au-dessus, ni les heures en dessous)
             const chart = e.target.closest('.chart');
             const plot = chart?.querySelector('.apexcharts-grid')?.getBoundingClientRect();
             const onPlot = plot && e.clientY >= plot.top && e.clientY <= plot.bottom ? chart : null;
+            if (onPlot) tap = { id: e.pointerId, x0: e.clientX, y0: e.clientY, chart: onPlot };
             if (onPlot && onPlot === engaged) return;
             engaged = null;
             if (!CONFIG.domain.includes(this.state.currentPoint) || !DataService.state.data[this.state.currentPoint]) return;
             if (content.hasAttribute('aria-busy')) return;
             mute = !!onPlot;
-            g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [], chart: onPlot };
+            g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [] };
         });
 
         content.addEventListener('pointermove', e => {
+            if (tap?.id === e.pointerId && Math.hypot(e.clientX - tap.x0, e.clientY - tap.y0) >= 10) tap = null;
             if (!g || e.pointerId !== g.id) return;
             const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
             if (!g.locked) {
@@ -848,8 +851,7 @@ const App = {
             if (!g || e.pointerId !== g.id) return;
             const gesture = g;
             g = null;
-            // Un appui sur le tracé (son infobulle s'affiche) : les glissés suivants y lisent les heures
-            if (!gesture.locked) { if (!cancelled) engaged = gesture.chart; return; }
+            if (!gesture.locked) return;
 
             // Vitesse sur les derniers déplacements : un geste vif suffit, même court, s'il va dans
             // le sens où la page est déjà partie
@@ -905,8 +907,19 @@ const App = {
             gesture.current[0]?.addEventListener('transitionend', finish, { once: true });
             setTimeout(finish, 350);
         };
-        content.addEventListener('pointerup', e => end(e, false));
-        content.addEventListener('pointercancel', e => end(e, true));
+        content.addEventListener('pointerup', e => {
+            // Un appui sur le tracé : son infobulle à cette heure, tout de suite, et les glissés suivants y
+            // lisent les heures. Donnée par nous : certains téléphones n'envoient pas au graphique les
+            // événements de souris d'un appui. Après le touchend, qui la masquerait
+            if (tap?.id === e.pointerId) {
+                engaged = tap.chart;
+                const { target, clientX, clientY } = e;
+                setTimeout(() => target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX, clientY })));
+            }
+            tap = null;
+            end(e, false);
+        });
+        content.addEventListener('pointercancel', e => { tap = null; end(e, true); });
     },
 
     // Modèle affiché en détail pour un jour : le choix de l'utilisateur, sauf au-delà de son horizon
