@@ -1510,6 +1510,8 @@ const App = {
                 <span class="place-meta">${Utils.escapeHtml(meta)}</span>
             </li>`;
         }).join('') || (message ? `<li class="place-message" role="presentation">${message}</li>` : '');
+        // Licence Ouverte de l'IGN : citer la source
+        if (results.length) list.innerHTML += '<li class="place-source" role="presentation">Source : IGN</li>';
         list.hidden = !list.innerHTML;
         input.setAttribute('aria-expanded', String(results.length > 0));
     },
@@ -1519,8 +1521,15 @@ const App = {
         if (e.key === 'Escape') {
             this.renderPlaceResults([]);
         } else if (e.key === 'Enter') {
+            // Une suggestion surlignée aux flèches est choisie ; sinon (touche « Rechercher » du
+            // clavier mobile) la recherche part tout de suite, même liste fermée après un choix
             e.preventDefault();
-            if (n) this.choosePlace(Math.max(this._placeActive, 0));
+            if (this._placeActive >= 0) { this.choosePlace(this._placeActive); return; }
+            const text = e.target.value.trim();
+            if (text.length < 3) return;
+            clearTimeout(this._placeTimer);
+            this._placeAbort?.abort();
+            this.searchPlace(text);
         } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && n) {
             e.preventDefault();
             let a = this._placeActive + (e.key === 'ArrowDown' ? 1 : -1);
@@ -1536,7 +1545,9 @@ const App = {
     choosePlace(i) {
         const r = this._placeResults[i];
         if (!r) return;
-        document.getElementById('place-search').value = r.fulltext;
+        const input = document.getElementById('place-search');
+        input.value = r.fulltext;
+        input.blur();  // ferme le clavier mobile (le choix a gardé le focus dans le champ)
         this.renderPlaceResults([]);
         const nameInput = document.getElementById('point-name');
         if (!nameInput.value.trim() || nameInput.value === this._autoName) {
