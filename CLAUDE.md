@@ -482,7 +482,7 @@ Main application state & logic.
 
 Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
 icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and nothing is tinted
-by the source: the day detail is white with a 3px border in the model's colour, and its hourly rows are light grey (`#ececec`, the darkest grey that keeps the snow cyan at 4.5:1). See `DESIGN.md` for the visual system.
+by the source: the day detail is white with a 3px border in the model's colour, and its hourly rows take that colour at 6% on white (`--card`: `#f0f6f9`, `#f7f2fc`, `#fbf5f0`). See `DESIGN.md` for the visual system.
 
 ### Key Layout Classes
 
