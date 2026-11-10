@@ -480,6 +480,10 @@ body {
     justify-content: center;
     gap: var(--space-0-5);
     padding: var(--space-1-5) var(--space-2);
+    /* Glisser d'un jour à l'autre (App.initDayScrub) : le navigateur ne prend pas le geste */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* Un jour : son libellé et l'indicateur du verdict pour le point affiché */
@@ -502,7 +506,37 @@ body {
     font-size: var(--text-small);
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s, translate 0.15s, scale 0.15s;
+}
+
+/* Glissement en cours : le jour sous le doigt se soulève au-dessus de lui et tremble en arrivant,
+   les autres s'effacent un peu */
+.day-nav.is-scrubbing .day-btn:not(.is-scrub) {
+    opacity: 0.55;
+}
+
+.day-btn.is-scrub {
+    position: relative;
+    z-index: 1;
+    translate: 0 -44px;
+    scale: 1.3;
+    color: var(--text);
+    background: var(--bg-secondary);
+    border-color: var(--border-strong);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    animation: day-wiggle 0.4s ease-out;
+}
+
+[data-theme="light"] .day-btn.is-scrub {
+    background: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+@keyframes day-wiggle {
+    20% { rotate: -9deg; }
+    40% { rotate: 7deg; }
+    60% { rotate: -4deg; }
+    80% { rotate: 2deg; }
 }
 
 @media (hover: hover) {

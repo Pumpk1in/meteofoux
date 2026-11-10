@@ -395,6 +395,7 @@ const App = {
             // Le titre nomme déjà le point mémorisé pendant le chargement (son altitude vient avec les données)
             this.updateTopBar();
             this.initSwipe();
+            this.initDayScrub();
 
             // Charger le point initial et afficher immédiatement
             await DataService.loadFirst(false, this.state.currentPoint);
@@ -540,6 +541,74 @@ const App = {
             const section = document.querySelector(`.day-section[data-day="${day}"]`);
             if (section) section.scrollIntoView({ behavior: 'smooth' });
         }
+    },
+
+    // Barre des jours au doigt : appuyer sur un jour puis glisser sur les côtés. Le jour sous le
+    // doigt se soulève au-dessus de lui (le doigt le cacherait) et tremble à chaque changement ;
+    // relâcher l'ouvre. Doigt remonté loin au-dessus de la barre : rien n'est choisi. Un appui
+    // sans glisser reste un appui ordinaire
+    initDayScrub() {
+        const nav = document.getElementById('day-nav');
+        const CANCEL = 60;               // px au-dessus de la barre où le doigt annule
+        let g = null;
+        let suppressUntil = 0;           // le clic qui peut suivre un glissement ne choisit rien
+
+        // Le jour le plus proche du doigt (les espaces entre les boutons comptent aussi)
+        const dayAt = x => {
+            let best = null, bestDist = Infinity;
+            nav.querySelectorAll('.day-btn').forEach(btn => {
+                const r = btn.getBoundingClientRect();
+                const dist = Math.abs(x - (r.left + r.right) / 2);
+                if (dist < bestDist) { best = btn; bestDist = dist; }
+            });
+            return best;
+        };
+
+        const hover = btn => {
+            if (btn === g.btn) return;
+            g.btn?.classList.remove('is-scrub');
+            g.btn = btn;
+            if (!btn) return;
+            btn.classList.add('is-scrub');
+            navigator.vibrate?.(8);
+        };
+
+        const end = (e, cancelled) => {
+            if (!g || e.pointerId !== g.id) return;
+            const gesture = g;
+            if (gesture.locked) {
+                hover(null);
+                nav.classList.remove('is-scrubbing');
+                suppressUntil = e.timeStamp + 500;
+            }
+            g = null;
+            const day = gesture.locked && !cancelled ? gesture.day : null;
+            if (day && day !== this.state.currentDay) this.selectDay(day);
+        };
+
+        nav.addEventListener('pointerdown', e => {
+            if (e.pointerType === 'mouse' || !e.isPrimary || !e.target.closest('.day-btn')) return;
+            g = { id: e.pointerId, x0: e.clientX, locked: false, btn: null, day: null };
+        });
+
+        nav.addEventListener('pointermove', e => {
+            if (!g || e.pointerId !== g.id) return;
+            if (!g.locked) {
+                if (Math.abs(e.clientX - g.x0) < 10) return;
+                g.locked = true;
+                nav.setPointerCapture(e.pointerId);
+                nav.classList.add('is-scrubbing');
+            }
+            const away = e.clientY < nav.getBoundingClientRect().top - CANCEL;
+            hover(away ? null : dayAt(e.clientX));
+            g.day = g.btn?.dataset.day ?? null;
+        });
+
+        nav.addEventListener('pointerup', e => end(e, false));
+        nav.addEventListener('pointercancel', e => end(e, true));
+        nav.addEventListener('click', e => {
+            if (e.timeStamp < suppressUntil) { e.stopPropagation(); e.preventDefault(); }
+        }, { capture: true });
     },
 
     async selectPoint(pointKey) {
