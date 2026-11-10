@@ -1332,6 +1332,13 @@ const App = {
                     <button class="modal-close" onclick="App.closeAddPointModal()">&times;</button>
                 </div>
                 <div class="modal-body">
+                    <div class="modal-field place-field">
+                        <label for="place-search">Lieu ou adresse</label>
+                        <input type="text" id="place-search" placeholder="Ex : Mont Pelat, 12 rue de la Paix Paris" autocomplete="off" enterkeyhint="search"
+                            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-results"
+                            oninput="App.onPlaceInput()" onkeydown="App.onPlaceKey(event)" onblur="App.renderPlaceResults([])">
+                        <ul id="place-results" class="place-results" role="listbox" aria-label="Suggestions" hidden></ul>
+                    </div>
                     <div class="modal-field">
                         <label for="point-name">Nom</label>
                         <input type="text" id="point-name" placeholder="Ex: Marseille, Col du Lautaret..." maxlength="30" autocomplete="off">
@@ -1446,7 +1453,106 @@ const App = {
         document.getElementById('modal-btn-add').disabled = !name;
     },
 
+    // === Recherche d'un lieu (géocodage IGN Géoplateforme : gratuit, sans clé, France seule) ===
+
+    _placeTimer: null,
+    _placeAbort: null,
+    _placeResults: [],
+    _placeActive: -1,
+    _autoName: '',  // dernier nom pré-rempli : remplacé au choix suivant, pas un nom tapé à la main
+
+    onPlaceInput() {
+        clearTimeout(this._placeTimer);
+        this._placeAbort?.abort();  // une réponse en retard ne doit pas rouvrir la liste
+        const text = document.getElementById('place-search').value.trim();
+        if (text.length < 3) { this.renderPlaceResults([]); return; }
+        this._placeTimer = setTimeout(() => this.searchPlace(text), 250);
+    },
+
+    async searchPlace(text) {
+        this._placeAbort = new AbortController();
+        try {
+            const url = 'https://data.geopf.fr/geocodage/completion?maximumResponses=10&text=' + encodeURIComponent(text);
+            const res = await fetch(url, { signal: this._placeAbort.signal });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const seen = new Set();
+            const results = ((await res.json()).results || []).filter(r => {
+                // Une commune revient deux fois (« administratif » et « municipality ») : un seul suffit
+                const id = r.fulltext.split(', ')[0] + '|' + this.placeKind(r) + '|' + r.zipcode;
+                if (seen.has(id) || !CustomPoints.isInFrance(r.y, r.x)) return false;
+                seen.add(id);
+                return true;
+            }).slice(0, 6);
+            this.renderPlaceResults(results, 'Aucun lieu trouvé');
+        } catch (e) {
+            if (e.name !== 'AbortError') this.renderPlaceResults([], 'Recherche indisponible pour le moment');
+        }
+    },
+
+    // Catégorie affichée : celle de l'IGN quand elle est en français (sommet, refuge, lieu-dit habité…)
+    placeKind(r) {
+        const kinds = { housenumber: 'adresse', street: 'voie', municipality: 'commune', administratif: 'commune', locality: 'lieu-dit' };
+        return kinds[r.kind] || r.kind || '';
+    },
+
+    renderPlaceResults(results, message = '') {
+        const list = document.getElementById('place-results');
+        const input = document.getElementById('place-search');
+        if (!list) return;  // modale fermée entre-temps
+        this._placeResults = results;
+        this._placeActive = -1;
+        input.removeAttribute('aria-activedescendant');
+        list.innerHTML = results.map((r, i) => {
+            const [title, ...rest] = r.fulltext.split(', ');
+            const meta = [this.placeKind(r), rest.join(', ')].filter(Boolean).join(' · ');
+            return `<li id="place-opt-${i}" role="option" aria-selected="false" onmousedown="event.preventDefault()" onclick="App.choosePlace(${i})">
+                <span class="place-name">${Utils.escapeHtml(title)}</span>
+                <span class="place-meta">${Utils.escapeHtml(meta)}</span>
+            </li>`;
+        }).join('') || (message ? `<li class="place-message" role="presentation">${message}</li>` : '');
+        list.hidden = !list.innerHTML;
+        input.setAttribute('aria-expanded', String(results.length > 0));
+    },
+
+    onPlaceKey(e) {
+        const n = this._placeResults.length;
+        if (e.key === 'Escape') {
+            this.renderPlaceResults([]);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (n) this.choosePlace(Math.max(this._placeActive, 0));
+        } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && n) {
+            e.preventDefault();
+            let a = this._placeActive + (e.key === 'ArrowDown' ? 1 : -1);
+            if (a < 0) a = n - 1;
+            if (a >= n) a = 0;
+            this._placeActive = a;
+            document.querySelectorAll('#place-results [role="option"]').forEach((el, k) => el.setAttribute('aria-selected', String(k === a)));
+            document.getElementById('place-search').setAttribute('aria-activedescendant', `place-opt-${a}`);
+            document.getElementById(`place-opt-${a}`).scrollIntoView({ block: 'nearest' });
+        }
+    },
+
+    choosePlace(i) {
+        const r = this._placeResults[i];
+        if (!r) return;
+        document.getElementById('place-search').value = r.fulltext;
+        this.renderPlaceResults([]);
+        const nameInput = document.getElementById('point-name');
+        if (!nameInput.value.trim() || nameInput.value === this._autoName) {
+            nameInput.value = this._autoName = r.fulltext.split(', ')[0].slice(0, 30);
+        }
+        document.getElementById('modal-error').textContent = '';
+        if (this._mapInstance) {
+            this._mapInstance.setView([r.y, r.x], 13);
+            this.placeMarker(this._mapInstance, r.y, r.x);  // active « Ajouter » : le nom est déjà rempli
+        }
+    },
+
     closeAddPointModal() {
+        clearTimeout(this._placeTimer);
+        this._placeAbort?.abort();
+        this._autoName = '';
         if (this._mapInstance) {
             this._mapInstance.remove();
             this._mapInstance = null;

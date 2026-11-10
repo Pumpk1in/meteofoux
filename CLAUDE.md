@@ -457,7 +457,8 @@ Main application state & logic.
 
 #### Custom Points (Leaflet Map)
 - **`loadLeaflet()`** — Dynamically loads Leaflet CSS/JS
-- **`openAddPointModal()`** — Creates modal with: name input, Leaflet map (click-to-add, draggable marker), coords display, GPS manual input toggle
+- **`openAddPointModal()`** — Creates modal with: place/address search, name input, Leaflet map (click-to-add, draggable marker), coords display, GPS manual input toggle
+- **`onPlaceInput()` / `searchPlace(text)` / `renderPlaceResults(results, message)` / `onPlaceKey(e)` / `choosePlace(i)`** — Place or address search: IGN Géoplateforme autocompletion (`data.geopf.fr/geocodage/completion`, free, no key, CORS open, France only), called from the browser after 3 characters (250 ms debounce, previous request aborted). Up to 6 suggestions inside the France bounds, a commune's duplicate dropped, category shown (`placeKind`: the IGN's own French category for a POI — sommet, refuge…). Choosing one zooms the map, places the marker and pre-fills the name unless it was typed by hand. Combobox keyboard: arrows, Enter, Escape. No `lonlat` proximity bias: tried around La Foux, it made "col du lautaret" lose the col
 - **`initMap()`** — Setup Leaflet map (France bounds), OpenStreetMap tiles, circle markers for existing points
 - **`placeMarker(map, lat, lng)`** — Place/update draggable marker on map
 - **`updateCoordsDisplay(lat, lng)`** — Update modal coordinates display

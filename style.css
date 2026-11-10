@@ -2179,6 +2179,57 @@ footer details p {
     border-color: var(--accent);
 }
 
+/* Suggestions de la recherche de lieu, posées sur la carte */
+.place-field {
+    position: relative;
+}
+
+.place-results {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 1100;  /* au-dessus des contrôles Leaflet (1000) */
+    margin: var(--space-1) 0 0;
+    padding: var(--space-1) 0;
+    list-style: none;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.place-results [role="option"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 44px;
+    padding: var(--space-1) var(--space-3);
+    cursor: pointer;
+}
+
+.place-results [aria-selected="true"] {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+@media (hover: hover) {
+    .place-results [role="option"]:hover {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+}
+
+.place-meta,
+.place-message {
+    font-size: var(--text-small);
+    color: var(--muted);
+}
+
+.place-message {
+    padding: var(--space-2) var(--space-3);
+}
+
 .modal-map {
     flex: 1;
     min-height: 180px;
