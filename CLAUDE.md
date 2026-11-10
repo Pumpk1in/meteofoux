@@ -493,7 +493,7 @@ Main application state & logic.
 
 Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
 icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and nothing is tinted
-by the source: the day detail is white with a 3px border in the model's colour, and its hourly rows take that colour at 6% on white (`--card`: `#f0f6f9`, `#f7f2fc`, `#fbf5f0`). See `DESIGN.md` for the visual system.
+by a translucent source colour: the page is light grey (`#f6f6f6`), the verdict a faint darker layer with white model cells, the day detail an opaque pastel of the model (`--detail-tint`: `#c9e3f6`, `#e1d0f7`, `#f8d8b8`, no border), its chart and hourly rows on white at 92% (`--card`). See `DESIGN.md` for the visual system.
 
 ### Key Layout Classes
 
@@ -504,7 +504,7 @@ by the source: the day detail is white with a 3px border in the model's colour, 
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
 | `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |
-| `.day-detail` | Chart + hourly rows, in the colour of the model shown (tint in dark mode, border in light mode) |
+| `.day-detail` | Chart + hourly rows, in the colour of the model shown (translucent tint in dark mode, opaque pastel in light mode, chart and rows on white) |
 | `.rows` > `.rows-head` + `.card` | Hourly rows: fixed columns (`--col-*`), one background per row, 0.4rem apart; two columns from 768 px (`--n`) |
 | `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
 | `.skeleton-loader` | Loading skeleton (`partials/skeleton.html`): the page's own classes with `.skeleton` blocks, pulse animation |

@@ -61,8 +61,8 @@
 
 /* Thème clair */
 [data-theme="light"] {
-    --bg: #e6e6e6;
-    --bg-secondary: #f2f2f2;
+    --bg: #f6f6f6;
+    --bg-secondary: #f8f8f8;
     --card: rgba(255, 255, 255, 1);
     --card-hover: #ffffff;
     --text: #1e293b;
@@ -388,22 +388,32 @@ body {
     --muted: #a8b5c8;
 }
 
-/* Thème clair : pas de teinte sur le détail (sur le gris de la page, elle ternissait et gênait la
-   lecture au soleil). Fond blanc, et la couleur du modèle en bordure épaisse : la même teinte foncée
-   que sa case dans le verdict. Le nom du modèle en tête du détail la reprend. Les bandes horaires
-   prennent cette couleur à 6 % sur blanc (--card), pour se détacher du fond */
+/* Thème clair : le détail sur un pastel opaque du modèle (une teinte transparente sur le gris de la
+   page ternissait). Le graphique et les bandes horaires sont sur un blanc à 92 %, à peine teinté par
+   ce pastel, pour rester lisibles. Le nom du modèle en tête du détail prend sa teinte foncée, un cran
+   plus sombre que sa case pour Open-Meteo et MET.no (≥ 4,5:1 sur le pastel) */
 [data-theme="light"] .day-detail[data-source] {
-    background: #fff;
-    border: 3px solid var(--detail-color);
+    background: var(--detail-tint);
+    border: 0;
+    --card: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="light"] .day-detail[data-source] .chart-wrapper {
+    background: var(--card);
+    border-radius: var(--radius-md);
+}
+
+[data-theme="light"] .day-detail[data-source] .detail-source {
+    font-weight: 600;
 }
 
 [data-theme="light"] .day-detail[data-source] .detail-source strong {
     color: var(--detail-color);
 }
 
-[data-theme="light"] .day-detail[data-source="openmeteo"] { --detail-color: #0369a1; --card: #f0f6f9; }
-[data-theme="light"] .day-detail[data-source="arome"] { --detail-color: #7e22ce; --card: #f7f2fc; }
-[data-theme="light"] .day-detail[data-source="metno"] { --detail-color: #b45309; --card: #fbf5f0; }
+[data-theme="light"] .day-detail[data-source="openmeteo"] { --detail-color: #075985; --detail-tint: #c9e3f6; }
+[data-theme="light"] .day-detail[data-source="arome"] { --detail-color: #7e22ce; --detail-tint: #e1d0f7; }
+[data-theme="light"] .day-detail[data-source="metno"] { --detail-color: #92400e; --detail-tint: #f8d8b8; }
 
 /* En tête du détail : le modèle dont on voit les heures */
 .detail-source {
@@ -646,8 +656,10 @@ main {
     border-radius: var(--radius-lg);
 }
 
+/* Thème clair : le verdict en retrait, à peine plus foncé que la page (comme en sombre, il est à
+   peine différent du fond) ; les cases des modèles, blanches, ressortent dessus */
 [data-theme="light"] .verdict {
-    background: var(--card);
+    background: rgba(0, 0, 0, 0.025);
 }
 
 .verdict-main {
@@ -865,7 +877,7 @@ main {
 }
 
 /* Thème clair : teintes foncées pour rester lisibles au soleil */
-[data-theme="light"] .model-cell { background: rgba(0, 0, 0, 0.02); }
+[data-theme="light"] .model-cell { background: #fff; }
 @media (hover: hover) {
     [data-theme="light"] .model-cell:hover:not(:disabled) { background: rgba(0, 0, 0, 0.05); }
 }

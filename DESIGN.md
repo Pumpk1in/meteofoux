@@ -19,8 +19,8 @@ colors:
   ardoise-muted: "#94a3b8"
   panneau-givre: "rgba(255, 255, 255, 0.075)"
   trait-givre: "rgba(255, 255, 255, 0.08)"
-  jour-fond: "#e6e6e6"
-  jour-fond-haut: "#f2f2f2"
+  jour-fond: "#f6f6f6"
+  jour-fond-haut: "#f8f8f8"
   jour-texte: "#1e293b"
   jour-muted: "#4a5568"
   neige: "#67e8f9"
@@ -179,12 +179,12 @@ names something: a source, a point, or a weather quantity.
 - **Open-Meteo** (`source-openmeteo`), **AROME** (`source-arome`), **MET.no** (`source-metno`):
   the model cell's label and border, and the day detail (chart and hourly rows). In dark mode the
   detail takes an assumed tint (`rgba(14,110,220,.3)`, `rgba(130,50,235,.3)`, `rgba(225,115,15,.26)`;
-  `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode a tint over the
-  grey page muddied the reading in the sun, so the detail stays white and gets a 3px border in the
-  model's deep hue (`source-*-deep`: `#0369a1`, `#7e22ce`, `#b45309`), the same as its selected
-  cell; the model name in "Heures selon …" takes it too. Its rows take that hue at 6% on white
-  (`#f0f6f9`, `#f7f2fc`, `#fbf5f0`): just enough to stand out from the white, every text stays
-  ≥ 4.5:1. When the source changes, the detail changes colour.
+  `--muted` is one step lighter inside it to keep 4.5:1 on the rows). In light mode a translucent
+  tint over the grey page muddied the reading in the sun, so the detail takes an **opaque pastel**
+  of the model (`#c9e3f6`, `#e1d0f7`, `#f8d8b8`), no border, and the chart and the hourly rows sit
+  on white at 92%, barely tinted by it. The model name in "Heures selon …" takes the model's deep
+  hue (`#075985`, `#7e22ce`, `#92400e`: one step darker than the cell for Open-Meteo and MET.no, to
+  keep ≥ 4.5:1 on the pastel). When the source changes, the detail changes colour.
 
 ### Tertiary: point identity
 - **Station**, **Observatoire**, **Marin-Pascal**, **Vescal** (`point-*`): the dot before the point
@@ -213,8 +213,10 @@ names something: a source, a point, or a weather quantity.
   labels, units, inactive navigation, secondary readings.
 - **Panneau givre** (`panneau-givre`) and **Trait givre** (`trait-givre`): the translucent row fill
   and the hairline border.
-- Light theme: `jour-fond` → `jour-fond-haut` background, `jour-texte`, `jour-muted`, opaque white
-  panels (verdict, day detail), rows inside the detail faintly tinted by the model (see Secondary).
+- Light theme: `jour-fond` → `jour-fond-haut` background (as light as the model cells), `jour-texte`,
+  `jour-muted`. As in dark mode, the verdict is set back: a faint darker layer (`rgba(0,0,0,.025)`)
+  with a hairline, on which the white model cells stand out; the day detail is the coloured layer
+  (see Secondary).
 
 ### Named Rules
 **The Colour Means Something Rule.** Every hue identifies a source, a point or a weather
@@ -271,7 +273,8 @@ a section, 32 px between sections. Only negative margins tuned against ApexChart
 
 Flat and layered: depth comes from stacked translucency, never from shadow (there is none). The page
 gradient, then the verdict panel (a faint white layer) and the day detail (the model's tint in dark
-mode, a white panel framed by the model's border in light mode), then the frosted rows. Fixed bars
+mode, an opaque pastel in light mode), then the frosted rows (white at 92% in light mode, the chart
+on the same white panel). Fixed bars
 use a 10px backdrop blur; the point sheet sits on a 55% black backdrop, the add-point modal on a 4px
 blur. Rows do not react to hover: they are not clickable.
 
@@ -282,7 +285,8 @@ buttons, inputs, model cells, day buttons and hourly rows, `md` 12 px for sheet 
 `lg` 16 px for day sections, the verdict, the detail, the sheet and the modal. "Show more" buttons,
 chips and the details pill are full pills (`--radius-pill`); dots are circles; the thin bars (model
 bars, chart key) keep a 2 px radius. Borders are 1px hairlines in `trait-givre`, except the 1.5px
-model cells and the 3px detail border in light mode.
+model cells; the detail has none in light mode (its pastel is enough). The chart's white panel in
+light mode takes `md`.
 
 ## Components
 
@@ -333,7 +337,7 @@ Bare inside the detail, no panel of its own.
   stops just before them.
 
 ### Hourly rows
-- **Shape:** 8px radius, 6px apart, at least 48px tall; `panneau-givre` (the model's hue at 6% in light mode), no
+- **Shape:** 8px radius, 6px apart, at least 48px tall; `panneau-givre` (white at 92% on the model's pastel in light mode), no
   border: the background is what separates the rows.
 - **Content:** hour on the left ("14 h"), or the period name above the row ("Matin · 7–13 h");
   28px weather icon; temperature (a period shows "min° à max°"); snow in cyan and rain in blue, to
@@ -400,8 +404,8 @@ bar shows seven placeholder buttons until it is built.
 ### Don't:
 - **Don't** let a button, cell or toggle draw the eye away from the data.
 - **Don't** add colour that identifies nothing; the multicolour palette is a key, not decoration.
-- **Don't** tint a large surface in light mode: over the grey page it muddies the reading; use a
-  border.
+- **Don't** tint a large surface in light mode with a translucent colour: over the grey page it
+  muddies the reading. Use an opaque pastel, and keep the chart and the rows on white.
 - **Don't** fall back to a neutral, corporate grey dashboard: the playful multi-source colour is a
   commitment.
 - **Don't** let density cost legibility: dense is fine, unreadable is not.
