@@ -1410,15 +1410,19 @@ const Components = {
     // available = sources présentes dans la réponse du proxy (une absente n'a pas répondu)
     // Nom d'une source pour un jour. La source "arome" est la chaîne Météo-France : AROME jusque
     // vers J+2, puis ARPEGE ; elle porte le nom du modèle qui a vraiment servi ce jour-là.
+    // "openmeteo" (best_match) prend le nom d'ICON-D2 les jours où il le recopie (best_match_model)
     sourceLabel(key, summary) {
         const MODEL_LABELS = {
-            meteofrance_arome_france_hd: 'AROME',
-            meteofrance_arome_france: 'AROME',
-            meteofrance_arpege_seamless: 'ARPEGE',
-            meteofrance_seamless: 'Météo-France'
+            arome: {
+                meteofrance_arome_france_hd: 'AROME',
+                meteofrance_arome_france: 'AROME',
+                meteofrance_arpege_seamless: 'ARPEGE',
+                meteofrance_seamless: 'Météo-France'
+            },
+            openmeteo: { icon_d2: 'ICON-D2' }
         };
         const SOURCE_LABELS = { openmeteo: 'Open-Meteo', arome: 'AROME', metno: 'MET.no' };
-        return (key === 'arome' && MODEL_LABELS[summary?.model]) || SOURCE_LABELS[key];
+        return MODEL_LABELS[key]?.[summary?.model] || SOURCE_LABELS[key];
     },
 
     Verdict(verdict, summaries, selected, available) {
@@ -1517,7 +1521,7 @@ const Components = {
                     <p>Trois services de prévision, qui calculent chacun la météo à leur façon. Touchez une case pour voir ses heures en dessous.</p>
                     <ul>
                         <li><strong>AROME</strong> : Météo-France, le plus détaillé, sur environ 2 jours. Ensuite, son modèle plus large : <strong>ARPEGE</strong>.</li>
-                        <li><strong>Open-Meteo</strong> : combine plusieurs modèles, à sa façon.</li>
+                        <li><strong>Open-Meteo</strong> : choisit lui-même ses modèles, sans dire lesquels. Quand il reprend tel quel le modèle allemand <strong>ICON-D2</strong>, la case porte ce nom.</li>
                         <li><strong>MET.no</strong> : l’institut météo norvégien. Heure par heure sur environ 2 jours, puis toutes les 6 h.</li>
                     </ul>
                 </div>

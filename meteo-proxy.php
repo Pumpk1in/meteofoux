@@ -104,7 +104,8 @@ $end_date = gmdate('Y-m-d', strtotime('+7 days'));
 $url_openmeteo = "https://api.open-meteo.com/v1/forecast?" . http_build_query([
     'latitude' => $lat,
     'longitude' => $lon,
-    'models' => 'best_match,meteofrance_arome_france_hd,meteofrance_arome_france,meteofrance_arpege_seamless,meteofrance_seamless,meteoswiss_icon_seamless',
+    // icon_d2 : seulement pour reconnaître les heures où best_match le recopie (best_match_model)
+    'models' => 'best_match,meteofrance_arome_france_hd,meteofrance_arome_france,meteofrance_arpege_seamless,meteofrance_seamless,meteoswiss_icon_seamless,icon_d2',
     'timezone' => 'GMT',
     'start_date' => $start_date,
     'end_date' => $end_date,
@@ -237,7 +238,7 @@ $output = [
         'generated_at' => gmdate('Y-m-d\TH:i:s\Z'),
         'sources' => [
             'openmeteo' => [
-                'description' => 'Open-Meteo best_match (fusion optimisée multi-modèles)',
+                'description' => 'Open-Meteo best_match (modèle choisi par Open-Meteo, sans l\'indiquer ; model = icon_d2 sur les heures où il recopie ICON-D2)',
                 'priority' => 'best_match → arome_hd → seamless → arome',
                 'coverage' => '7 jours'
             ],

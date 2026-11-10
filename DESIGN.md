@@ -313,7 +313,7 @@ The answer of the day, readable in one second.
   highest model, and its temperatures, covered period or "Toutes les 6 h". They select the model
   shown in the detail. **Selected:** the model's tinted fill and border. **Missing:** dashed,
   "Ne répond pas" or "Ne prévoit pas si loin". The Météo-France cell is named after the model that
-  served the day (AROME, ARPEGE).
+  served the day (AROME, ARPEGE), the Open-Meteo cell "ICON-D2" on days best_match copies it.
 
 ### Day detail
 "Heures selon AROME" (or "Heures selon Open-Meteo · AROME ne prévoit pas si loin" on a relay day),

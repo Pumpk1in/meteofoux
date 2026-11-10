@@ -68,6 +68,24 @@ function get_model_source($data, $key, $index, $models_priority) {
 }
 
 /**
+ * Le modèle que best_match recopie à cette heure : 'icon_d2' ou 'best_match'.
+ * Open-Meteo ne dit pas quel modèle il prend. À La Foux, best_match est une copie exacte
+ * d'ICON-D2 (DWD, 2 km) sur ses ~33 premières heures, puis s'en écarte (constat du 10/11/2026,
+ * 4 points, 22 modèles comparés). On ne le nomme que sur une copie exacte : température, point
+ * de rosée, précipitation et vent identiques. Sans icon_d2 dans la réponse : 'best_match'.
+ */
+function best_match_model($hourly, $index) {
+    foreach (['temperature_2m', 'dew_point_2m', 'precipitation', 'wind_speed_10m'] as $key) {
+        $best = $hourly[$key . '_best_match'][$index] ?? null;
+        $d2 = $hourly[$key . '_icon_d2'][$index] ?? null;
+        if ($best === null || $d2 === null || (float) $best !== (float) $d2) {
+            return 'best_match';
+        }
+    }
+    return 'icon_d2';
+}
+
+/**
  * Détermine si les précipitations tombent sous forme de neige
  * Critère : température humide <= SNOW_WET_BULB_THRESHOLD.
  *
@@ -601,9 +619,15 @@ function openmeteo_rows($openmeteo, $elevation = null, $priorities = null) {
             $weather_code = null;
         }
 
+        // Modèle qui a servi ; pour best_match, celui qu'il recopie quand on le reconnaît
+        $model = get_model_source($hourly, 'temperature_2m', $i, $prio_hd);
+        if ($model === 'best_match') {
+            $model = best_match_model($hourly, $i);
+        }
+
         $rows[] = [
             'time' => $time,
-            'model' => get_model_source($hourly, 'temperature_2m', $i, $prio_hd),
+            'model' => $model,
             'temperature' => $temp,
             'apparent_temperature' => $apparent,
             'dew_point' => $dew,

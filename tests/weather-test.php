@@ -403,6 +403,31 @@ check('pas de 6 h sans donnees : pas de cumul invente',
     [$six['precipitation'][0], $six['rain'][0], $six['snowfall'][0], $six['snowfall_roebber'][0]], [null, null, null, null]);
 check('pas de 6 h sans donnees : ni icone ni isotherme', [$six['symbol_code'][0], $six['freezing_point'][0]], [null, null]);
 
+section('best_match : reconnu comme ICON-D2 seulement sur une copie exacte');
+// Heure 0 : copie exacte (0 et 0.0 comptent pour egaux). Heure 1 : 0.1 C d'ecart.
+// Heure 2 : ICON-D2 au-dela de son horizon. Heure 3 : rien a comparer.
+$bm = ['hourly' => [
+    'time' => ['2026-11-10T06:00', '2026-11-11T09:00', '2026-11-12T12:00', '2026-11-13T12:00'],
+    'temperature_2m_best_match' => [1.3, 2.5, 1.3, 0.5],
+    'temperature_2m_icon_d2' => [1.3, 2.4, null, null],
+    'dew_point_2m_best_match' => [1.3, 2.0, 1.0, 0.0],
+    'dew_point_2m_icon_d2' => [1.3, 2.0, null, null],
+    'precipitation_best_match' => [0.0, 0.2, 0.0, 0.0],
+    'precipitation_icon_d2' => [0, 0.2, null, null],
+    'wind_speed_10m_best_match' => [11.2, 9.0, 5.0, 5.0],
+    'wind_speed_10m_icon_d2' => [11.2, 9.0, null, null],
+]];
+check('copie exacte -> icon_d2', best_match_model($bm['hourly'], 0), 'icon_d2');
+check('un ecart de 0.1 C -> best_match', best_match_model($bm['hourly'], 1), 'best_match');
+check('icon_d2 null -> best_match', best_match_model($bm['hourly'], 2), 'best_match');
+unset($bm['hourly']['temperature_2m_icon_d2']);
+check('icon_d2 absent (ancien cache) -> best_match', best_match_model($bm['hourly'], 0), 'best_match');
+$bm['hourly']['temperature_2m_icon_d2'] = [1.3, 2.4, null, null];
+check('colonne model de la source openmeteo', enrich_openmeteo_hourly($bm, 2590)['model'],
+    ['icon_d2', 'best_match', 'best_match', 'best_match']);
+check('la chaine AROME n est pas concernee', enrich_openmeteo_hourly($bm, 2590, arome_priorities())['model'],
+    [null, null, null, null]);
+
 // ================= RESULTAT =================
 
 echo "\n" . str_repeat('-', 46) . "\n";
