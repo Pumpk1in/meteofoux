@@ -7,6 +7,11 @@
 const Charts = {
     instances: {},
 
+    // Faux le temps d'un rendu : les graphiques paraissent d'un coup, sans l'animation d'entrée
+    // d'ApexCharts (elle peint d'abord le tracé fini une image, l'efface puis le redessine). Pour les
+    // voisins préparés hors écran, et après un balayage : la page vient déjà de glisser
+    animate: true,
+
     // Couleurs des séries selon le thème (clair : ≥ 3:1 sur blanc). La neige est la série la plus
     // saturée : c'est la grandeur qui compte ici
     getSeriesColors(isDark) {
@@ -58,7 +63,7 @@ const Charts = {
                 fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                 toolbar: { show: false },
                 zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
-                animations: { enabled: true, speed: 400 },
+                animations: { enabled: this.animate, speed: 400 },
                 offsetX: 0,
                 offsetY: 0,
                 parentHeightOffset: 0
@@ -107,6 +112,7 @@ const Charts = {
     // details = ressenti, rafales et UV affichés (bouton « Plus de détails »)
     createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}, scales = null, details = false) {
         const colors = this.getSeriesColors(isDark);
+        const animate = this.animate;
 
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
@@ -240,6 +246,10 @@ const Charts = {
                     }
                 },
                 events: {
+                    // Sans animation d'entrée, les icônes dès le tracé
+                    mounted: function() {
+                        if (!animate) Charts.addWeatherIcons(containerId, iconByHour);
+                    },
                     animationEnd: function() {
                         Charts.addWeatherIcons(containerId, iconByHour);
                     },
@@ -308,6 +318,13 @@ const Charts = {
         this.instances = {};
     },
 
+    // Détruit les graphiques contenus dans un élément (une page quittée, un voisin préparé)
+    destroyIn(root) {
+        for (const [id, chart] of Object.entries(this.instances)) {
+            if (root.contains(chart.el)) { chart.destroy(); delete this.instances[id]; }
+        }
+    },
+
     // Ajoute les icônes météo sous les labels de l'axe X
     addWeatherIcons(containerId, iconByHour) {
         const el = document.getElementById(containerId);
@@ -373,10 +390,11 @@ const App = {
         try {
             // Charger les points personnalisés avant tout
             CustomPoints.init();
-            // Rouvrir le dernier point consulté, s'il existe encore
+            // Rouvrir le dernier point consulté, s'il existe encore ; sinon (première visite) la Station,
+            // le plus bas du domaine, quel que soit l'ordre mémorisé des points
             const savedPoint = localStorage.getItem('fmeteo_point');
             this.state.currentPoint = CONFIG.points.some(p => p.key === savedPoint)
-                ? savedPoint : CONFIG.points[0].key;
+                ? savedPoint : CONFIG.domain[0];
 
             // Charger le thème sauvegardé
             const savedTheme = localStorage.getItem('fmeteo_theme') || 'dark';
@@ -392,6 +410,7 @@ const App = {
             this.tintSkeleton();
             // Le titre nomme déjà le point mémorisé pendant le chargement (son altitude vient avec les données)
             this.updateTopBar();
+            this.initSwipe();
 
             // Charger le point initial et afficher immédiatement
             await DataService.loadFirst(false, this.state.currentPoint);
@@ -479,21 +498,27 @@ const App = {
     },
 
 
-    // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date
-    updateTopBar() {
-        const point = CONFIG.points.find(p => p.key === this.state.currentPoint);
+    // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date.
+    // Un autre point pendant un balayage : celui où l'on arrivera en lâchant
+    updateTopBar(pointKey = this.state.currentPoint) {
+        const point = CONFIG.points.find(p => p.key === pointKey);
         if (point) {
             const elevation = DataService.state.data[point.key]?.elevation;
             document.getElementById('point-title-text').textContent =
                 elevation ? `${point.name} · ${Math.round(elevation)} m` : point.name;
-            document.getElementById('point-title-dot').style.setProperty('--point-color', point.color);
+            // Point du domaine : sa place parmi les quatre, du plus bas au plus haut (les autres en
+            // petit, mobile seulement) ; le balayage passe de l'un à l'autre
+            const rank = CONFIG.domain.indexOf(point.key);
+            const dot = `<span class="point-dot" style="--point-color: ${point.color}"></span>`;
+            document.getElementById('point-title-dots').innerHTML = rank < 0 ? dot
+                : CONFIG.domain.map((_, i) => i === rank ? dot : '<span class="point-step"></span>').join('');
         }
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
             // Sur ordinateur, tous les jours s'empilent et chacun a sa date en tête : en haut, la
             // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste
             const formatted = Utils.isMobile() ? Utils.formatDateShort(this.state.currentDay) : '';
-            const freshness = this.freshness(DataService.state.data[this.state.currentPoint]?.meta);
+            const freshness = this.freshness(DataService.state.data[pointKey]?.meta);
             const line = [formatted, freshness?.text].filter(Boolean).join(' · ');
             dateEl.textContent = line.charAt(0).toUpperCase() + line.slice(1);
             dateEl.classList.toggle('is-stale', !!freshness?.stale);
@@ -662,10 +687,19 @@ const App = {
         }
 
         lucide.createIcons();
+        this.restoreToggles(document);
 
+        // Rendre les graphiques après le DOM
+        requestAnimationFrame(() => this.renderCharts());
+        this.scheduleNeighbors();
+    },
+
+    // Heures dépliées (aujourd'hui, jours suivants) dans un rendu tout neuf : la page, ou le point
+    // voisin pendant un balayage
+    restoreToggles(root) {
         // Restaurer l'état du toggle aujourd'hui si nécessaire
         if (this.state.todayHoursExpanded) {
-            const todayGrid = document.querySelector('.day-section[data-day="' + new Date().toLocaleDateString('fr-CA') + '"] .cards-grid:not(.cards-grid-tomorrow)');
+            const todayGrid = root.querySelector('.day-section[data-day="' + new Date().toLocaleDateString('fr-CA') + '"] .cards-grid:not(.cards-grid-tomorrow)');
             if (todayGrid) {
                 todayGrid.querySelectorAll('.hidden-card').forEach(card => {
                     card.classList.remove('hidden-card');
@@ -679,7 +713,7 @@ const App = {
 
         // Restaurer l'état du toggle pour chaque jour étendu
         this.state.expandedDays.forEach(day => {
-            const dayGrid = document.querySelector(`.cards-grid-tomorrow[data-day="${day}"]`);
+            const dayGrid = root.querySelector(`.cards-grid-tomorrow[data-day="${day}"]`);
             if (dayGrid) {
                 const periodsGrid = dayGrid.querySelector('.grid-periods');
                 const hourlyGrid = dayGrid.querySelector('.grid-hourly');
@@ -691,9 +725,172 @@ const App = {
                 }
             }
         });
+    },
 
-        // Rendre les graphiques après le DOM
-        requestAnimationFrame(() => this.renderCharts());
+    // Un point voisin dans un panneau posé hors écran à côté de la page : le jour affiché, pour ce point
+    neighborPanel(key, side) {
+        const el = document.createElement('div');
+        el.className = 'swipe-peek';
+        el.dataset.key = key;
+        el.setAttribute('aria-hidden', 'true');
+        el.inert = true;
+        el.style.transform = `translateX(${side === 'prev' ? '-' : ''}100%)`;
+        const pointData = DataService.state.data[key];
+        el.innerHTML = pointData
+            ? this.renderDayContent(this.state.currentDay, pointData, Utils.isToday(this.state.currentDay))
+            : Components.Skeleton();
+        if (!pointData) el.querySelector('.day-detail')?.setAttribute('data-source', this.state.globalSource);
+        this.restoreToggles(el);
+        document.getElementById('content').appendChild(el);
+        lucide.createIcons();
+        return el;
+    },
+
+    // Les deux voisins (mobile), préparés hors écran quand le navigateur a le temps, graphique compris :
+    // au balayage ils sont déjà là, et à l'arrivée il n'y a plus rien à dessiner. Refaits après chaque
+    // rendu, chaque bascule qui change la page, et quand un voisin (loadedKey) vient de charger
+    scheduleNeighbors(loadedKey) {
+        const i = CONFIG.domain.indexOf(this.state.currentPoint);
+        if (loadedKey && Math.abs(CONFIG.domain.indexOf(loadedKey) - i) !== 1) return;
+        const content = document.getElementById('content');
+        content.querySelectorAll(':scope > .swipe-peek').forEach(p => { Charts.destroyIn(p); p.remove(); });
+        if (!Utils.isMobile() || i < 0) return;
+        const token = this._neighbors = (this._neighbors || 0) + 1;
+        const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
+        // Un voisin par moment libre : chacun coûte ~70 ms sur un téléphone moyen
+        [[CONFIG.domain[i - 1], 'prev'], [CONFIG.domain[i + 1], 'next']].forEach(([key, side]) => idle(() => {
+            if (token !== this._neighbors || this._swiping || content.hasAttribute('aria-busy')) return;
+            if (!key || !DataService.state.data[key]) return;
+            const panel = this.neighborPanel(key, side);
+            Charts.animate = false;
+            this.renderCharts(key);
+            Charts.animate = true;
+            panel.dataset.drawn = '1';
+        }));
+    },
+
+    // Balayage d'un point du domaine à l'autre (mobile, au doigt). La page suit le doigt et le point
+    // voisin entre à côté, déjà dessiné (scheduleNeighbors) ; à l'arrivée, il devient la page. Lâchée
+    // au-delà de 30 % de la largeur, ou d'un geste vif, elle part vers ce point ; sinon elle revient.
+    // Vers la gauche on monte, vers la droite on descend ; pas de boucle : aux deux bouts, la page
+    // résiste. Le titre annonce le point où l'on arrivera en lâchant. Le jour et la position dans la
+    // page ne changent pas : on compare le même endroit d'un point à l'autre.
+    // Pas depuis le tracé du graphique, où l'on glisse pour lire les heures (sa légende au-dessus et
+    // la rangée des heures et des icônes en dessous, si), ni depuis un point perso (ils restent dans
+    // la feuille des points)
+    initSwipe() {
+        const content = document.getElementById('content');
+        const COMMIT = 0.3, FLICK = 0.5; // part de la largeur ; vitesse en px/ms
+        let g = null;                    // geste en cours
+
+        // Le voisin préparé ; sinon (geste juste après un changement) construit maintenant, sans son
+        // graphique, dont la place est gardée : les heures ne remontent pas puis redescendent à l'arrivée
+        const panelFor = (key, side) => {
+            if (!key) return null;
+            const ready = content.querySelector(`:scope > .swipe-peek[data-key="${key}"]`);
+            if (ready) return ready;
+            const el = this.neighborPanel(key, side);
+            const chartHeight = content.querySelector(':scope > .day-section .chart-wrapper')?.offsetHeight;
+            if (chartHeight) el.querySelectorAll('.chart-wrapper').forEach(w => w.style.minHeight = `${chartHeight}px`);
+            return el;
+        };
+
+        const place = (gesture, offset, animate) => {
+            [...gesture.current, gesture.prev, gesture.next].filter(Boolean).forEach(el => {
+                el.style.transition = animate ? 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+            });
+            gesture.current.forEach(el => el.style.transform = `translateX(${offset}px)`);
+            if (gesture.prev) gesture.prev.style.transform = `translateX(calc(-100% + ${offset}px))`;
+            if (gesture.next) gesture.next.style.transform = `translateX(calc(100% + ${offset}px))`;
+        };
+
+        content.addEventListener('pointerdown', e => {
+            g = null;
+            if (e.pointerType === 'mouse' || !e.isPrimary || this._swiping || !Utils.isMobile()) return;
+            if (!CONFIG.domain.includes(this.state.currentPoint) || !DataService.state.data[this.state.currentPoint]) return;
+            if (content.hasAttribute('aria-busy')) return;
+            const plot = e.target.closest('.chart')?.querySelector('.apexcharts-grid')?.getBoundingClientRect();
+            if (plot && e.clientY >= plot.top && e.clientY <= plot.bottom) return;
+            g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [] };
+        });
+
+        content.addEventListener('pointermove', e => {
+            if (!g || e.pointerId !== g.id) return;
+            const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+            if (!g.locked) {
+                if (Math.hypot(dx, dy) < 10) return;
+                // Plutôt vertical : la page défile, le balayage n'a pas lieu
+                if (Math.abs(dy) >= Math.abs(dx)) { g = null; return; }
+                g.locked = true;
+                this._swiping = true;
+                content.setPointerCapture(e.pointerId);
+                const i = CONFIG.domain.indexOf(this.state.currentPoint);
+                g.prevKey = CONFIG.domain[i - 1];
+                g.nextKey = CONFIG.domain[i + 1];
+                g.current = [...content.children];
+                g.prev = g.prevKey && peek(g.prevKey);
+                g.next = g.nextKey && peek(g.nextKey);
+                lucide.createIcons();
+                g.shown = this.state.currentPoint;
+            }
+            g.samples.push({ x: e.clientX, t: e.timeStamp });
+            if (g.samples.length > 5) g.samples.shift();
+
+            const targetKey = dx < 0 ? g.nextKey : g.prevKey;
+            g.offset = targetKey ? dx : dx / 3; // pas de voisin de ce côté : la page résiste
+            place(g, g.offset, false);
+            const shown = targetKey && Math.abs(g.offset) > content.clientWidth * COMMIT ? targetKey : this.state.currentPoint;
+            if (shown !== g.shown) { g.shown = shown; this.updateTopBar(shown); }
+        });
+
+        const end = (e, cancelled) => {
+            if (!g || e.pointerId !== g.id) return;
+            const gesture = g;
+            g = null;
+            if (!gesture.locked) return;
+
+            // Vitesse sur les derniers déplacements : un geste vif suffit, même court, s'il va dans
+            // le sens où la page est déjà partie
+            const s = gesture.samples;
+            const v = s.length > 1 ? (s[s.length - 1].x - s[0].x) / Math.max(1, s[s.length - 1].t - s[0].t) : 0;
+            const toward = Math.sign(gesture.offset);
+            const go = !cancelled && (Math.abs(v) > FLICK
+                ? Math.sign(v) === toward
+                : Math.abs(gesture.offset) > content.clientWidth * COMMIT);
+            const key = go ? (toward < 0 ? gesture.nextKey : gesture.prevKey) : null;
+            place(gesture, key ? toward * content.clientWidth : 0, true);
+
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                this._swiping = false;
+                if (key) {
+                    // Le rendu remplace la page et ses voisins ; même position dans la page. Le
+                    // graphique n'est tracé qu'à l'image suivante (render) : d'ici là, la page garde sa
+                    // hauteur, sinon le navigateur ramènerait le défilement plus haut
+                    const scrollY = window.scrollY;
+                    content.style.minHeight = `${content.offsetHeight}px`;
+                    Charts.animate = false;
+                    this.selectPoint(key);
+                    window.scrollTo(0, scrollY);
+                    // Après le tracé (même image que celui de render, demandé avant)
+                    requestAnimationFrame(() => {
+                        content.style.minHeight = '';
+                        Charts.animate = true;
+                    });
+                } else {
+                    gesture.prev?.remove();
+                    gesture.next?.remove();
+                    gesture.current.forEach(el => el.style.transform = el.style.transition = '');
+                    this.updateTopBar();
+                }
+            };
+            gesture.current[0]?.addEventListener('transitionend', finish, { once: true });
+            setTimeout(finish, 350);
+        };
+        content.addEventListener('pointerup', e => end(e, false));
+        content.addEventListener('pointercancel', e => end(e, true));
     },
 
     // Modèle affiché en détail pour un jour : le choix de l'utilisateur, sauf au-delà de son horizon
@@ -808,9 +1005,10 @@ const App = {
         `;
     },
 
-    renderCharts() {
+    // Un autre point que le point affiché : un voisin préparé hors écran (balayage)
+    renderCharts(pointKey = this.state.currentPoint) {
         const data = DataService.state.data;
-        const pointData = data[this.state.currentPoint];
+        const pointData = data[pointKey];
 
         // Déterminer quels jours ont besoin d'un graphique
         const daysToRender = Utils.isMobile() ? [this.state.currentDay] : this.state.days;
@@ -828,16 +1026,16 @@ const App = {
             // Ne pas rendre si pas assez de données
             if (chartAvailability.type === 'none') return;
 
-            this.renderChartForDay(day, chartAvailability.type, sourceData);
+            this.renderChartForDay(day, chartAvailability.type, sourceData, pointKey);
         });
     },
 
-    renderChartForDay(day, dataType, sourceData) {
+    renderChartForDay(day, dataType, sourceData, pointKey = this.state.currentPoint) {
         const chartData = DataNormalizer.toChartData(day, sourceData, dataType);
         if (chartData.length < 2) return;
 
         const isDark = this.state.theme === 'dark';
-        const chartIdPrefix = `chart-${day}-${this.state.currentPoint}`;
+        const chartIdPrefix = `chart-${day}-${pointKey}`;
 
         // Formater les données pour ApexCharts
         const formattedData = {
@@ -863,15 +1061,15 @@ const App = {
         const hasExtendedData = sourceData.extended && dataType === 'hourly';
         if (document.getElementById(`${chartIdPrefix}-unified`)) {
             Charts.createUnifiedChart(`${chartIdPrefix}-unified`, formattedData, isDark, hasExtendedData, iconByHour,
-                this.sharedChartScales(day, dataType), this.state.chartDetails);
+                this.sharedChartScales(day, dataType, pointKey), this.state.chartDetails);
         }
     },
 
     // Échelles communes aux modèles d'un jour : passer d'une case à l'autre ne change pas les axes,
     // une heure à 1 cm a la même hauteur chez les trois. Températures et vent : tous les modèles.
     // Neige et pluie : seulement ceux tracés au même pas (une barre de 6 h cumule six heures).
-    sharedChartScales(day, dataType) {
-        const pointData = DataService.state.data[this.state.currentPoint];
+    sharedChartScales(day, dataType, pointKey = this.state.currentPoint) {
+        const pointData = DataService.state.data[pointKey];
         const temps = [], winds = [], snows = [], rains = [];
         for (const src of Object.values(pointData.sources)) {
             const type = Utils.getChartDataAvailability(day, src.hourly, src.sixHourly).type;
@@ -979,9 +1177,9 @@ const App = {
                 </span>
             </div>`;
 
-        // Domaine : du plus bas au plus haut (altitude inconnue tant que le point charge : à la fin)
-        const domain = CONFIG.points.filter(p => !p.custom)
-            .sort((a, b) => (elevationOf(a) ?? Infinity) - (elevationOf(b) ?? Infinity));
+        // Domaine : du plus bas au plus haut, dans l'ordre du balayage (fixe : ne bouge pas pendant
+        // que les points chargent)
+        const domain = CONFIG.domain.map(key => CONFIG.points.find(p => p.key === key));
         const canAdd = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM;
         const dayLabel = Utils.formatDateShort(day);
 

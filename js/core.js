@@ -4,11 +4,13 @@
  */
 
 const CONFIG = {
+    // Les points du domaine, du plus bas au plus haut : l'ordre de la feuille des points et du
+    // balayage d'un point à l'autre (CONFIG.domain, ci-dessous)
     points: [
         { name: 'Station', lat: 44.2902, lon: 6.5689, key: 'station', color: '#309fcf' },
-        { name: 'Observatoire', lat: 44.2848, lon: 6.5356, key: 'observatoire', color: '#d866a1' },
         { name: 'Marin-Pascal', lat: 44.2935, lon: 6.5904, key: 'marin-pascal', color: '#de9333' },
-        { name: 'Vescal', lat: 44.3122, lon: 6.5743, key: 'vescal', color: '#866fcc' }
+        { name: 'Vescal', lat: 44.3122, lon: 6.5743, key: 'vescal', color: '#866fcc' },
+        { name: 'Observatoire', lat: 44.2848, lon: 6.5356, key: 'observatoire', color: '#d866a1' }
     ],
     dayLabels: ['DI', 'LU', 'MA', 'ME', 'JE', 'VE', 'SA'],
     charts: {
@@ -17,6 +19,10 @@ const CONFIG = {
         minSixHourlyPoints: 3  // Minimum de points 6h pour graphique simplifié (4 créneaux max/jour)
     }
 };
+
+// Ordre du domaine, figé dès maintenant : CONFIG.points reçoit ensuite les points perso et suit
+// l'ordre mémorisé (CustomPoints.applyOrder), qui peut dater d'un domaine rangé autrement
+CONFIG.domain = CONFIG.points.map(p => p.key);
 
 // Gestion des points personnalisés (localStorage)
 const CustomPoints = {

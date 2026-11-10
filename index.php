@@ -31,7 +31,7 @@ $v = fn($f) => '?v=' . filemtime(__DIR__ . '/' . $f);
         <h1 class="point-title-heading">
             <button class="point-title" id="point-title" onclick="App.openPointSheet()" aria-haspopup="dialog" aria-expanded="false">
                 <span class="point-title-name">
-                    <span class="point-dot" id="point-title-dot"></span>
+                    <span class="point-steps" id="point-title-dots"><span class="point-dot"></span></span>
                     <span id="point-title-text">MeteoFoux</span>
                     <i data-lucide="chevron-down"></i>
                 </span>

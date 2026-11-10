@@ -289,7 +289,9 @@ model cells and the 3px detail border in light mode.
 ### Top bar
 - **Point title** (a button, opens the point sheet): the point's dot, "Observatoire · 2590 m", a
   chevron; under it, the date and the freshness ("màj il y a 5 min") on mobile, the freshness only on
-  desktop (every day there has its own date). Stale data ("données d'il y a 2 h") turns amber.
+  desktop (every day there has its own date). Stale data ("données d'il y a 2 h") turns amber. On
+  mobile, for a domain point, the dot sits among three 4px muted steps at its rank from lowest to
+  highest (Station first, Observatoire last): the position for the swipe between points.
 - **Icon buttons** (refresh, theme): 44px squares, 8px radius, hairline border, faint slate fill,
   18px muted Lucide icon. Refresh spins its icon while loading.
 
@@ -341,11 +343,22 @@ Bare inside the detail, no panel of its own.
   quality drops under its figure, a figure never leaves its unit.
 
 ### Point sheet
-A bottom sheet opened from the title: "La Foux d'Allos" points sorted by altitude, then "Mes
-points", each row with its dot, altitude and the day's verdict ("Chargement…" while unknown); the
+A bottom sheet opened from the title: "La Foux d'Allos" points sorted by altitude (a fixed order,
+the swipe's), then "Mes points", each row with its dot, altitude and the day's verdict ("Chargement…" while unknown); the
 current point is highlighted. "Modifier" reveals up/down and delete for custom points; a dashed
 "Ajouter un point" row opens the add-point modal (Leaflet map). Focus is trapped inside, Escape
 closes it.
+
+### Swipe between points
+On mobile, a horizontal swipe on the content moves to the next domain point (left: higher, right:
+lower), on the same day and at the same place in the page, so one reading is compared across
+altitudes. The page follows the finger and the neighbour's real day slides in beside it (its chart's
+place kept; on arrival the chart fades in over 0.2s, without its usual entry animation: the page has
+just moved); past 30% of the width, or with a flick, it goes, otherwise it
+springs back with the sheet's curve (0.28s, `cubic-bezier(0.22, 1, 0.36, 1)`). No loop: Station and
+Observatoire resist. The title switches to the target point once letting go would land there. Not
+from the plot of the chart (dragging there reads the hours; its key above and its row of hours and
+icons below do swipe), not on custom points (the sheet only).
 
 ### Loading skeleton
 `partials/skeleton.html`: the day built from the page's own classes, with pulsing blocks in place of

@@ -283,15 +283,20 @@ response must never overwrite it:
 ### CONFIG Object
 
 ```javascript
-points: [
+points: [                // the domain, lowest to highest
   { name: 'Station',       lat: 44.2902, lon: 6.5689, key: 'station',       color: '#309fcf' },
-  { name: 'Observatoire',  lat: 44.2848, lon: 6.5356, key: 'observatoire',  color: '#d866a1' },
   { name: 'Marin-Pascal',  lat: 44.2935, lon: 6.5904, key: 'marin-pascal',  color: '#de9333' },
-  { name: 'Vescal',        lat: 44.3122, lon: 6.5743, key: 'vescal',        color: '#866fcc' }
+  { name: 'Vescal',        lat: 44.3122, lon: 6.5743, key: 'vescal',        color: '#866fcc' },
+  { name: 'Observatoire',  lat: 44.2848, lon: 6.5356, key: 'observatoire',  color: '#d866a1' }
 ]
 dayLabels: ['DI', 'LU', 'MA', 'ME', 'JE', 'VE', 'SA']
 charts: { maxDays: 7, minHourlyPoints: 12, minSixHourlyPoints: 3 }
 ```
+
+`CONFIG.domain` = the keys of the domain points in that declared order, set right after `CONFIG`:
+`CONFIG.points` later receives the custom points and follows the saved order
+(`CustomPoints.applyOrder`, which may date from a domain ordered differently). It is the order of
+the point sheet and of the swipe, and `CONFIG.domain[0]` (Station) is the point of a first visit.
 
 ### CustomPoints Module
 
@@ -363,6 +368,7 @@ Formats raw data for UI consumption.
 ApexCharts wrapper for multi-axis weather charts.
 
 - **`instances`** — Stores chart objects by containerId
+- **`animate`** — `true`, except for the render that follows a swipe: the charts then skip ApexCharts' entry animation (it paints the finished plot for one frame, clears it, then redraws it left to right) and fade in instead (`.chart-enter`, 0.2 s), their weather icons added on `mounted` instead of `animationEnd`
 - **`getSeriesColors(isDark)`** — Series colors by key (`temp`, `feels`, `wind`, `gusts`, `uv`, `snow`, `rain`). Snow is light cyan, rain mid blue: same family, a clear lightness gap (3:1 between them in dark mode). Light-theme colors are ≥ 3:1 on white. Axis labels: 10 px (≈ Micro), `#4b5563` in light mode (5.6:1 on the tinted detail)
 - **`getAxisTitleColors(isDark)`** — Axis units take the color of the series they measure (°C, km/h of the wind, UV)
 - **`chartHeadHtml(defs, isDark, details)`** — The chart key, in HTML above the plot (`.chart-head`, filled by `createUnifiedChart`): one non-clickable item per series (line, dashed line or bar mark; snow and rain only when the day has some), then `.chart-units-row`: the units `.chart-units` (°C / km/h / UV; `.no-uv` when UV is hidden, km/h then takes its place) above their tick columns, and the "Plus de détails" / "Moins de détails" button (`App.toggleChartDetails`, an outlined pill with a chevron inside a 44 px target; no chevron under 360 px) centred between them, so it does not move when the key wraps. Replaces the ApexCharts legend and axis titles. The chart has no card of its own (`.chart-wrapper` is bare): it sits in the tinted detail
@@ -415,20 +421,22 @@ Main application state & logic.
 ```
 
 #### Lifecycle
-- **`init()`** — Load custom points, restore the last point viewed, theme & source from localStorage, load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
+- **`init()`** — Load custom points, restore the last point viewed (Station on a first visit), theme & source from localStorage, set up the swipe (`initSwipe`), load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
 - **`setupDays()`** — Extract unique days from series, filter ≥ today, slice to 7 max. After 18:00 the app opens on tomorrow
-- **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states, calls renderCharts()
+- **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states (`restoreToggles`), calls renderCharts()
+- **`restoreToggles(root)`** — Unfolds, in a fresh render (`document`, or the neighbour panel of a swipe), today's hours (`todayHoursExpanded`) and the days whose hours were shown (`expandedDays`)
 
 #### Navigation
 - **`renderNavigation()`** — Day bar, top bar
 - **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max), the unit (cm / mm / max) on its own line under it on mobile (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). Redone when the point changes
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
 - **`selectPoint(pointKey)`** — Switch active point (loads it if needed), save it to localStorage, re-render
-- **`updateTopBar()`** — Title button "● Point · altitude ▾" and the line under it: date + freshness on mobile, freshness only on desktop (every day is stacked there, each with its own date)
+- **`updateTopBar(pointKey = currentPoint)`** — Title button "● Point · altitude ▾" and the line under it: date + freshness on mobile, freshness only on desktop (every day is stacked there, each with its own date). On a domain point the dot is one of four (`#point-title-dots`: `.point-dot` at the point's rank in `CONFIG.domain`, `.point-step` for the others, mobile only); a custom point keeps its single dot. Another `pointKey` during a swipe: the point the user lands on if they let go
+- **`initSwipe()`** — Mobile, touch only: horizontal swipe on `#content` from one domain point to the next (left = higher, right = lower), the day and the scroll position kept. The page follows the finger; on direction lock (10 px, horizontal wins) both neighbours are rendered next to it (`.swipe-peek`: `renderDayContent` of the same day, or the skeleton if that point is not loaded yet; the chart is drawn on arrival, its height kept). Let go past 30 % of the width, or with a flick (> 0.5 px/ms in the direction the page already moved): `selectPoint`, with `Charts.animate` off for that render (the chart fades in) and the page height held until the chart is drawn (else the scroll position would be clamped); otherwise it springs back (0.28 s, the sheet's curve). No loop: at Station and Observatoire the page resists (a third of the finger's travel). Not from the plot (the vertical band of `.apexcharts-grid`: dragging there reads the hours; the key above it and the row of hours and icons below it are fine), not on a custom point, not while loading. The title announces the target past the 30 % mark
 - **`freshness(meta)`** — "màj il y a X min", or "données d'il y a X h" (amber) when the proxy served its cache or the data is over an hour old
 
 #### Point Sheet (opened from the title)
-- **`openPointSheet()` / `closePointSheet()` / `renderPointSheet()` / `refreshPointSheet()`** — Bottom sheet: "La Foux d'Allos" points sorted by altitude, then "Mes points" (custom, in their order), each with the day's verdict ("Chargement…" / "Indisponible" while unknown). Focus trap and Escape (`onPointSheetKey`), focus back to the title on close, focus kept inside after a re-render
+- **`openPointSheet()` / `closePointSheet()` / `renderPointSheet()` / `refreshPointSheet()`** — Bottom sheet: "La Foux d'Allos" points by altitude (`CONFIG.domain`, fixed while they load), then "Mes points" (custom, in their order), each with the day's verdict ("Chargement…" / "Indisponible" while unknown). Focus trap and Escape (`onPointSheetKey`), focus back to the title on close, focus kept inside after a re-render
 - **`choosePoint(key)`**, **`togglePointsEdit()`** ("Modifier": up/down and delete for custom points), **`movePoint(key, direction)`** (swaps two custom points in place, saves the order), **`addPointFromSheet()`**
 
 #### Data Source & Theme
@@ -497,6 +505,8 @@ by the source: the day detail is white with a 3px border in the model's colour, 
 | `.rows` > `.rows-head` + `.card` | Hourly rows: fixed columns (`--col-*`), one background per row, 0.4rem apart; two columns from 768 px (`--n`) |
 | `.sheet-root` > `.sheet` | Point sheet (bottom sheet) |
 | `.skeleton-loader` | Loading skeleton (`partials/skeleton.html`): the page's own classes with `.skeleton` blocks, pulse animation |
+| `.swipe-peek` | A neighbour point during a swipe, laid over `main` and translated beside it. Under 768 px `main` is `position: relative`, `overflow-x: clip` (the off-screen panel does not widen the page) and `touch-action: pan-y pinch-zoom` (vertical scroll and zoom stay with the browser, horizontal drags reach the page) |
+| `.point-steps` > `.point-dot` / `.point-step` | The title's dot among the four domain points (4 px muted steps, hidden from 768 px) |
 
 ### Source Color Indicators
 
@@ -590,6 +600,6 @@ icons and the chart.
 |-----|---------|
 | `fmeteo_theme` | `'dark'` or `'light'` |
 | `fmeteo_source` | `'openmeteo'`, `'arome'`, or `'metno'` |
-| `fmeteo_point` | Key of the last point viewed, reopened at startup (first point of the list if it no longer exists) |
+| `fmeteo_point` | Key of the last point viewed, reopened at startup (Station if absent or if that point no longer exists) |
 | `fmeteo_custom_points` | JSON array of custom geographic points |
 | `fmeteo_points_order` | JSON array of point keys (drag-reorder) |

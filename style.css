@@ -245,6 +245,28 @@ body {
     background: var(--point-color, var(--muted));
 }
 
+/* Place du point parmi les quatre du domaine, du plus bas au plus haut : le point affiché dans sa
+   couleur, les autres en petit. Sur mobile seulement, où l'on balaie d'un point à l'autre */
+.point-steps {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 3px;
+}
+
+.point-step {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+@media (min-width: 768px) {
+    .point-step {
+        display: none;
+    }
+}
+
 .top-bar-right {
     display: flex;
     flex-shrink: 0;
@@ -546,6 +568,27 @@ main {
     padding: var(--space-4);
     max-width: 900px;
     margin: auto;
+}
+
+/* Balayage d'un point à l'autre (mobile, App.initSwipe) : le défilement vertical et le zoom restent
+   au navigateur, le glissement horizontal revient à la page. Le point voisin, posé à côté, n'élargit
+   pas la page */
+@media (max-width: 767px) {
+    main {
+        position: relative;
+        overflow-x: clip;
+        touch-action: pan-y; /* navigateurs sans pinch-zoom ci-dessous */
+        touch-action: pan-y pinch-zoom;
+    }
+}
+
+.swipe-peek {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: inherit;
+    pointer-events: none;
 }
 
 /* ============================================
@@ -929,6 +972,15 @@ main {
 
 .chart {
     min-height: 180px;
+}
+
+/* Graphique paru sans l'animation d'entrée d'ApexCharts (après un balayage) : un fondu bref */
+.chart-enter {
+    animation: chartEnter 0.2s ease-out;
+}
+
+@keyframes chartEnter {
+    from { opacity: 0; }
 }
 
 /* Cacher la toolbar ApexCharts (pan activé par défaut) */
