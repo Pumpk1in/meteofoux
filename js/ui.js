@@ -753,6 +753,9 @@ const App = {
     scheduleNeighbors(loadedKey) {
         const i = CONFIG.domain.indexOf(this.state.currentPoint);
         if (loadedKey && Math.abs(CONFIG.domain.indexOf(loadedKey) - i) !== 1) return;
+        // Pendant un geste, les voisins restent (retirés, la page glisserait vers le vide) : refaits à la fin
+        if (this._swiping) { this._neighborsStale = true; return; }
+        this._neighborsStale = false;
         const content = document.getElementById('content');
         content.querySelectorAll(':scope > .swipe-peek').forEach(p => { Charts.destroyIn(p); p.remove(); });
         if (!Utils.isMobile() || i < 0) return;
@@ -866,7 +869,9 @@ const App = {
                 if (done) return;
                 done = true;
                 this._swiping = false;
-                if (panel?.dataset.drawn) {
+                // Un voisin a rechargé pendant le geste (rafraîchissement) : son panneau date d'avant
+                const stale = this._neighborsStale;
+                if (panel?.dataset.drawn && !stale) {
                     // Le voisin devient la page, graphique compris : rien à redessiner. L'ancienne page
                     // s'en va ; l'autre voisin aussi, les nouveaux se préparent
                     gesture.current.forEach(el => { Charts.destroyIn(el); el.remove(); });
@@ -895,7 +900,7 @@ const App = {
                     gesture.current.forEach(el => el.style.transform = el.style.transition = '');
                     this.updateTopBar();
                     // Voisins construits pendant le geste, sans graphique : à préparer pour de bon
-                    if ([gesture.prev, gesture.next].some(p => p && !p.dataset.drawn)) this.scheduleNeighbors();
+                    if (stale || [gesture.prev, gesture.next].some(p => p && !p.dataset.drawn)) this.scheduleNeighbors();
                 }
             };
             gesture.current[0]?.addEventListener('transitionend', finish, { once: true });
