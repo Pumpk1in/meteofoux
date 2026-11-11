@@ -648,6 +648,46 @@ main {
     pointer-events: none;
 }
 
+/* Point qui arrive pendant un balayage (App.initSwipe), à hauteur du doigt (top posé en JS) : il
+   suit la page voisine, rebondit à l'arrivée, reste un instant puis s'efface. Couleurs inversées
+   par rapport au thème (clair sur fond sombre, sombre sur fond clair) : il doit se détacher de la page */
+.swipe-label {
+    position: fixed;
+    left: 50%;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: 999px;
+    background: var(--text);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    color: var(--bg);
+    font-size: var(--text-heading);
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.swipe-label.is-on {
+    opacity: 1;
+    visibility: visible;
+}
+
+.swipe-label.is-pop {
+    animation: swipe-label-pop 0.45s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes swipe-label-pop {
+    40% { scale: 1.18; }
+}
+
+[data-theme="light"] .swipe-label {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
 /* ============================================
    DAY SECTIONS
    ============================================ */

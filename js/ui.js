@@ -483,14 +483,18 @@ const App = {
     },
 
 
+    // « Vescal · 2100 m » ; le nom seul tant que le point n'a pas chargé
+    pointName(point) {
+        const elevation = DataService.state.data[point.key]?.elevation;
+        return elevation ? `${point.name} · ${Math.round(elevation)} m` : point.name;
+    },
+
     // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date.
     // Un autre point pendant un balayage : celui où l'on arrivera en lâchant
     updateTopBar(pointKey = this.state.currentPoint) {
         const point = CONFIG.points.find(p => p.key === pointKey);
         if (point) {
-            const elevation = DataService.state.data[point.key]?.elevation;
-            document.getElementById('point-title-text').textContent =
-                elevation ? `${point.name} · ${Math.round(elevation)} m` : point.name;
+            document.getElementById('point-title-text').textContent = this.pointName(point);
             // Point du domaine : sa place parmi les quatre, du plus bas au plus haut (les autres en
             // petit, mobile seulement) ; le balayage passe de l'un à l'autre
             const rank = CONFIG.domain.indexOf(point.key);
@@ -865,6 +869,42 @@ const App = {
             return el;
         };
 
+        // Étiquette du point qui arrive, à hauteur du doigt (un peu au-dessus, que le pouce ne la cache
+        // pas) : là où l'œil est pendant le geste. Le titre, petit et en haut à gauche, passait inaperçu,
+        // surtout après un balayage involontaire. Elle glisse avec la page voisine, rebondit à
+        // l'arrivée, y reste un instant puis s'efface
+        const label = document.createElement('div');
+        label.className = 'swipe-label';
+        label.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(label);
+        let labelTimer = null;
+        const showLabel = (key, x, animate) => {
+            clearTimeout(labelTimer);
+            if (label.dataset.key !== key) {
+                const point = CONFIG.points.find(p => p.key === key);
+                label.innerHTML = `<span class="point-dot" style="--point-color: ${point.color}"></span>${Utils.escapeHtml(this.pointName(point))}`;
+                label.dataset.key = key;
+            }
+            // translate, pas transform : le rebond (scale) se fait alors autour de la bulle à sa place
+            label.style.transition = animate ? 'translate 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+            label.style.translate = `calc(-50% + ${x}px) -50%`;
+            label.classList.add('is-on');
+        };
+        // Entre la barre du haut et celle des jours
+        const placeLabel = y => {
+            const half = label.offsetHeight / 2 + 8;
+            const min = document.querySelector('.top-bar').getBoundingClientRect().bottom + half;
+            const max = document.querySelector('.bottom-nav').getBoundingClientRect().top - half;
+            label.style.top = `${Math.min(max, Math.max(min, y - 64))}px`;
+        };
+        const hideLabel = delay => {
+            clearTimeout(labelTimer);
+            labelTimer = setTimeout(() => {
+                label.style.transition = 'opacity 0.4s, visibility 0.4s';
+                label.classList.remove('is-on');
+            }, delay);
+        };
+
         const place = (gesture, offset, animate) => {
             [...gesture.current, gesture.prev, gesture.next].filter(Boolean).forEach(el => {
                 el.style.transition = animate ? 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
@@ -918,6 +958,12 @@ const App = {
             const targetKey = dx < 0 ? g.nextKey : g.prevKey;
             g.offset = targetKey ? dx : dx / 3; // pas de voisin de ce côté : la page résiste
             place(g, g.offset, false);
+            // Au milieu de la page voisine, qu'elle suit
+            g.side = dx < 0 ? 1 : -1;
+            if (targetKey) {
+                showLabel(targetKey, g.side * content.clientWidth + g.offset, false);
+                if (!g.labelPlaced) { placeLabel(g.y0); g.labelPlaced = true; }
+            } else label.classList.remove('is-on');
             const shown = targetKey && Math.abs(g.offset) > content.clientWidth * COMMIT ? targetKey : this.state.currentPoint;
             if (shown !== g.shown) { g.shown = shown; this.updateTopBar(shown); }
         });
@@ -938,6 +984,16 @@ const App = {
                 : Math.abs(gesture.offset) > content.clientWidth * COMMIT);
             const key = go ? (toward < 0 ? gesture.nextKey : gesture.prevKey) : null;
             place(gesture, key ? toward * content.clientWidth : 0, true);
+            if (label.classList.contains('is-on')) {
+                if (key) {
+                    showLabel(key, 0, true);
+                    label.classList.remove('is-pop');
+                    void label.offsetWidth; // relance le rebond d'un balayage à l'autre
+                    label.classList.add('is-pop');
+                    hideLabel(1400);
+                }
+                else { showLabel(label.dataset.key, gesture.side * content.clientWidth, true); hideLabel(280); }
+            }
 
             const panel = key && (toward < 0 ? gesture.next : gesture.prev);
             let done = false;
