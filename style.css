@@ -684,7 +684,17 @@ main {
     40% { scale: 1.18; }
 }
 
-/* Indice sur un point perso sans voisin : la flèche vise le titre */
+/* Indice sur un point perso sans voisin : la flèche vise le titre ; il se touche (ouvre la feuille) */
+.swipe-label.is-hint {
+    min-height: 44px;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.swipe-label.is-hint:not(.is-on) {
+    pointer-events: none;
+}
+
 .swipe-label .lucide {
     width: 18px;
     height: 18px;

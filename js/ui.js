@@ -895,6 +895,7 @@ const App = {
                     : `<span class="point-dot" style="--point-color: ${point.color}"></span>${Utils.escapeHtml(this.pointName(point))}`;
                 if (key === HINT) lucide.createIcons();
                 label.dataset.key = key;
+                label.classList.toggle('is-hint', key === HINT);
             }
             // translate, pas transform : le rebond (scale) se fait alors autour de la bulle à sa place
             label.style.transition = animate ? 'translate 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
@@ -915,6 +916,15 @@ const App = {
                 label.classList.remove('is-on');
             }, delay);
         };
+        // L'indice se touche : on est tenté d'appuyer dessus, il ouvre la feuille des points comme le
+        // titre (qui reste le chemin accessible : la bulle est aria-hidden)
+        label.addEventListener('click', () => {
+            if (label.dataset.key !== HINT || !label.classList.contains('is-on')) return;
+            clearTimeout(labelTimer);
+            label.style.transition = 'none';
+            label.classList.remove('is-on');
+            this.openPointSheet();
+        });
         // Rebond (la bulle, le titre) : la classe retirée puis remise le relance d'un geste à l'autre
         const pop = (el, cls) => {
             el.classList.remove(cls);
@@ -1015,7 +1025,7 @@ const App = {
                     pop(label, 'is-pop');
                     hideLabel(1400);
                 }
-                else if (label.dataset.key === HINT) hideLabel(1400);
+                else if (label.dataset.key === HINT) hideLabel(3000); // le temps de la toucher
                 else { showLabel(label.dataset.key, gesture.side * content.clientWidth, true); hideLabel(280); }
             }
 
