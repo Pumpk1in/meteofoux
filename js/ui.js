@@ -114,7 +114,6 @@ const Charts = {
     // details = ressenti, rafales et UV affichés (bouton « Plus de détails »)
     createUnifiedChart(containerId, data, isDark = true, hasExtendedData = true, iconByHour = {}, scales = null, details = false) {
         const colors = this.getSeriesColors(isDark);
-        const animate = this.animate;
 
         // YAxis config selon les séries
         // Pour MET.no avec peu de variation, forcer une plage min de 10°C
@@ -230,11 +229,9 @@ const Charts = {
                 id: containerId,
                 stacked: false,
                 events: {
-                    // Sans animation d'entrée, les icônes dès le tracé
+                    // Icônes dès le montage, sans attendre la fin de l'animation (~0,6 s) : les libellés de
+                    // l'axe X sont déjà placés et l'animation ne les redessine pas
                     mounted: function() {
-                        if (!animate) Charts.addWeatherIcons(containerId, iconByHour);
-                    },
-                    animationEnd: function() {
                         Charts.addWeatherIcons(containerId, iconByHour);
                     },
                     updated: function() {

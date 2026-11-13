@@ -368,7 +368,7 @@ Formats raw data for UI consumption.
 ApexCharts wrapper for multi-axis weather charts.
 
 - **`instances`** — Stores chart objects by containerId
-- **`animate`** — `true`, except for the neighbours prepared off screen and the render that follows a swipe whose neighbour was not ready: the charts then skip ApexCharts' entry animation (it paints the finished plot for one frame, clears it, then redraws it left to right), their weather icons added on `mounted` instead of `animationEnd`
+- **`animate`** — `true`, except for the neighbours prepared off screen and the render that follows a swipe whose neighbour was not ready: the charts then skip ApexCharts' entry animation (it paints the finished plot for one frame, clears it, then redraws it left to right)
 - **`destroyIn(root)`** — Destroys the charts inside an element (a page left by a swipe, a neighbour panel)
 - **`getSeriesColors(isDark)`** — Series colors by key (`temp`, `feels`, `wind`, `gusts`, `uv`, `snow`, `rain`). Snow is light cyan, rain mid blue: same family, a clear lightness gap (3:1 between them in dark mode). Light-theme colors are ≥ 3:1 on white. Axis labels: 10 px (≈ Micro), `#4b5563` in light mode (5.6:1 on the tinted detail)
 - **`getAxisTitleColors(isDark)`** — Axis units take the color of the series they measure (°C, km/h of the wind, UV)
@@ -381,7 +381,7 @@ ApexCharts wrapper for multi-axis weather charts.
   - UV (details only: right axis, opposite)
   - Neige (column, cyan) and Pluie (column, blue), hidden axes
   - A "maintenant" vertical line (x-axis annotation) on the chart that contains the current time
-  - Adds weather SVG icons below X-axis on animation end
+  - Adds weather SVG icons below X-axis on `mounted`, animated or not: the x-axis labels are placed by then and the entry animation does not redraw them (waiting for `animationEnd` showed them ~0.6 s late)
 - **`destroyAll()`** — Destroys all chart instances (a theme change re-renders: series and the key follow the theme)
 - **`addWeatherIcons(containerId, iconByHour)`** — Overlays 22 px weather SVG icons below X-axis labels (faint outline in light mode)
 
