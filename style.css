@@ -684,6 +684,30 @@ main {
     40% { scale: 1.18; }
 }
 
+/* Indice sur un point perso sans voisin : la flèche vise le titre */
+.swipe-label .lucide {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+}
+
+/* Le titre, visé par l'indice : il s'éclaire et son chevron sautille */
+.point-title.is-nudge {
+    animation: title-nudge-bg 1.2s ease-in-out;
+}
+
+.point-title.is-nudge .lucide-chevron-down {
+    animation: title-nudge-chevron 0.4s ease-in-out 3;
+}
+
+@keyframes title-nudge-bg {
+    15%, 70% { background: var(--border-strong); }
+}
+
+@keyframes title-nudge-chevron {
+    50% { translate: 0 4px; }
+}
+
 [data-theme="light"] .swipe-label {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }

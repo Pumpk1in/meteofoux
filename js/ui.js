@@ -486,18 +486,25 @@ const App = {
         return elevation ? `${point.name} · ${Math.round(elevation)} m` : point.name;
     },
 
+    // Les points entre lesquels on balaie : ceux du domaine, ou les points perso entre eux, dans
+    // l'ordre de la feuille. On ne passe pas de l'un à l'autre groupe : le domaine garde ses deux bouts
+    swipeGroup(key = this.state.currentPoint) {
+        return CONFIG.domain.includes(key) ? CONFIG.domain : CONFIG.points.filter(p => p.custom).map(p => p.key);
+    },
+
     // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date.
     // Un autre point pendant un balayage : celui où l'on arrivera en lâchant
     updateTopBar(pointKey = this.state.currentPoint) {
         const point = CONFIG.points.find(p => p.key === pointKey);
         if (point) {
             document.getElementById('point-title-text').textContent = this.pointName(point);
-            // Point du domaine : sa place parmi les quatre, du plus bas au plus haut (les autres en
-            // petit, mobile seulement) ; le balayage passe de l'un à l'autre
-            const rank = CONFIG.domain.indexOf(point.key);
+            // Sa place dans son groupe (les quatre du domaine, du plus bas au plus haut, ou les points
+            // perso), les autres en petit, mobile seulement : le balayage passe de l'un à l'autre
+            const group = this.swipeGroup(point.key);
+            const rank = group.indexOf(point.key);
             const dot = `<span class="point-dot" style="--point-color: ${point.color}"></span>`;
-            document.getElementById('point-title-dots').innerHTML = rank < 0 ? dot
-                : CONFIG.domain.map((_, i) => i === rank ? dot : '<span class="point-step"></span>').join('');
+            document.getElementById('point-title-dots').innerHTML = group.length < 2 ? dot
+                : group.map((_, i) => i === rank ? dot : '<span class="point-step"></span>').join('');
         }
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
@@ -811,8 +818,9 @@ const App = {
     // au balayage ils sont déjà là, et à l'arrivée il n'y a plus rien à dessiner. Refaits après chaque
     // rendu, chaque bascule qui change la page, et quand un voisin (loadedKey) vient de charger
     scheduleNeighbors(loadedKey) {
-        const i = CONFIG.domain.indexOf(this.state.currentPoint);
-        if (loadedKey && Math.abs(CONFIG.domain.indexOf(loadedKey) - i) !== 1) return;
+        const group = this.swipeGroup();
+        const i = group.indexOf(this.state.currentPoint);
+        if (loadedKey && Math.abs(group.indexOf(loadedKey) - i) !== 1) return;
         // Pendant un geste, les voisins restent (retirés, la page glisserait vers le vide) : refaits à la fin
         if (this._swiping) { this._neighborsStale = true; return; }
         this._neighborsStale = false;
@@ -822,7 +830,7 @@ const App = {
         const token = this._neighbors = (this._neighbors || 0) + 1;
         const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
         // Un voisin par moment libre : chacun coûte ~70 ms sur un téléphone moyen
-        [[CONFIG.domain[i - 1], 'prev'], [CONFIG.domain[i + 1], 'next']].forEach(([key, side]) => idle(() => {
+        [[group[i - 1], 'prev'], [group[i + 1], 'next']].forEach(([key, side]) => idle(() => {
             if (token !== this._neighbors || this._swiping || content.hasAttribute('aria-busy')) return;
             if (!key || !DataService.state.data[key]) return;
             const panel = this.neighborPanel(key, side);
@@ -833,14 +841,15 @@ const App = {
         }));
     },
 
-    // Balayage d'un point du domaine à l'autre (mobile, au doigt). La page suit le doigt et le point
-    // voisin entre à côté, déjà dessiné (scheduleNeighbors) ; à l'arrivée, il devient la page. Lâchée
-    // au-delà de 30 % de la largeur, ou d'un geste vif, elle part vers ce point ; sinon elle revient.
-    // Vers la gauche on monte, vers la droite on descend ; pas de boucle : aux deux bouts, la page
-    // résiste. Le titre annonce le point où l'on arrivera en lâchant. Le jour et la position dans la
-    // page ne changent pas : on compare le même endroit d'un point à l'autre.
+    // Balayage d'un point à l'autre de son groupe (swipeGroup : le domaine, ou les points perso ;
+    // mobile, au doigt). La page suit le doigt et le point voisin entre à côté, déjà dessiné
+    // (scheduleNeighbors) ; à l'arrivée, il devient la page. Lâchée au-delà de 30 % de la largeur, ou
+    // d'un geste vif, elle part vers ce point ; sinon elle revient. Vers la gauche on monte (le point
+    // suivant), vers la droite on descend ; pas de boucle : aux deux bouts, la page résiste. Le titre
+    // annonce le point où l'on arrivera en lâchant. Le jour et la position dans la page ne changent
+    // pas : on compare le même endroit d'un point à l'autre.
     // Depuis le tracé du graphique aussi, sauf après un appui dessus : on y glisse alors pour lire les
-    // heures, jusqu'à toucher ailleurs. Pas depuis un point perso (ils restent dans la feuille des points)
+    // heures, jusqu'à toucher ailleurs. Sur tous les graphiques, même sans voisin : un seul usage à apprendre
     initSwipe() {
         const content = document.getElementById('content');
         const COMMIT = 0.3, FLICK = 0.5; // part de la largeur ; vitesse en px/ms
@@ -869,17 +878,22 @@ const App = {
         // Étiquette du point qui arrive, à hauteur du doigt (un peu au-dessus, que le pouce ne la cache
         // pas) : là où l'œil est pendant le geste. Le titre, petit et en haut à gauche, passait inaperçu,
         // surtout après un balayage involontaire. Elle glisse avec la page voisine, rebondit à
-        // l'arrivée, y reste un instant puis s'efface
+        // l'arrivée, y reste un instant puis s'efface.
+        // Sur un point perso sans voisin de ce côté (HINT), elle renvoie au titre, qui ouvre la feuille
+        // des points : sans elle, le geste ne donnait aucun retour
         const label = document.createElement('div');
         label.className = 'swipe-label';
         label.setAttribute('aria-hidden', 'true');
         document.body.appendChild(label);
+        const HINT = '';
         let labelTimer = null;
         const showLabel = (key, x, animate) => {
             clearTimeout(labelTimer);
             if (label.dataset.key !== key) {
                 const point = CONFIG.points.find(p => p.key === key);
-                label.innerHTML = `<span class="point-dot" style="--point-color: ${point.color}"></span>${Utils.escapeHtml(this.pointName(point))}`;
+                label.innerHTML = key === HINT ? '<i data-lucide="arrow-up-left"></i>Autres points'
+                    : `<span class="point-dot" style="--point-color: ${point.color}"></span>${Utils.escapeHtml(this.pointName(point))}`;
+                if (key === HINT) lucide.createIcons();
                 label.dataset.key = key;
             }
             // translate, pas transform : le rebond (scale) se fait alors autour de la bulle à sa place
@@ -900,6 +914,12 @@ const App = {
                 label.style.transition = 'opacity 0.4s, visibility 0.4s';
                 label.classList.remove('is-on');
             }, delay);
+        };
+        // Rebond (la bulle, le titre) : la classe retirée puis remise le relance d'un geste à l'autre
+        const pop = (el, cls) => {
+            el.classList.remove(cls);
+            void el.offsetWidth;
+            el.classList.add(cls);
         };
 
         const place = (gesture, offset, animate) => {
@@ -924,7 +944,7 @@ const App = {
             if (onPlot) tap = { id: e.pointerId, x0: e.clientX, y0: e.clientY, chart: onPlot };
             if (onPlot && onPlot === engaged) return;
             engaged = null;
-            if (!CONFIG.domain.includes(this.state.currentPoint) || !DataService.state.data[this.state.currentPoint]) return;
+            if (!DataService.state.data[this.state.currentPoint]) return;
             if (content.hasAttribute('aria-busy')) return;
             mute = !!onPlot;
             g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [] };
@@ -941,9 +961,10 @@ const App = {
                 g.locked = true;
                 this._swiping = true;
                 content.setPointerCapture(e.pointerId);
-                const i = CONFIG.domain.indexOf(this.state.currentPoint);
-                g.prevKey = CONFIG.domain[i - 1];
-                g.nextKey = CONFIG.domain[i + 1];
+                const group = this.swipeGroup();
+                const i = group.indexOf(this.state.currentPoint);
+                g.prevKey = group[i - 1];
+                g.nextKey = group[i + 1];
                 g.current = [...content.children].filter(el => !el.classList.contains('swipe-peek'));
                 g.prev = panelFor(g.prevKey, 'prev');
                 g.next = panelFor(g.nextKey, 'next');
@@ -955,11 +976,18 @@ const App = {
             const targetKey = dx < 0 ? g.nextKey : g.prevKey;
             g.offset = targetKey ? dx : dx / 3; // pas de voisin de ce côté : la page résiste
             place(g, g.offset, false);
-            // Au milieu de la page voisine, qu'elle suit
+            // Au milieu de la page voisine, qu'elle suit ; l'indice, lui, reste au doigt. Aux bouts du
+            // domaine, rien : l'ordre d'altitude se comprend seul
             g.side = dx < 0 ? 1 : -1;
-            if (targetKey) {
-                showLabel(targetKey, g.side * content.clientWidth + g.offset, false);
+            const hint = !targetKey && !CONFIG.domain.includes(this.state.currentPoint);
+            if (targetKey || hint) {
+                const fresh = label.dataset.key !== (targetKey || HINT) || !label.classList.contains('is-on');
+                showLabel(targetKey || HINT, targetKey ? g.side * content.clientWidth + g.offset : 0, false);
                 if (!g.labelPlaced) { placeLabel(g.y0); g.labelPlaced = true; }
+                if (hint && fresh) {
+                    pop(label, 'is-pop');
+                    pop(document.getElementById('point-title'), 'is-nudge');
+                }
             } else label.classList.remove('is-on');
             const shown = targetKey && Math.abs(g.offset) > content.clientWidth * COMMIT ? targetKey : this.state.currentPoint;
             if (shown !== g.shown) { g.shown = shown; this.updateTopBar(shown); }
@@ -984,11 +1012,10 @@ const App = {
             if (label.classList.contains('is-on')) {
                 if (key) {
                     showLabel(key, 0, true);
-                    label.classList.remove('is-pop');
-                    void label.offsetWidth; // relance le rebond d'un balayage à l'autre
-                    label.classList.add('is-pop');
+                    pop(label, 'is-pop');
                     hideLabel(1400);
                 }
+                else if (label.dataset.key === HINT) hideLabel(1400);
                 else { showLabel(label.dataset.key, gesture.side * content.clientWidth, true); hideLabel(280); }
             }
 
@@ -1411,6 +1438,9 @@ const App = {
         [CONFIG.points[a], CONFIG.points[b]] = [CONFIG.points[b], CONFIG.points[a]];
         CustomPoints.saveOrder(CONFIG.points.map(p => p.key));
         this.renderPointSheet();
+        // L'ordre des points perso est celui du balayage : pastilles du titre et voisins le suivent
+        this.updateTopBar();
+        this.scheduleNeighbors();
     },
 
     addPointFromSheet() {
