@@ -917,14 +917,19 @@ const App = {
             }, delay);
         };
         // L'indice se touche : on est tenté d'appuyer dessus, il ouvre la feuille des points comme le
-        // titre (qui reste le chemin accessible : la bulle est aria-hidden)
-        label.addEventListener('click', () => {
+        // titre (qui reste le chemin accessible : la bulle est aria-hidden). Au lever du doigt, pas au
+        // click : sur téléphone le premier appui ne donnait pas toujours de click (il fallait taper deux
+        // fois) ; preventDefault supprime le click qui suivrait, et qui fermerait la feuille ouverte
+        const openFromHint = e => {
             if (label.dataset.key !== HINT || !label.classList.contains('is-on')) return;
+            e.preventDefault();
             clearTimeout(labelTimer);
             label.style.transition = 'none';
             label.classList.remove('is-on');
             this.openPointSheet();
-        });
+        };
+        label.addEventListener('touchend', openFromHint);
+        label.addEventListener('click', openFromHint);
         // Rebond (la bulle, le titre) : la classe retirée puis remise le relance d'un geste à l'autre
         const pop = (el, cls) => {
             el.classList.remove(cls);
@@ -1303,6 +1308,11 @@ const App = {
         root.id = 'point-sheet';
         root.className = 'sheet-root';
         root.addEventListener('keydown', e => this.onPointSheetKey(e));
+        // Le cadre (fond, feuille) est posé une fois : renderPointSheet n'en remplace que le contenu,
+        // sinon l'animation d'ouverture rejouait à chaque point qui finit de charger
+        root.innerHTML = `
+            <div class="sheet-backdrop" onclick="App.closePointSheet()"></div>
+            <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></div>`;
         document.body.appendChild(root);
         this.renderPointSheet();
         document.getElementById('point-title').setAttribute('aria-expanded', 'true');
@@ -1377,9 +1387,7 @@ const App = {
         const canAdd = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM;
         const dayLabel = Utils.formatDateShort(day);
 
-        root.innerHTML = `
-            <div class="sheet-backdrop" onclick="App.closePointSheet()"></div>
-            <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+        root.querySelector('.sheet').innerHTML = `
                 <div class="sheet-header">
                     <h2 id="sheet-title">Choisir un point</h2>
                     <span class="sheet-day">${dayLabel}</span>
@@ -1397,8 +1405,7 @@ const App = {
                     ${this._pointsEditing ? customs.map(editRow).join('') : customs.map(row).join('')}
                     ${!customs.length ? '<p class="sheet-empty">Ajoutez un endroit qui vous intéresse, même hors de la station.</p>' : ''}
                     ${canAdd ? `<button class="sheet-add" data-focus-key="add" onclick="App.addPointFromSheet()"><i data-lucide="plus"></i>Ajouter un point</button>` : ''}
-                </section>
-            </div>`;
+                </section>`;
         lucide.createIcons();
         // Le focus reste dans la feuille après un re-rendu (sinon Échap et le piège de Tab ne marchent
         // plus) : même bouton si possible, sinon "Modifier"/"Terminé", sinon "Fermer"

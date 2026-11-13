@@ -689,6 +689,7 @@ main {
     min-height: 44px;
     pointer-events: auto;
     cursor: pointer;
+    touch-action: manipulation; /* pas d'attente d'un double appui (zoom) */
 }
 
 .swipe-label.is-hint:not(.is-on) {
