@@ -405,6 +405,14 @@ const App = {
 
             // "mis à jour il y a X min" reste juste si l'onglet reste ouvert
             setInterval(() => this.updateTopBar(), 60000);
+            // L'app restée en mémoire et rouverte après minuit : la barre des jours suit la nouvelle date
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState !== 'visible' || this._refreshing) return;
+                if (new Date().toLocaleDateString('fr-CA') === this._daysDate) return;
+                this.setupDays(true);
+                this.renderDayNav();
+                this.render();
+            });
         } catch (e) {
             console.error("Erreur chargement:", e);
             document.getElementById('content').removeAttribute('aria-busy');
@@ -418,13 +426,18 @@ const App = {
         }
     },
 
-    setupDays() {
+    // keepDay : au rafraîchissement, garder le jour choisi s'il existe encore (après minuit, la veille
+    // n'y est plus : on retombe sur le jour par défaut)
+    setupDays(keepDay = false) {
         const data = DataService.state.data;
         const now = new Date();
         const todayStr = now.toLocaleDateString('fr-CA');
 
-        const allDays = [...new Set(Object.values(data)[0].series.map(s => Utils.getLocalDay(s.time)))];
+        const pointData = data[this.state.currentPoint] || Object.values(data)[0];
+        const allDays = [...new Set(pointData.series.map(s => Utils.getLocalDay(s.time)))];
         this.state.days = allDays.filter(day => day >= todayStr).slice(0, 7);
+        this._daysDate = todayStr;
+        if (keepDay && this.state.days.includes(this.state.currentDay)) return;
         // Le soir, on regarde surtout demain : après 18 h, ouvrir sur le lendemain
         this.state.currentDay = now.getHours() >= 18 && this.state.days.length > 1
             ? this.state.days[1]
@@ -681,10 +694,14 @@ const App = {
         const current = CONFIG.points.find(p => p.key === this.state.currentPoint);
         try {
             await DataService.loadSinglePoint(current, true);
+            this.setupDays(true);
             this.renderDayNav();
             this.render();
         } catch (e) {
             console.error('Rafraîchissement impossible :', e);
+            // La date a pu changer depuis l'ouverture, même sans nouvelles données
+            this.setupDays(true);
+            this.renderDayNav();
             this.render();
             const freshness = this.freshness(DataService.state.data[current.key]?.meta);
             this.showNotice(`Rafraîchissement impossible (réseau ou service météo indisponible). `

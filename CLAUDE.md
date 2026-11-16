@@ -423,7 +423,7 @@ Main application state & logic.
 
 #### Lifecycle
 - **`init()`** — Load custom points, restore the last point viewed (Station on a first visit), theme & source from localStorage, set up the swipe (`initSwipe`), load all data via DataService, setup days, render navigation, render content, refresh the top bar's freshness every minute
-- **`setupDays()`** — Extract unique days from series, filter ≥ today, slice to 7 max. After 18:00 the app opens on tomorrow
+- **`setupDays(keepDay)`** — Extract unique days from the current point's series, filter ≥ today, slice to 7 max. After 18:00 the app opens on tomorrow. `keepDay` keeps the chosen day if it still exists. Called again by `refreshData()` and when the app comes back to the foreground on a new date (`visibilitychange`): an app left open past midnight otherwise kept yesterday as "AUJ."
 - **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states (`restoreToggles`), calls renderCharts()
 - **`restoreToggles(root)`** — Unfolds, in a fresh render (`document`, or the neighbour panel of a swipe), today's hours (`todayHoursExpanded`) and the days whose hours were shown (`expandedDays`)
 
