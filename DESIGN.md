@@ -19,8 +19,8 @@ colors:
   ardoise-muted: "#94a3b8"
   panneau-givre: "rgba(255, 255, 255, 0.075)"
   trait-givre: "rgba(255, 255, 255, 0.08)"
-  jour-fond: "#f6f6f6"
-  jour-fond-haut: "#f8f8f8"
+  jour-fond: "#eceef1"
+  jour-fond-haut: "#eceef1"
   jour-texte: "#1e293b"
   jour-muted: "#4a5568"
   neige: "#67e8f9"
@@ -195,7 +195,7 @@ names something: a source, a point, or a weather quantity.
 ### Weather quantities
 - **Neige** (`neige`, cyan) and **Pluie** (`pluie`, blue): the snow and rain figures of the hourly
   rows, the same hues as the chart bars (light theme: `#0e7490` / `#1d4ed8`); the snowflake and
-  drop of the day bar and the point sheet. Snow quality ("humide" / "sèche") is muted text.
+  rain cloud of the day bar and the Résumé (Phosphor bold, filled) and of the point sheet. Snow quality ("humide" / "sèche") is muted text.
 - **Chart series**: temperature orange (`serie-temperature`), apparent temperature light orange
   (`serie-ressenti`), wind mint (`serie-vent`), gusts green (`serie-rafales`), UV amber
   (`serie-uv`), snow light cyan columns (`serie-neige`), rain mid-blue columns (`serie-pluie`):
@@ -208,7 +208,8 @@ names something: a source, a point, or a weather quantity.
 
 ### Neutral
 - **Ciel avant l'aube** (`ciel-avant-aube` → `ciel-avant-aube-haut`): the vertical body gradient
-  in dark mode; the top bar and the day bar sit on it at 95% opacity with a 10px blur.
+  in dark mode; the top bar sits on it at 95% opacity with a 10px blur. The floating bottom bar has
+  its own surface (`--dock-bg`, the days zone a step darker), a shadow, and a blurred veil behind it.
 - **Givre texte** (`givre-texte`): primary text. **Ardoise muted** (`ardoise-muted`): times,
   labels, units, inactive navigation, secondary readings.
 - **Panneau givre** (`panneau-givre`) and **Trait givre** (`trait-givre`): the translucent row fill
@@ -253,7 +254,11 @@ and lighter than the figures.
 A single column, centred, at most 900px wide (`main`, padding 1rem; 1.5rem from 768px; 0.8rem under
 600px). A fixed top bar (60px, plus the iPhone notch: `viewport-fit=cover`, `--safe-top`) holds the
 point title and two square icon buttons; its side padding follows `main`, so the title lines up with
-the content. A fixed day bar at the bottom holds the seven days (68px on mobile, 60px from 768px).
+the content. A floating bar at the bottom (max 456px, 12px above the screen edge, radius 22px, one
+block, the same on desktop) holds the seven days above three tabs: La Foux, Mes points, Résumé
+(Phosphor duotone icons, the light part only on the open tab). On a phone the days fold away while
+scrolling down and come back when scrolling up. The Résumé lists every point for one day, one row
+each, with night / morning / midday / evening of the chosen model and the model picker on top.
 
 Each day is a section, in this order:
 1. **Header** (desktop only, where every day stacks): the date, "Mardi 10 novembre".

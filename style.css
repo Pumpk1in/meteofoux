@@ -56,13 +56,44 @@
     --accent3: #f472b6;
     --border: rgba(255, 255, 255, 0.08);
     --top-bar-height: 60px;
-    --bottom-nav-height: 68px; /* Boutons des jours sur 3 lignes : jour, indicateur, unité */
+
+    /* Barre flottante du bas (jours + onglets) */
+    --dock-bg: #172036;
+    --dock-days-bg: #0f1729;      /* zone des jours, un cran en retrait de la barre */
+    --dock-line: rgba(255, 255, 255, 0.08);
+    --dock-active: var(--accent);
+    --dock-ink-2: #94a3b8;
+    --dock-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 16px 30px -9px rgb(0 0 0 / 0.95), 0 1px 3px rgb(0 0 0 / 0.5);
+    --dock-shadow-up: 0 -3px 12px -2px rgb(0 0 0 / 0.4), 0 -20px 48px -8px rgb(0 0 0 / 0.5);
+    --dock-gap: 12px;             /* entre la barre et le bas de l'écran */
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --dock-h: 132px;              /* hauteur de la barre, mesurée en JS (App.initDockCollapse) */
+    --dock-full: 132px;           /* la même, jours dépliés : la marge du bas de la page */
+
+    /* Verdict d'un jour (barre des jours, Résumé) : icônes, et quantités du Résumé (= lignes horaires) */
+    --snow-ico: #60a5fa;
+    --rain-ico: #3b82f6;
+    --dry-ico: #fbbf24;
+    --snow-text: #67e8f9;
+    --rain-text: #60a5fa;
 }
 
-/* Thème clair */
+/* Thème clair. Fond de page un cran plus foncé que les cartes blanches : elles ressortent */
 [data-theme="light"] {
-    --bg: #f6f6f6;
-    --bg-secondary: #f8f8f8;
+    --bg: #eceef1;
+    --bg-secondary: #eceef1;
+    --dock-bg: #ffffff;
+    --dock-days-bg: #eef2f7;
+    --dock-line: rgba(15, 23, 42, 0.08);
+    --dock-active: #0369a1;
+    --dock-ink-2: #4a5568;
+    --dock-shadow: 0 16px 30px -9px rgb(15 23 42 / 0.45), 0 1px 3px rgb(15 23 42 / 0.12);
+    --dock-shadow-up: 0 -3px 10px -2px rgb(15 23 42 / 0.1), 0 -18px 44px -8px rgb(15 23 42 / 0.09);
+    --snow-ico: #0369a1;
+    --rain-ico: #1d4ed8;
+    --dry-ico: #b45309;
+    --snow-text: #0e7490;
+    --rain-text: #1d4ed8;
     --card: rgba(255, 255, 255, 1);
     --card-hover: #ffffff;
     --text: #1e293b;
@@ -124,7 +155,7 @@ body {
     min-height: 100vh;
     scroll-behavior: smooth;
     padding-top: calc(var(--top-bar-height) + var(--safe-top));
-    padding-bottom: var(--bottom-nav-height);
+    padding-bottom: calc(var(--dock-full) + var(--dock-gap) + var(--safe-b));
 }
 
 /* ============================================
@@ -252,6 +283,11 @@ body {
     flex-shrink: 0;
     align-items: center;
     gap: 3px;
+}
+
+/* Résumé, « Mes points » vide : pas de point, pas de pastille (ni sa marge) */
+.point-steps:empty {
+    display: none;
 }
 
 .point-step {
@@ -454,32 +490,139 @@ body {
 }
 
 /* ============================================
-   BOTTOM NAVIGATION
+   BARRE DU BAS — flottante : les jours au-dessus, les onglets dessous, d'un bloc ;
+   ombre et voile flou derrière (la page s'estompe en passant dessous)
    ============================================ */
-.bottom-nav {
+.dock {
     position: fixed;
-    bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(2, 6, 23, 0.98);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid var(--border);
-    z-index: 100;
-    padding: 0 0 var(--space-2) 0;
-    padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+    bottom: calc(var(--dock-gap) + var(--safe-b));
+    z-index: 110;
+    display: flex;
+    flex-direction: column;
+    width: calc(100% - 24px);
+    max-width: 456px;
+    margin: 0 auto;
+    background: var(--dock-bg);
+    border-radius: 22px;
+    box-shadow: var(--dock-shadow-up), var(--dock-shadow);
+    -webkit-user-select: none;
+    user-select: none;
     -webkit-touch-callout: none;
 }
 
-[data-theme="light"] .bottom-nav {
-    background: rgba(241, 245, 249, 0.98);
+/* Zone des jours : d'un ton différent de la barre ; repliée en défilant vers le bas (App.initDockCollapse) */
+.dock-days {
+    max-height: 80px;
+    background: var(--dock-days-bg);
+    border-radius: 22px 22px 0 0;
+    transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+}
+
+/* Rognée seulement pendant qu'elle se replie ou se déplie : dépliée, le jour glissé au doigt se
+   soulève au-dessus de la barre (App.initDayScrub) */
+.dock.is-compact .dock-days,
+.dock.is-expanding .dock-days {
+    overflow: hidden;
+}
+
+.dock.is-compact .dock-days {
+    max-height: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s, visibility 0s 0.25s;
+}
+
+.dock-veil {
+    display: none;
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    /* Le voile fait l'ombre vers le haut : la barre garde la sienne seule */
+    .dock {
+        box-shadow: var(--dock-shadow);
+    }
+
+    .dock-veil {
+        display: block;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 105;
+        height: calc(var(--dock-h) + var(--dock-gap) + 40px + var(--safe-b));
+        background: color-mix(in srgb, var(--bg) 20%, transparent);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        --veil-mask: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.2) 11px, rgb(0 0 0 / 0.55) 22px,
+            rgb(0 0 0 / 0.82) 34px, rgb(0 0 0 / 0.95) 45px, #000 56px);
+        -webkit-mask-image: var(--veil-mask);
+        mask-image: var(--veil-mask);
+        pointer-events: none;
+        transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+}
+
+/* Onglets : icône Phosphor duotone, sa partie claire seulement sur l'onglet actif */
+.dock-tabs {
+    display: flex;
+    height: 58px;
+    border-top: 1px solid var(--dock-line);
+}
+
+.dock.is-compact .dock-tabs {
+    border-top-color: transparent;
+}
+
+.dock-tabs button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 22px;
+    background: none;
+    color: var(--dock-ink-2);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.16s;
+}
+
+.dock-tabs button[aria-current="page"] {
+    color: var(--dock-active);
+}
+
+.dock-tabs button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -4px;
+}
+
+.tab-ico {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+.tab-ico .duo {
+    opacity: 0;
+    transition: opacity 0.16s;
+}
+
+.dock-tabs button[aria-current="page"] .tab-ico .duo {
+    opacity: 0.2;
 }
 
 .day-nav {
     display: flex;
     justify-content: center;
     gap: var(--space-0-5);
-    padding: var(--space-1-5) var(--space-2);
+    padding: 6px 6px 4px;
     /* Glisser d'un jour à l'autre (App.initDayScrub) : le navigateur ne prend pas le geste */
     touch-action: none;
     -webkit-user-select: none;
@@ -491,14 +634,14 @@ body {
     flex: 1 1 0;
     min-width: 0;
     max-width: 64px;
-    min-height: 48px;
+    min-height: 50px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: var(--space-0-5);
     padding: var(--space-1) var(--space-0-5);
-    border: 1.5px solid transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted);
@@ -556,15 +699,29 @@ body {
     outline-offset: 2px;
 }
 
+/* Boutons des bouts : leur coin suit celui de la barre (22 px moins les 6 px de marge) */
+.day-btn:first-child {
+    border-top-left-radius: 16px;
+}
+
+.day-btn:last-child {
+    border-top-right-radius: 16px;
+}
+
+/* Jour choisi : un contour fin. Clair : fond blanc, contour de la couleur active */
 .day-btn.active {
-    color: var(--accent);
+    color: var(--dock-active);
     border-color: var(--border-strong);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] .day-btn.active {
-    color: #0369a1;
-    background: rgba(0, 0, 0, 0.04);
+    background: #fff;
+    border-color: color-mix(in srgb, var(--dock-active) 77%, transparent);
+}
+
+.day-btn.active .day-label {
+    font-weight: 700;
 }
 
 .day-indicator {
@@ -578,18 +735,19 @@ body {
     white-space: nowrap;
 }
 
-.day-indicator .lucide {
+.day-indicator .ph {
     width: 12px;
     height: 12px;
     flex-shrink: 0;
+    fill: currentColor;
 }
 
-.day-indicator.is-snow .lucide { stroke: #60a5fa; }
-.day-indicator.is-rain .lucide { stroke: #3b82f6; }
-.day-indicator.is-dry .lucide { stroke: #fbbf24; }
-[data-theme="light"] .day-indicator.is-snow .lucide { stroke: #0369a1; }
-[data-theme="light"] .day-indicator.is-rain .lucide { stroke: #1d4ed8; }
-[data-theme="light"] .day-indicator.is-dry .lucide { stroke: #b45309; }
+.day-indicator.is-snow .ph,
+.resume-verdict.is-snow .ph { color: var(--snow-ico); }
+.day-indicator.is-rain .ph,
+.resume-verdict.is-rain .ph { color: var(--rain-ico); }
+.day-indicator.is-dry .ph,
+.resume-verdict.is-dry .ph { color: var(--dry-ico); }
 
 /* Modèles qui se contredisent ce jour-là : la fourchette en ambre, comme l'alerte du verdict */
 .day-indicator.is-unsure {
@@ -723,6 +881,316 @@ main {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
+/* Changement d'onglet : la page entre du côté de l'onglet dans la barre (App.enterTab). Pas les
+   voisins du balayage (.swipe-peek) : l'animation remplacerait leur décalage hors écran, ils
+   passeraient par-dessus la page */
+@keyframes tab-in-r { from { opacity: 0; transform: translateX(28px); } }
+@keyframes tab-in-l { from { opacity: 0; transform: translateX(-28px); } }
+main.tab-enter-r > :not(.swipe-peek) { animation: tab-in-r 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+main.tab-enter-l > :not(.swipe-peek) { animation: tab-in-l 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ============================================
+   RÉSUMÉ — tous les points pour un jour (Components.Resume) : une bande par point, quatre
+   colonnes alignées (nuit, matin, midi, soir), le choix du modèle en tête
+   ============================================ */
+.resume {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* Texte pour les lecteurs d'écran seulement (le nom de la période dans chaque case du Résumé) */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Choix du modèle : les couleurs des cases du verdict */
+.resume-src {
+    display: flex;
+    gap: var(--space-1-5);
+}
+
+.resume-src button {
+    --m: #c084fc;
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--m);
+    font: inherit;
+    font-size: var(--text-small);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.16s, border-color 0.16s;
+}
+
+.resume-src button[data-source="openmeteo"] { --m: #38bdf8; }
+.resume-src button[data-source="metno"] { --m: #f59f30; }
+
+.resume-src button[aria-pressed="true"] {
+    border-color: var(--m);
+    background: color-mix(in srgb, var(--m) 16%, transparent);
+}
+
+.resume-src button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+[data-theme="light"] .resume-src button { --m: #7e22ce; background: #fff; }
+[data-theme="light"] .resume-src button[data-source="openmeteo"] { --m: #0369a1; }
+[data-theme="light"] .resume-src button[data-source="metno"] { --m: #b45309; }
+[data-theme="light"] .resume-src button[aria-pressed="true"] { background: color-mix(in srgb, var(--m) 12%, #fff); }
+
+.resume-intro {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-small);
+    color: var(--muted);
+}
+
+.resume-intro strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* En-tête de groupe puis bandes : le nom du point sur toute la largeur, les quatre périodes dessous */
+.resume-head,
+.resume-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 2px;
+    row-gap: 6px;
+    align-items: center;
+}
+
+.resume-head {
+    padding: var(--space-3) var(--space-2) 0;
+    font-size: var(--text-micro);
+    color: var(--muted);
+}
+
+.resume-head h2 {
+    grid-column: 1 / -1;
+    margin: 0 0 4px;
+    font-size: var(--text-small);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.resume-head span {
+    text-align: center;
+    line-height: 1.2;
+}
+
+.resume-head small {
+    display: block;
+    font-size: var(--text-micro);
+    opacity: 0.8;
+}
+
+.resume-row {
+    width: 100%;
+    min-height: 76px;
+    padding: var(--space-2) 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+[data-theme="light"] .resume-row {
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+.resume-row:active {
+    background: var(--card-hover);
+}
+
+@media (hover: hover) {
+    .resume-row:hover {
+        background: var(--card-hover);
+    }
+}
+
+.resume-row:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+button.resume-row:active {
+    transform: scale(0.98);
+}
+
+.resume-point {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.resume-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--text-body);
+}
+
+.resume-name b {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resume-alt,
+.resume-status {
+    font-size: var(--text-micro);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.resume-row.is-loading {
+    min-height: 0;
+}
+
+.resume-verdict {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: auto;
+    font-size: var(--text-small);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.resume-verdict .ph {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    fill: currentColor;
+}
+
+.resume-verdict.is-unsure {
+    color: var(--warn);
+}
+
+.resume-verdict small {
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.resume-per {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.resume-per img {
+    width: 30px;
+    height: 30px;
+}
+
+.resume-per .t,
+.resume-per .q {
+    font-size: var(--text-micro);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.resume-per .q {
+    min-height: 1.2em;
+}
+
+.resume-per .q.is-snow { color: var(--snow-text); }
+.resume-per .q.is-rain { color: var(--rain-text); }
+
+.resume-per .q.is-none {
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.resume-per.is-empty {
+    font-size: var(--text-micro);
+    color: var(--muted);
+}
+
+/* « Mes points » sans point perso */
+.tab-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-6) var(--space-4);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.tab-empty h2 {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: 600;
+}
+
+.tab-empty p {
+    margin: 0;
+    max-width: 46ch;
+    line-height: 1.45;
+    color: var(--text-soft);
+}
+
+.tab-empty-add {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--dock-active);
+    color: var(--bg);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[data-theme="light"] .tab-empty-add {
+    color: #fff;
+}
+
+.tab-empty-add .lucide {
+    width: 18px;
+    height: 18px;
+}
+
+.tab-empty-add:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
 /* ============================================
    DAY SECTIONS
    ============================================ */
@@ -781,7 +1249,7 @@ main {
 /* Thème clair : le verdict en retrait, à peine plus foncé que la page (comme en sombre, il est à
    peine différent du fond) ; les cases des modèles, blanches, ressortent dessus */
 [data-theme="light"] .verdict {
-    background: rgba(0, 0, 0, 0.025);
+    background: rgb(255 255 255 / 56%);
 }
 
 .verdict-main {
@@ -1791,36 +2259,6 @@ footer details p {
    RESPONSIVE - DESKTOP
    ============================================ */
 @media (min-width: 768px) {
-    :root {
-        --bottom-nav-height: 60px;
-    }
-
-    .bottom-nav {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--space-8);
-        padding: var(--space-2) var(--space-4);
-    }
-
-    .day-nav {
-        padding: 0;
-    }
-
-    .day-btn {
-        flex: 0 0 auto;
-        max-width: none;
-        flex-direction: row;
-        gap: var(--space-2);
-        padding: var(--space-1) var(--space-3);
-    }
-
-    /* Boutons en ligne : l'unité suit la fourchette, sur la même ligne */
-    .day-unit {
-        margin: 0 0 0 -0.3rem;
-        font-size: var(--text-micro);
-    }
-
     .chart-full {
         max-width: 100%;
     }

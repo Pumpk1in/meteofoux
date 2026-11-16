@@ -353,6 +353,8 @@ const App = {
     state: {
         currentDay: null,
         currentPoint: 'station',
+        tab: 'lafoux',              // onglet : 'lafoux' (le domaine), 'mes' (points perso), 'resume'
+        pointByTab: { lafoux: 'station', mes: null }, // dernier point vu dans chaque onglet de points
         globalSource: 'arome',      // 'openmeteo', 'arome', ou 'metno' (AROME par défaut : le plus fiable ici)
         theme: 'dark',
         days: [],
@@ -376,6 +378,16 @@ const App = {
             const savedPoint = localStorage.getItem('fmeteo_point');
             this.state.currentPoint = CONFIG.points.some(p => p.key === savedPoint)
                 ? savedPoint : CONFIG.domain[0];
+            // Onglet et dernier point de chaque onglet : le point mémorisé dans le sien, le premier dans l'autre
+            const customs = CONFIG.points.filter(p => p.custom);
+            this.state.pointByTab = { lafoux: CONFIG.domain[0], mes: customs[0]?.key ?? null };
+            this.state.pointByTab[this.tabOf(this.state.currentPoint)] = this.state.currentPoint;
+            const savedTab = localStorage.getItem('fmeteo_tab');
+            this.state.tab = ['lafoux', 'mes', 'resume'].includes(savedTab) ? savedTab : this.tabOf(this.state.currentPoint);
+            const tabPoint = this.state.pointByTab[this.state.tab];
+            if (tabPoint) this.state.currentPoint = tabPoint;
+            this.renderTabs();
+            this.initDockCollapse();
 
             // Charger le thème sauvegardé
             const savedTheme = localStorage.getItem('fmeteo_theme') || 'dark';
@@ -400,8 +412,9 @@ const App = {
             this.renderNavigation();
             this.render();
 
-            // Charger les autres points en arrière-plan (la feuille des points se complète au fur et à mesure)
-            DataService.loadRemaining(false, key => { this.refreshPointSheet(); this.scheduleNeighbors(key); });
+            // Charger les autres points en arrière-plan (la feuille des points et le Résumé se complètent
+            // au fur et à mesure)
+            DataService.loadRemaining(false, key => this.onPointLoaded(key));
 
             // "mis à jour il y a X min" reste juste si l'onglet reste ouvert
             setInterval(() => this.updateTopBar(), 60000);
@@ -452,44 +465,173 @@ const App = {
     },
 
     // Barre des jours : "AUJ." puis les jours de la semaine, chacun avec l'indicateur du verdict
-    // pour le point affiché (flocon + cm, goutte + mm, soleil + max), l'unité sur sa propre ligne
+    // pour le point affiché (flocon + cm, nuage de pluie + mm, soleil + max), l'unité sur sa propre ligne
     // (« 28–49 mm » ne tient pas dans un bouton de 44 px), en ambre si les modèles se contredisent.
-    // À refaire quand le point change.
+    // Dans le Résumé, le plus fort du domaine. À refaire quand le point ou l'onglet change.
     renderDayNav() {
-        const pointData = DataService.state.data[this.state.currentPoint];
-        const deg = n => String(Math.round(n)).replace('-', '−');
-        const ICONS = { snow: 'snowflake', rain: 'cloud-rain', dry: 'sun' };
-        const SPOKEN = { snow: ' de neige', rain: ' de pluie', dry: ', sec' };
-        const UNITS = { snow: 'cm', rain: 'mm', dry: 'max' };
+        const pointData = this.showsPoint() ? DataService.state.data[this.state.currentPoint] : null;
+        const resume = this.state.tab === 'resume';
 
         document.getElementById('day-nav').innerHTML = this.state.days.map((day, index) => {
             const isActive = day === this.state.currentDay;
             const label = index === 0 ? 'AUJ.' : CONFIG.dayLabels[Utils.getDayOfWeek(day)];
-            const verdict = pointData ? DataNormalizer.dayVerdict(pointData, day).verdict : null;
-
-            let indicatorHtml = '', spoken = '';
-            if (verdict) {
-                const { prefix, value, unit } = Components.verdictValue(verdict);
-                spoken = ` : ${prefix ? `${prefix} ` : ''}${value} ${unit}${SPOKEN[verdict.mode]}${verdict.contradict ? ', peu fiable' : ''}`;
-                let short;
-                if (verdict.mode === 'dry') {
-                    short = `${deg(verdict.tempMax)}°`;
-                } else {
-                    const lo = Math.round(verdict.range.lo), hi = Math.round(verdict.range.hi);
-                    short = verdict.basis.length === 1 || lo === hi ? `${hi}` : `${lo}–${hi}`;
-                }
-                indicatorHtml = `<span class="day-indicator is-${verdict.mode}${verdict.contradict ? ' is-unsure' : ''}"><i data-lucide="${ICONS[verdict.mode]}"></i>${short}</span>
-                    <span class="day-unit">${UNITS[verdict.mode]}</span>`;
-            }
+            const ind = resume ? this.domainIndicator(day)
+                : pointData ? this.dayIndicator(DataNormalizer.dayVerdict(pointData, day).verdict) : null;
+            const indicatorHtml = !ind ? '' : `<span class="day-indicator is-${ind.mode}${ind.unsure ? ' is-unsure' : ''}">${Components.modeIcon(ind.mode)}${ind.short}</span>
+                    <span class="day-unit">${ind.unit}</span>`;
 
             return `
                 <button class="day-btn ${isActive ? 'active' : ''}" data-day="${day}" aria-current="${isActive}"
-                        aria-label="${Utils.formatDateLabel(day)}${spoken}" onclick="App.selectDay('${day}')">
+                        aria-label="${Utils.formatDateLabel(day)}${ind ? ind.spoken : ''}" onclick="App.selectDay('${day}')">
                     <span class="day-label">${label}</span>
                     ${indicatorHtml}
                 </button>`;
         }).join('');
-        lucide.createIcons();
+    },
+
+    // Indicateur court d'un verdict (barre des jours, Résumé) : « 4–8 » cm, « 12 » mm, « 5° » max
+    dayIndicator(verdict) {
+        if (!verdict) return null;
+        const deg = n => String(Math.round(n)).replace('-', '−');
+        const SPOKEN = { snow: ' de neige', rain: ' de pluie', dry: ', sec' };
+        const { prefix, value, unit } = Components.verdictValue(verdict);
+        const spoken = ` : ${prefix ? `${prefix} ` : ''}${value} ${unit}${SPOKEN[verdict.mode]}${verdict.contradict ? ', peu fiable' : ''}`;
+        if (verdict.mode === 'dry') return { mode: 'dry', short: `${deg(verdict.tempMax)}°`, unit: 'max', spoken };
+        const lo = Math.round(verdict.range.lo), hi = Math.round(verdict.range.hi);
+        return {
+            mode: verdict.mode,
+            short: verdict.basis.length === 1 || lo === hi ? `${hi}` : `${lo}–${hi}`,
+            unit: verdict.mode === 'snow' ? 'cm' : 'mm',
+            unsure: verdict.contradict,
+            spoken
+        };
+    },
+
+    // Résumé : pas de point affiché, la barre des jours donne le plus fort du domaine (neige d'abord,
+    // puis pluie, sinon la plus haute température)
+    domainIndicator(day) {
+        const verdicts = CONFIG.domain.map(k => DataService.state.data[k])
+            .filter(Boolean).map(pd => DataNormalizer.dayVerdict(pd, day).verdict).filter(Boolean);
+        if (!verdicts.length) return null;
+        const deg = n => String(Math.round(n)).replace('-', '−');
+        const mode = verdicts.some(v => v.mode === 'snow') ? 'snow' : verdicts.some(v => v.mode === 'rain') ? 'rain' : 'dry';
+        if (mode === 'dry') {
+            const max = deg(Math.max(...verdicts.map(v => v.tempMax)));
+            return { mode, short: `${max}°`, unit: 'max', spoken: ` : sec sur le domaine, jusqu’à ${max} °C` };
+        }
+        const hi = Math.round(Math.max(...verdicts.filter(v => v.mode === mode).map(v => v.range.hi)));
+        const unit = mode === 'snow' ? 'cm' : 'mm';
+        return { mode, short: `${hi}`, unit: `${unit} max`,
+            spoken: ` : jusqu’à ${hi} ${unit} de ${mode === 'snow' ? 'neige' : 'pluie'} sur le domaine` };
+    },
+
+    // === Onglets (barre du bas) ===
+    // La Foux : les points du domaine ; Mes points : les points perso ; Résumé : tous les points, un
+    // jour, sans graphique. Le balayage reste entre les points de l'onglet (ses deux groupes)
+
+    tabOf(key) {
+        return CONFIG.domain.includes(key) ? 'lafoux' : 'mes';
+    },
+
+    // La page montre un point (pas le Résumé, ni « Mes points » sans point perso)
+    showsPoint() {
+        return this.state.tab !== 'resume' && this.tabOf(this.state.currentPoint) === this.state.tab;
+    },
+
+    // Le point affiché, et l'onglet qui le contient
+    setPoint(key) {
+        this.state.currentPoint = key;
+        this.state.tab = this.tabOf(key);
+        this.state.pointByTab[this.state.tab] = key;
+        localStorage.setItem('fmeteo_point', key);
+        localStorage.setItem('fmeteo_tab', this.state.tab);
+        this.renderTabs();
+    },
+
+    renderTabs() {
+        document.querySelectorAll('#dock-tabs button').forEach(b => {
+            if (b.dataset.tab === this.state.tab) b.setAttribute('aria-current', 'page');
+            else b.removeAttribute('aria-current');
+        });
+    },
+
+    // Jours dépliés ; la zone reste rognée le temps de se déplier (le contenu déborderait sur les onglets)
+    expandDock() {
+        const dock = document.getElementById('dock');
+        if (!dock.classList.contains('is-compact')) return;
+        dock.classList.remove('is-compact');
+        dock.classList.add('is-expanding');
+        clearTimeout(this._expandTimer);
+        this._expandTimer = setTimeout(() => dock.classList.remove('is-expanding'), 260);
+    },
+
+    // Toucher l'onglet ouvert remonte en haut de la page
+    async selectTab(tab) {
+        if (tab === this.state.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+        if (this._swiping || !DataService.state.data[this.state.currentPoint]) return;
+        const TABS = ['lafoux', 'mes', 'resume'];
+        const dir = Math.sign(TABS.indexOf(tab) - TABS.indexOf(this.state.tab));
+        this.expandDock();
+        window.scrollTo(0, 0);
+        const point = this.state.pointByTab[tab];
+        if (point) {
+            await this.selectPoint(point);
+        } else {
+            this.state.tab = tab;
+            localStorage.setItem('fmeteo_tab', tab);
+            this.renderTabs();
+            this.renderDayNav();
+            this.render();
+        }
+        this.enterTab(dir);
+    },
+
+    // L'onglet d'arrivée entre du côté où il est dans la barre (1 : de la droite)
+    enterTab(dir) {
+        const content = document.getElementById('content');
+        content.classList.remove('tab-enter-r', 'tab-enter-l');
+        void content.offsetWidth;
+        content.classList.add(dir > 0 ? 'tab-enter-r' : 'tab-enter-l');
+        // Retirée après coup : le rendu suivant (autre modèle, autre jour) ne rejoue pas l'entrée
+        clearTimeout(this._enterTimer);
+        this._enterTimer = setTimeout(() => content.classList.remove('tab-enter-r', 'tab-enter-l'), 300);
+    },
+
+    // Une bande du Résumé : son point, dans son onglet, en haut de la page
+    async openFromResume(key) {
+        this.expandDock();
+        window.scrollTo(0, 0);
+        await this.selectPoint(key);
+        this.enterTab(-1);
+    },
+
+    // Jours repliés en défilant vers le bas (téléphone), revenus en remontant : la page gagne de la
+    // hauteur pendant la lecture. La marge du bas de la page garde la hauteur de la barre dépliée (sinon
+    // la page raccourcirait sous le doigt, et le défilement ramené ferait redéplier les jours).
+    // L'écart se mesure depuis la dernière bascule (anchor), pas d'un événement à l'autre : un
+    // défilement lent n'avance que de quelques pixels à la fois et ne franchissait jamais le seuil
+    initDockCollapse() {
+        const dock = document.getElementById('dock');
+        const root = document.documentElement;
+        const STEP = 6;
+        let anchor = window.scrollY;
+        window.addEventListener('scroll', () => {
+            const y = window.scrollY;
+            if (!Utils.isMobile() || this._swiping || y < 80) {
+                this.expandDock();
+                anchor = y;
+            } else if (y > anchor + STEP) {
+                dock.classList.add('is-compact');
+                anchor = y;
+            } else if (y < anchor - STEP) {
+                this.expandDock();
+                anchor = y;
+            }
+        }, { passive: true });
+        new ResizeObserver(() => {
+            root.style.setProperty('--dock-h', `${dock.offsetHeight}px`);
+            if (!dock.matches('.is-compact, .is-expanding')) root.style.setProperty('--dock-full', `${dock.offsetHeight}px`);
+        }).observe(dock);
     },
 
 
@@ -508,7 +650,13 @@ const App = {
     // Barre du haut : point choisi et son altitude (ouvre la feuille des points), puis la date.
     // Un autre point pendant un balayage : celui où l'on arrivera en lâchant
     updateTopBar(pointKey = this.state.currentPoint) {
-        const point = CONFIG.points.find(p => p.key === pointKey);
+        // Résumé, ou « Mes points » sans point perso : le nom de l'onglet, sans pastille
+        const point = this.showsPoint() || pointKey !== this.state.currentPoint
+            ? CONFIG.points.find(p => p.key === pointKey) : null;
+        if (!point) {
+            document.getElementById('point-title-text').textContent = this.state.tab === 'resume' ? 'Tous les points' : 'Mes points';
+            document.getElementById('point-title-dots').innerHTML = '';
+        }
         if (point) {
             document.getElementById('point-title-text').textContent = this.pointName(point);
             // Sa place dans son groupe (les quatre du domaine, du plus bas au plus haut, ou les points
@@ -522,9 +670,15 @@ const App = {
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
             // Sur ordinateur, tous les jours s'empilent et chacun a sa date en tête : en haut, la
-            // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste
-            const formatted = Utils.isMobile() ? Utils.formatDateShort(this.state.currentDay) : '';
-            const freshness = this.freshness(DataService.state.data[pointKey]?.meta);
+            // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste. Le Résumé,
+            // lui, ne montre qu'un jour, et la fraîcheur du point le plus ancien
+            const resume = this.state.tab === 'resume';
+            const formatted = Utils.isMobile() || resume ? Utils.formatDateShort(this.state.currentDay) : '';
+            const meta = resume && !point
+                ? CONFIG.points.map(p => DataService.state.data[p.key]?.meta).filter(m => m?.generated_at)
+                    .sort((a, b) => Date.parse(a.generated_at) - Date.parse(b.generated_at))[0]
+                : DataService.state.data[pointKey]?.meta;
+            const freshness = this.freshness(meta);
             const line = [formatted, freshness?.text].filter(Boolean).join(' · ');
             dateEl.textContent = line.charAt(0).toUpperCase() + line.slice(1);
             dateEl.classList.toggle('is-stale', !!freshness?.stale);
@@ -632,9 +786,9 @@ const App = {
         }, { capture: true });
     },
 
+    // Ouvre un point, dans son onglet (La Foux ou Mes points)
     async selectPoint(pointKey) {
-        this.state.currentPoint = pointKey;
-        localStorage.setItem('fmeteo_point', pointKey);
+        this.setPoint(pointKey);
         this.updateTopBar();
 
         // Si le point n'est pas encore chargé, afficher skeleton et attendre
@@ -688,8 +842,11 @@ const App = {
         const dayNav = document.getElementById('day-nav');
         dayNav.classList.add('is-loading');
         dayNav.setAttribute('aria-busy', 'true');
-        this.showSkeleton();
-        window.scrollTo(0, 0);
+        // Le Résumé reste affiché : ses lignes se mettent à jour point par point (onPointLoaded)
+        if (this.state.tab !== 'resume') {
+            this.showSkeleton();
+            window.scrollTo(0, 0);
+        }
 
         const current = CONFIG.points.find(p => p.key === this.state.currentPoint);
         try {
@@ -716,13 +873,35 @@ const App = {
         for (const point of CONFIG.points.filter(p => p.key !== current.key)) {
             try {
                 await DataService.loadSinglePoint(point, true);
-                this.refreshPointSheet();
-                this.scheduleNeighbors(point.key);
+                this.onPointLoaded(point.key);
             } catch (e) {
                 console.warn(`Rafraîchissement de ${point.key} impossible :`, e.message);
             }
         }
         this._refreshing = false;
+    },
+
+    // Un point vient de (re)charger en arrière-plan : feuille des points, voisin du balayage, ou le
+    // Résumé. Là, seule sa bande change (avec la phrase et les noms des modèles, qui en dépendent) :
+    // un redessin complet faisait perdre le focus clavier, et un appui tombé pendant ce temps
+    onPointLoaded(key) {
+        this.refreshPointSheet();
+        if (this.state.tab !== 'resume') { this.scheduleNeighbors(key); return; }
+        const page = document.querySelector('#content > .resume');
+        if (!page) return; // premier point pas encore affiché : le rendu viendra avec lui
+        const fresh = document.createElement('div');
+        fresh.innerHTML = Components.Resume(this.state.currentDay);
+        const selector = `.resume-row[data-key="${key}"]`;
+        const oldRow = page.querySelector(selector), newRow = fresh.querySelector(selector);
+        if (!oldRow || !newRow) return;
+        const hadFocus = oldRow === document.activeElement;
+        oldRow.replaceWith(newRow);
+        if (hadFocus) newRow.focus();
+        page.querySelector('.resume-intro').replaceWith(fresh.querySelector('.resume-intro'));
+        // Les boutons du choix du modèle restent (focus) : leur texte seul suit
+        const names = fresh.querySelectorAll('.resume-src button');
+        page.querySelectorAll('.resume-src button').forEach((b, i) => { b.textContent = names[i].textContent; });
+        this.renderDayNav();
     },
 
     // Squelette de la page pendant un chargement, le détail aux couleurs du modèle choisi
@@ -758,6 +937,14 @@ const App = {
 
         // Détruire les anciens graphiques avant de recréer le DOM
         Charts.destroyAll();
+
+        if (!this.showsPoint()) {
+            document.getElementById('content').innerHTML = this.state.tab === 'resume'
+                ? Components.Resume(this.state.currentDay) : Components.NoCustomPoint();
+            lucide.createIcons();
+            this.scheduleNeighbors();
+            return;
+        }
 
         // Sur mobile : afficher uniquement le jour sélectionné
         // Sur desktop : afficher tous les jours en scroll
@@ -843,8 +1030,9 @@ const App = {
         this._neighborsStale = false;
         const content = document.getElementById('content');
         content.querySelectorAll(':scope > .swipe-peek').forEach(p => { Charts.destroyIn(p); p.remove(); });
-        if (!Utils.isMobile() || i < 0) return;
+        // Le jeton change même sans voisins : ceux encore attendus ne se posent pas sur une autre page
         const token = this._neighbors = (this._neighbors || 0) + 1;
+        if (!Utils.isMobile() || i < 0 || !this.showsPoint()) return;
         const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
         // Un voisin par moment libre : chacun coûte ~70 ms sur un téléphone moyen
         [[group[i - 1], 'prev'], [group[i + 1], 'next']].forEach(([key, side]) => idle(() => {
@@ -923,7 +1111,7 @@ const App = {
         const placeLabel = y => {
             const half = label.offsetHeight / 2 + 8;
             const min = document.querySelector('.top-bar').getBoundingClientRect().bottom + half;
-            const max = document.querySelector('.bottom-nav').getBoundingClientRect().top - half;
+            const max = document.getElementById('dock').getBoundingClientRect().top - half;
             label.style.top = `${Math.min(max, Math.max(min, y - 64))}px`;
         };
         const hideLabel = delay => {
@@ -976,7 +1164,7 @@ const App = {
             if (onPlot) tap = { id: e.pointerId, x0: e.clientX, y0: e.clientY, chart: onPlot };
             if (onPlot && onPlot === engaged) return;
             engaged = null;
-            if (!DataService.state.data[this.state.currentPoint]) return;
+            if (!DataService.state.data[this.state.currentPoint] || !this.showsPoint()) return;
             if (content.hasAttribute('aria-busy')) return;
             mute = !!onPlot;
             g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, locked: false, offset: 0, samples: [] };
@@ -1064,8 +1252,7 @@ const App = {
                     // s'en va ; l'autre voisin aussi, les nouveaux se préparent
                     gesture.current.forEach(el => { Charts.destroyIn(el); el.remove(); });
                     panel.replaceWith(...panel.childNodes);
-                    this.state.currentPoint = key;
-                    localStorage.setItem('fmeteo_point', key);
+                    this.setPoint(key);
                     this.updateTopBar();
                     this.renderDayNav();
                     this.scheduleNeighbors();
@@ -1808,8 +1995,7 @@ const App = {
         try {
             await DataService.loadSinglePoint(result.point);
             this.closeAddPointModal();
-            this.state.currentPoint = result.point.key;
-            localStorage.setItem('fmeteo_point', result.point.key);
+            this.setPoint(result.point.key);
             this.renderNavigation();
             this.render();
         } catch (e) {
@@ -1822,20 +2008,27 @@ const App = {
         }
     },
 
-    confirmDeletePoint(key) {
+    async confirmDeletePoint(key) {
         const point = CONFIG.points.find(p => p.key === key);
         if (!point || !confirm(`Supprimer le point "${point.name}" ?`)) return;
 
         CustomPoints.remove(key);
 
-        // Si on regarde le point supprimé, basculer sur le premier
-        if (this.state.currentPoint === key) {
-            this.state.currentPoint = CONFIG.points[0].key;
-            localStorage.setItem('fmeteo_point', this.state.currentPoint);
+        // Si on regarde le point supprimé, passer au premier point perso restant (chargé au besoin) ;
+        // sans point perso, l'onglet reste (il invite à en ajouter un) et le point de référence
+        // redevient celui de La Foux
+        const next = CONFIG.points.find(p => p.custom)?.key ?? null;
+        if (this.state.pointByTab.mes === key) this.state.pointByTab.mes = next;
+        if (this.state.currentPoint === key && next && this.state.tab === 'mes') {
+            await this.selectPoint(next);
+        } else {
+            if (this.state.currentPoint === key) {
+                this.state.currentPoint = this.state.pointByTab.lafoux; // Résumé : il reste ouvert
+                localStorage.setItem('fmeteo_point', this.state.currentPoint);
+            }
+            this.renderNavigation();
+            this.render();
         }
-
-        this.renderNavigation();
-        this.render();
         this.refreshPointSheet();
     },
 
@@ -1942,6 +2135,97 @@ const Components = {
         const loIsZero = Number(lo.replace(',', '.')) === 0;
         if (loIsZero && !verdict.contradict) return { prefix: 'jusqu’à', value: hi, unit };
         return { prefix: '', value: `${loIsZero ? '0' : lo} à ${hi}`, unit };  // "0 à 26,8", pas "0,0 à 26,8"
+    },
+
+    // Icône du verdict d'un jour (barre des jours, Résumé) : flocon, nuage de pluie, soleil.
+    // Phosphor « bold » (MIT), en SVG dans la page : remplie, elle reste lisible à 12 px
+    modeIcon(mode) {
+        const PATHS = {
+            snow: 'M227.65,149.14a12,12,0,0,1-8.79,14.51l-20.67,5.08,5.4,20.16a12,12,0,0,1-23.18,6.22l-7.29-27.2L140,148.78V187l20.48,20.48a12,12,0,0,1-17,17L128,209l-15.51,15.52a12,12,0,0,1-17-17L116,187V148.78L82.88,167.91l-7.29,27.2a12,12,0,0,1-23.18-6.22l5.4-20.16-20.67-5.08a12,12,0,1,1,5.72-23.3l27.89,6.85L104,128,70.75,108.8l-27.89,6.85A11.8,11.8,0,0,1,40,116a12,12,0,0,1-2.85-23.65l20.67-5.08-5.4-20.16a12,12,0,0,1,23.18-6.22l7.29,27.2L116,107.21V69L95.52,48.48a12,12,0,0,1,17-17L128,47l15.51-15.52a12,12,0,1,1,17,17L140,69v38.24l33.12-19.12,7.29-27.2a12,12,0,0,1,23.18,6.22l-5.4,20.16,20.67,5.08A12,12,0,0,1,216,116a11.8,11.8,0,0,1-2.87-.35l-27.89-6.85L152,128l33.25,19.2,27.89-6.85A12,12,0,0,1,227.65,149.14Z',
+            rain: 'M156,12A80.22,80.22,0,0,0,82.39,60.36,56.76,56.76,0,0,0,76,60a56,56,0,0,0,0,112h29.58L86,201.34a12,12,0,1,0,20,13.32L134.42,172H156a80,80,0,0,0,0-160Zm0,136H76a32,32,0,0,1,0-64h.28c-.11,1.1-.2,2.2-.26,3.3a12,12,0,1,0,24,1.39A56.06,56.06,0,1,1,156,148Zm.65,58.66-26.67,40a12,12,0,1,1-20-13.32l26.66-40a12,12,0,1,1,20,13.32Z',
+            dry: 'M116,36V20a12,12,0,0,1,24,0V36a12,12,0,0,1-24,0Zm80,92a68,68,0,1,1-68-68A68.07,68.07,0,0,1,196,128Zm-24,0a44,44,0,1,0-44,44A44.05,44.05,0,0,0,172,128ZM51.51,68.49a12,12,0,1,0,17-17l-12-12a12,12,0,0,0-17,17Zm0,119-12,12a12,12,0,0,0,17,17l12-12a12,12,0,1,0-17-17ZM196,72a12,12,0,0,0,8.49-3.51l12-12a12,12,0,0,0-17-17l-12,12A12,12,0,0,0,196,72Zm8.49,115.51a12,12,0,0,0-17,17l12,12a12,12,0,0,0,17-17ZM48,128a12,12,0,0,0-12-12H20a12,12,0,0,0,0,24H36A12,12,0,0,0,48,128Zm80,80a12,12,0,0,0-12,12v16a12,12,0,0,0,24,0V220A12,12,0,0,0,128,208Zm108-92H220a12,12,0,0,0,0,24h16a12,12,0,0,0,0-24Z'
+        };
+        return `<svg class="ph" viewBox="0 0 256 256" aria-hidden="true"><path d="${PATHS[mode]}"/></svg>`;
+    },
+
+    // Résumé : tous les points pour un jour, une bande chacun (nuit, matin, midi, soir du modèle
+    // choisi, sans graphique), le verdict des 3 modèles près du nom. Le choix du modèle est en tête :
+    // le même que celui des cases du verdict (un seul pour toute l'app), mais visible là où il compte.
+    // Toucher une bande ouvre ce point dans son onglet
+    Resume(day) {
+        const data = DataService.state.data;
+        const deg = n => String(Math.round(n)).replace('-', '−');
+        const amount = v => v >= 9.95 ? String(Math.round(v)) : v.toFixed(1).replace('.', ',');
+        const pad = n => String(n).padStart(2, '0');
+        // Pas de 6 h alignés sur 0/6/12/18 h UTC : leurs heures locales changent avec la saison
+        const cols = [0, 6, 12, 18].map(h => {
+            const from = new Date(`${day}T${pad(h)}:00:00Z`).getHours();
+            return { label: Utils.periodLabel(h), hours: `${from}–${(from + 6) % 24 || 24} h`, time: `${day}T${pad(h)}:00` };
+        });
+        const chosen = App.state.globalSource;
+        let relay = null;   // modèle qui prend le relais au-delà de l'horizon du modèle choisi
+
+        // Une bande = un bouton. Pas d'aria-label : il remplacerait tout le contenu, et un lecteur
+        // d'écran n'entendrait que le nom du point, sans ses prévisions. Des span (un bouton ne
+        // contient pas de div), mis en grille par le CSS
+        const row = point => {
+            const pd = data[point.key];
+            const name = `<span class="resume-name"><span class="point-dot" style="--point-color: ${point.color}"></span><b>${Utils.escapeHtml(point.name)}</b></span>`;
+            const open = `data-key="${point.key}" onclick="App.openFromResume('${point.key}')"`;
+            if (!pd) {
+                const status = DataService.state.failed[point.key] ? 'Indisponible' : 'Chargement…';
+                return `<button class="resume-row is-loading" ${open}><span class="resume-point">${name}<span class="resume-status">${status}</span></span></button>`;
+            }
+            const { summaries, verdict } = DataNormalizer.dayVerdict(pd, day);
+            const source = App.daySource(pd, summaries);
+            if (source !== chosen && summaries[source]) relay = relay || Components.sourceLabel(source, summaries[source]);
+            const six = App.getSourceData(pd, source).sixHourly;
+            const ind = App.dayIndicator(verdict);
+            const verdictHtml = !verdict ? ''
+                : verdict.mode === 'dry'
+                    ? `<span class="resume-verdict is-dry">${this.modeIcon('dry')}${deg(verdict.range.lo)} à ${deg(verdict.range.hi)}°</span>`
+                    : `<span class="resume-verdict is-${ind.mode}${ind.unsure ? ' is-unsure' : ''}">${this.modeIcon(ind.mode)}${ind.short}<small>&nbsp;${ind.unit}</small></span>`;
+            const cells = cols.map(c => {
+                const s = six[c.time];
+                if (!s || s.tempMax === null) return `<span class="resume-per is-empty"><span class="sr-only">${c.label}, pas de donnée</span><span aria-hidden="true">—</span></span>`;
+                const lo = deg(s.tempMin), hi = deg(s.tempMax);
+                const q = [];
+                if (s.snow >= 0.05) q.push(`<span class="q is-snow">${amount(s.snow)} cm</span>`);
+                if (s.rain >= 0.05) q.push(`<span class="q is-rain">${amount(s.rain)} mm</span>`);
+                if (!q.length) q.push('<span class="q is-none">sec</span>');
+                return `<span class="resume-per"><span class="sr-only">${c.label}, </span><img src="weather/svg/${s.icon}.svg" alt="${Utils.symbolLabel(s.icon)}" width="30" height="30"><span class="t">${lo === hi ? `${hi}°` : `${lo}° à ${hi}°`}</span>${q.join('')}</span>`;
+            }).join('');
+            return `<button class="resume-row" ${open}>
+                <span class="resume-point">${name}<span class="resume-alt">${Math.round(pd.elevation)} m</span>${verdictHtml}</span>${cells}</button>`;
+        };
+
+        const head = title => `<div class="resume-head"><h2>${title}</h2>${cols.map(c => `<span aria-hidden="true">${c.label}<small>${c.hours}</small></span>`).join('')}</div>`;
+        const customs = CONFIG.points.filter(p => p.custom);
+        const domain = CONFIG.domain.map(key => CONFIG.points.find(p => p.key === key));
+        const body = head('La Foux d’Allos') + domain.map(row).join('')
+            + (customs.length ? head('Mes points') + customs.map(row).join('') : '');
+
+        // Noms des modèles ce jour-là (AROME ou ARPEGE, ICON-D2…), pris sur le premier point chargé du domaine
+        const ref = CONFIG.domain.map(k => data[k]).find(Boolean);
+        const refSummaries = ref ? DataNormalizer.dayVerdict(ref, day).summaries : {};
+        const picker = ['arome', 'openmeteo', 'metno'].map(key =>
+            `<button data-source="${key}" aria-pressed="${key === chosen}" onclick="App.selectSource('${key}')">${this.sourceLabel(key, refSummaries[key])}</button>`).join('');
+
+        return `<section class="resume">
+            <div class="resume-src" role="group" aria-label="Modèle affiché">${picker}</div>
+            <p class="resume-intro">Nuit, matin, midi et soir selon <strong>${this.sourceLabel(chosen, refSummaries[chosen])}</strong>${
+                relay ? ` (${relay} au-delà de son horizon)` : ''}. Près du nom, la journée selon les 3 modèles. Touchez un point pour ses heures.</p>
+            ${body}</section>`;
+    },
+
+    // Onglet « Mes points » sans point perso : il invite à en ajouter un
+    NoCustomPoint() {
+        const canAdd = CustomPoints.getSaved().length < CustomPoints.MAX_CUSTOM;
+        return `<section class="tab-empty">
+            <h2>Vos endroits à vous</h2>
+            <p>Ajoutez un endroit qui vous intéresse, même hors de la station : un col, un refuge, une autre vallée. Ses prévisions s’affichent ici, comme celles de La Foux, et dans le Résumé.</p>
+            ${canAdd ? '<button class="tab-empty-add" onclick="App.openAddPointModal()"><i data-lucide="plus"></i>Ajouter un point</button>' : ''}
+        </section>`;
     },
 
     // Bloc verdict en tête du jour : la grandeur qui décide de la journée selon les modèles,

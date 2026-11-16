@@ -154,7 +154,8 @@ Browser (index.php)
 
 The main screen follows the confirmed brief in `.impeccable/surfaces/index-php.md` (verdict across
 models at the top of each day, one row of model cells as selector, point sheet opened from the
-title, 7-day bar with a verdict indicator per day). `PRODUCT.md` holds the product context and
+title, 7-day bar with a verdict indicator per day). Since 2026-11-16 a floating bottom bar adds three
+tabs under the days: La Foux, Mes points, Résumé (see App → Tabs). `PRODUCT.md` holds the product context and
 `DESIGN.md` the visual system.
 
 ### Key Files
@@ -394,6 +395,9 @@ HTML generators (return HTML strings).
 - **`verdictValue(verdict)`** — `{prefix, value, unit}`: the big number and its unit (cm rounded, mm to the tenth, °C range on a dry day). When the lowest model rounds to zero, `prefix` = "jusqu'à" and `value` = the highest ("jusqu'à 18 cm", not "0 à 18"), except when the models contradict: "0 à 17 cm" then shows both ends. Shared with the point sheet and the day bar (spoken label)
 - **`verdictAmount(mode, v)`** — Formats a verdict quantity (cm rounded / mm to the tenth)
 - **`sourceLabel(key, summary)`** — Name of a source for a day: "MET.no"; for the Météo-France chain the model that served that day (AROME, ARPEGE, Météo-France); "ICON-D2" for Open-Meteo when that is the day's majority `model`, else "Open-Meteo"
+- **`modeIcon(mode)`** — Verdict icon (snow / rain / dry) as an inline Phosphor "bold" SVG (`.ph`, filled: readable at 12 px)
+- **`Resume(day)`** — The Résumé tab: the model picker on top (`.resume-src`, same choice as the verdict cells, `App.selectSource`; names of the day from the first loaded domain point), a sentence naming the model (and the relay model beyond its horizon), then one row per point (domain, then "Mes points"): name, altitude, the day's verdict across the 3 models (`dayIndicator`), and the four 6 h steps of the model shown (`daySource`): night, morning, midday, evening, each icon + "min° à max°" + snow / rain or "sec". The night is kept: without it, snow falling at night disappeared. A row of a point not loaded yet: "Chargement…" / "Indisponible". A row is a button (`data-key`) that opens its point (`App.openFromResume`); no `aria-label` (it would hide the forecasts from screen readers), `span`s laid out by the grid, each period named for screen readers (`.sr-only`)
+- **`NoCustomPoint()`** — "Mes points" without custom point: a short invitation and "Ajouter un point" (`App.openAddPointModal`)
 - **`ChartSection(day, pointKey)`** — Empty chart div with unique ID
 - **`CardsGrid(entries, isToday)`** — List of hourly rows (`.rows`): today's hours (4 shown, the rest behind "Voir heures suivantes"), or a day's 6 h periods
 - **`CardsGridTomorrow(periodEntries, hourlyEntries, day)`** — Two lists: the periods (`.grid-periods`, shown) and all hours (`.grid-hourly`, hidden). Toggle button switches between views
@@ -427,13 +431,25 @@ Main application state & logic.
 - **`render()`** — Main render: destroys old charts, renders currentDay only on mobile or all days on desktop, restores expanded states (`restoreToggles`), calls renderCharts()
 - **`restoreToggles(root)`** — Unfolds, in a fresh render (`document`, or the neighbour panel of a swipe), today's hours (`todayHoursExpanded`) and the days whose hours were shown (`expandedDays`)
 
+#### Tabs (floating bottom bar)
+Three tabs in the floating bar (`.dock`), under the day bar: **La Foux** (the domain points), **Mes points** (custom points), **Résumé** (all points for one day). The two point tabs are exactly the two swipe groups (`swipeGroup`): the swipe stays between the points of the tab, never between tabs. State: `tab` and `pointByTab` (last point seen in each point tab), `tab` saved in `fmeteo_tab`.
+- **`tabOf(key)`** — `'lafoux'` for a domain point, else `'mes'`
+- **`showsPoint()`** — The page shows a point: not the Résumé, not "Mes points" without custom point (then `render()` shows `Components.NoCustomPoint()`, the swipe and the neighbours are off, the title reads the tab's name)
+- **`setPoint(key)`** — Current point + its tab + `pointByTab`, saved. Used by `selectPoint`, the swipe and `confirmAddPoint`: opening a point always opens its tab
+- **`selectTab(tab)`** — Opens the tab's last point (`selectPoint`), or the Résumé / the empty "Mes points"; scroll to top, days unfolded, entry animation (`enterTab`, from the side of the tab in the bar; not on the `.swipe-peek` panels, which would slide over the page). The open tab again: scroll to top
+- **`openFromResume(key)`** — A Résumé row: that point in its tab, at the top
+- **`renderTabs()`** — `aria-current="page"` on the open tab
+- **`initDockCollapse()` / `expandDock()`** — Mobile: the days fold when scrolling down, unfold when scrolling up (6 px, measured from the last fold or unfold, not from the previous scroll event: a slow scroll moves a few px per event and never crossed it; always unfolded above 80 px). `--dock-h` = the bar's height (the veil follows it), `--dock-full` = its unfolded height, the page's bottom padding (else the page would shorten under the finger and the clamped scroll would unfold the days again). `.is-expanding` keeps the days clipped while they unfold; otherwise unclipped, so the scrubbed day can rise above the bar
+- **`onPointLoaded(key)`** — A point (re)loaded in the background: point sheet, swipe neighbour, or the Résumé: only that point's row is replaced (plus the sentence and the model names, which depend on it), focus kept on it; a full re-render lost the keyboard focus and a tap landing meanwhile. Day bar redone
+
 #### Navigation
 - **`renderNavigation()`** — Day bar, top bar
-- **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, drop + mm range, sun + max), the unit (cm / mm / max) on its own line under it on mobile (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). Redone when the point changes
+- **`renderDayNav()`** — Day bar: "AUJ." then weekdays, each with the verdict indicator for the current point (snowflake + cm range, rain cloud + mm range, sun + max; Phosphor bold icons, `Components.modeIcon`), the unit (cm / mm / max) on its own line under it (it does not fit beside "28–49" in a 44 px button), the range in amber when the models contradict (spoken label: ", peu fiable"). On the Résumé, the strongest of the domain (`domainIndicator`: snow first, then rain, else the highest max; unit "cm max"). Redone when the point or the tab changes
+- **`dayIndicator(verdict)`** — `{mode, short, unit, unsure, spoken}`: the short indicator of a verdict, shared by the day bar and the Résumé
 - **`selectDay(day)`** — Switch active day, scroll to top, re-render
 - **`initDayScrub()`** — Touch only: press a day in the day bar and slide sideways (no long press: past 10 px the slide starts, else it stays a plain tap). The day nearest the finger lifts above it (`.day-btn.is-scrub`: raised 44 px, scaled 1.3, a short wiggle on each new day, a light vibration on Android), the others fade (`.day-nav.is-scrubbing`); releasing opens it through `selectDay`. Finger more than 60 px above the bar: nothing chosen. The click that may follow a slide is swallowed. `.day-nav` has `touch-action: none`
 - **`selectPoint(pointKey)`** — Switch active point (loads it if needed), save it to localStorage, re-render
-- **`updateTopBar(pointKey = currentPoint)`** — Title button "● Point · altitude ▾" and the line under it: date + freshness on mobile, freshness only on desktop (every day is stacked there, each with its own date). The dot sits among the points of its swipe group (`#point-title-dots`: `.point-dot` at the point's rank in `swipeGroup`, `.point-step` for the others, mobile only); a lone custom point keeps a single dot. Another `pointKey` during a swipe: the point the user lands on if they let go
+- **`updateTopBar(pointKey = currentPoint)`** — Title button "● Point · altitude ▾" and the line under it: date + freshness on mobile, freshness only on desktop (every day is stacked there, each with its own date). Résumé: "Tous les points", the date (also on desktop: it shows one day) and the freshness of the oldest point; empty "Mes points": "Mes points", no dot. The dot sits among the points of its swipe group (`#point-title-dots`: `.point-dot` at the point's rank in `swipeGroup`, `.point-step` for the others, mobile only); a lone custom point keeps a single dot. Another `pointKey` during a swipe: the point the user lands on if they let go
 - **`swipeGroup(key = currentPoint)`** — The points a swipe moves between: `CONFIG.domain` for a domain point, else the custom points in the sheet's order. The two groups never chain (the domain keeps Station and Observatoire as its ends)
 - **`initSwipe()`** — Mobile, touch only: horizontal swipe on `#content` from one point of its group (`swipeGroup`) to the next (left = next, i.e. higher on the domain; right = previous), the day and the scroll position kept. The page follows the finger with the neighbours beside it, already drawn (`scheduleNeighbors`). Let go past 30 % of the width, or with a flick (> 0.5 px/ms in the direction the page already moved): the neighbour panel **becomes the page** (its nodes moved into `#content`, chart included: nothing is redrawn), then state, top bar and day bar follow and new neighbours are prepared. If the neighbour was not ready (swipe right after a change), it is built on direction lock without its chart (its height kept) and the arrival goes through `selectPoint`, `Charts.animate` off and the chart fading in (`.chart-enter`, 0.2 s), the page height held until the chart is drawn (else the scroll position would be clamped); otherwise it springs back (0.28 s, the sheet's curve). No loop: at the ends of a group (Station, Observatoire, the first and last custom point) the page resists (a third of the finger's travel). From the plot too (the vertical band of `.apexcharts-grid`), unless it was tapped first: a tap shows its tooltip and engages that chart, dragging on it then reads the hours until a touch elsewhere. While not engaged, the plot does not see the gesture (its `touchstart` / `touchmove` stopped in the capture phase on `#content`). A tap (finger lifted within 10 px) is handed to the chart as a synthetic `mousemove` at the finger, after the `touchend` (which hides the tooltip): some phones send no mouse events for a tap, and the first tap showed nothing. This tap-first rule holds for **every** chart on mobile, a lone custom point included (one way to read a chart, whatever the point). Not while loading. The title announces the target past the 30 % mark. A `.swipe-label` bubble ("● Vescal · 2100 m", `pointName`) rides with the incoming page, 64 px above where the finger landed (kept between the top bar and the day bar), in colours inverted from the theme so it stands out from the page; on arrival it centres, pops (scale 1.18), stays ~1.4 s and fades; on a spring-back it leaves with the page. The title alone, small and top-left, went unnoticed (an accidental swipe changed the figures with no visible cause). On a custom point with no neighbour that way, the same bubble stays at the finger as a hint, "↖ Autres points" (pops, ~3 s; `.is-hint`: a 44 px target that opens the point sheet when tapped, since people are tempted to tap it — the title stays the accessible path, the bubble is `aria-hidden`), and the title flashes with its chevron bouncing (`.point-title.is-nudge`): the other points are in the sheet it opens. Before, that swipe gave no feedback at all. Not at the domain's ends: the altitude order explains itself
 - **`neighborPanel(key, side)`** — A neighbour point in a `.swipe-peek` panel (`aria-hidden`, `inert`) off screen beside the page: `renderDayContent` of the same day for that point (the skeleton if not loaded), toggles restored
@@ -471,7 +487,7 @@ Main application state & logic.
 - **`confirmDeletePoint(key)`** — Delete point, switch to the first point if current, re-render (sheet included)
 
 #### Interactions
-- **`refreshData()`** — Force-refresh: the page skeleton (`showSkeleton`) until the current point answers; on failure the old data comes back with a notice. The other points are then refreshed in the background. One refresh at a time
+- **`refreshData()`** — Force-refresh: the page skeleton (`showSkeleton`) until the current point answers (on the Résumé no skeleton: its rows update point by point); on failure the old data comes back with a notice. The other points are then refreshed in the background. One refresh at a time
 - **`showSkeleton()`** — Puts the skeleton in `#content` (`aria-busy`, charts destroyed), the detail in the chosen model's colour (`tintSkeleton`, also applied to the first-paint skeleton in `init`). `render()` clears `aria-busy`
 - **`showNotice(text)`** — Message at the top of the content (replaced on the next render)
 - **`toggleMore(btn)`** — Expand "Voir heures suivantes" for today
@@ -491,19 +507,25 @@ Main application state & logic.
 --focus: var(--accent);  /* keyboard focus outline; light theme: #0369a1 (--accent is 2.1:1 on white) */
 --border: rgba(255,255,255, 0.08);                 --border-strong: rgba(255,255,255, 0.18);
 --warn: #fbbf24;
---top-bar-height: 60px;  --bottom-nav-height: 68px;  /* 60px on desktop */
+--top-bar-height: 60px;
+--dock-*: the floating bar (background, days zone, line, active colour, shadows, gap); --dock-h / --dock-full set in JS
+--snow-ico, --rain-ico, --dry-ico: verdict icons; --snow-text, --rain-text: Résumé amounts (= hourly rows)
 ```
 
 Light theme inverts colors (white bg, dark text). It is the theme used in the sun: identity colors,
 icons and chart series use darker variants there (≥ 3:1 on white, text ≥ 4.5:1), and nothing is tinted
-by a translucent source colour: the page is light grey (`#f6f6f6`), the verdict a faint darker layer with white model cells, the day detail an opaque pastel of the model (`--detail-tint`: `#c9e3f6`, `#e1d0f7`, `#f8d8b8`, no border), its chart and hourly rows on white at 92% (`--card`). See `DESIGN.md` for the visual system.
+by a translucent source colour: the page is grey (`#eceef1`, a step darker so white cards stand out), the verdict a white veil at 56 % with white model cells, the day detail an opaque pastel of the model (`--detail-tint`: `#c9e3f6`, `#e1d0f7`, `#f8d8b8`, no border), its chart and hourly rows on white at 92% (`--card`). See `DESIGN.md` for the visual system.
 
 ### Key Layout Classes
 
 | Class | Description |
 |-------|-------------|
 | `.top-bar` | Fixed 60px header: `.point-title` button (point · altitude, date + freshness), refresh, theme. Its side padding follows `main`, so title and buttons line up with the content |
-| `.bottom-nav` / `.day-nav` | Fixed bottom bar, 7 `.day-btn` (≥ 48 px) with `.day-indicator` (`.is-unsure` in amber) and `.day-unit`; `.is-scrubbing` / `.is-scrub` while sliding across it (`App.initDayScrub`) |
+| `.dock` > `.dock-days` + `.dock-tabs` | Floating bottom bar (max 456 px, 12 px from the bottom, radius 22 px, also on desktop), one block: the days zone (`--dock-days-bg`, a different tone; folded with `.dock.is-compact`) above the three tabs (Phosphor duotone icons `.tab-ico`, the light `.duo` part only on the open tab). `.dock-veil`: blur + mask behind it, where `backdrop-filter` exists |
+| `.day-nav` | 7 `.day-btn` (50 px, 1 px border; the end buttons' top corners follow the bar's) with `.day-indicator` (`.is-unsure` in amber) and `.day-unit`; chosen day: thin outline (light: white, outline in the active colour); `.is-scrubbing` / `.is-scrub` while sliding across it (`App.initDayScrub`) |
+| `.resume` > `.resume-src`, `.resume-head`, `.resume-row` | Résumé: model picker, group header with the four periods, one row per point (name line across, four `.resume-per` columns) |
+| `.tab-empty` | "Mes points" without custom point |
+| `main.tab-enter-r` / `-l` | Tab change: the page slides in 28 px and fades in (not `.swipe-peek`) |
 | `main` | Max 900px, centered, 1rem padding |
 | `.day-section` | Container: header (desktop), `.verdict`, `.day-detail` |
 | `.verdict` | Verdict block: `.verdict-value`, `.verdict-sub`, `.verdict-facts`, `.verdict-models` > `.model-cell` |
@@ -528,7 +550,7 @@ The day detail gets the source colour (background tint in dark mode, 3px border 
 
 ### Responsive Breakpoints
 
-- **≥768px** — Desktop: bottom-nav horizontal, all days visible, hourly rows in two columns
+- **≥768px** — Desktop: the same floating bar (the days never fold), all days visible (a day button scrolls to it), hourly rows in two columns; the Résumé shows one day
 - **<400px** — Small mobile: adjusted chart height, hidden day-header
 
 ### ApexCharts Layout Notes
@@ -608,5 +630,6 @@ icons and the chart.
 | `fmeteo_theme` | `'dark'` or `'light'` |
 | `fmeteo_source` | `'openmeteo'`, `'arome'`, or `'metno'` |
 | `fmeteo_point` | Key of the last point viewed, reopened at startup (Station if absent or if that point no longer exists) |
+| `fmeteo_tab` | Open tab: `'lafoux'`, `'mes'` or `'resume'`, reopened at startup (else the tab of `fmeteo_point`) |
 | `fmeteo_custom_points` | JSON array of custom geographic points |
 | `fmeteo_points_order` | JSON array of point keys (drag-reorder) |
