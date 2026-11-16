@@ -202,8 +202,8 @@ names something: a source, a point, or a weather quantity.
   same family, a clear lightness gap (3:1 between them in dark mode). The light theme uses darker
   variants of the same hues, ≥ 3:1 on white (`js/ui.js`, `getSeriesColors`). Each axis unit takes
   the colour of the series it measures.
-- **Avertissement** (`avertissement`, `--warn`; light `#b45309`): "Peu fiable : les modèles se
-  contredisent", contradictory days in the day bar, stale data in the top bar, the refresh notice.
+- **Avertissement** (`avertissement`, `--warn`; light `#b45309`): the "Peu fiable" chip of the
+  verdict, contradictory days in the day bar, stale data in the top bar, the refresh notice.
 - **Alerte** (`alerte`): errors and the delete action of the point sheet only.
 
 ### Neutral
@@ -318,8 +318,9 @@ The answer of the day, readable in one second.
   800, the unit at 20px. "0 à 26 cm" shows both ends when the models contradict, "jusqu'à 18 cm"
   when the lowest rounds to zero.
 - **Sentence:** "de neige humide, et de la pluie, selon les 3 modèles", with a "?" that unfolds a
-  plain-language note on the models; "selon les 3 modèles ?" never splits. A chip says "Les modèles
-  s'accordent", or, in amber, "Peu fiable : les modèles se contredisent".
+  plain-language note on the models; "selon les 3 modèles ?" never splits. When the models contradict,
+  an amber "⚠ Peu fiable" chip sits at the top right, on the figure's line; nothing is said when they
+  agree (no news is good news).
 - **Facts:** temperatures and the freezing level relative to the point ("Limite du gel plus haut
   que le point (2980–3310 m)"); on a dry day, night refreeze and wind.
 - **Model cells:** AROME, Open-Meteo, MET.no, one row; each shows its value, a bar against the

@@ -2226,12 +2226,10 @@ const Components = {
         }
         // Affiché d'un bloc avec le « ? » (.nowrap) : la phrase se coupe après la virgule, jamais avant le « ? »
         const by = basis.length === 1 ? `selon ${LABELS[basis[0]]} seulement` : `selon les ${basis.length} modèles`;
-        // Accord : une puce. Contradiction (0 contre 17 cm) : une alerte, la prévision est peu fiable.
-        // Simple divergence : rien de plus, la fourchette et les cases juste en dessous la montrent déjà
-        const agreeHtml = verdict.contradict
-            ? '<span class="verdict-agree is-warn"><i data-lucide="triangle-alert"></i>Peu fiable : les modèles se contredisent</span>'
-            : verdict.diverge === false
-                ? '<span class="verdict-agree"><i data-lucide="check"></i>Les modèles s’accordent</span>' : '';
+        // Contradiction (0 contre 17 cm) : « Peu fiable », en haut à droite à côté du chiffre. Accord ou
+        // simple divergence : rien, la fourchette et les cases juste en dessous le montrent déjà
+        const unsureHtml = verdict.contradict
+            ? '<span class="verdict-unsure" title="Les modèles se contredisent"><i data-lucide="triangle-alert"></i>Peu fiable</span>' : '';
         const helpOpen = App.state.modelsHelpOpen;
 
         const facts = [];
@@ -2287,10 +2285,9 @@ const Components = {
 
         return `
             <div class="verdict" data-mode="${mode}">
-                <p class="verdict-main">${prefix ? `<span class="verdict-unit">${prefix}</span>` : ''}<span class="verdict-value">${value.replace(' à ', ' <span class="verdict-sep">à</span> ')}</span><span class="verdict-unit">${unit}</span></p>
+                <p class="verdict-main">${prefix ? `<span class="verdict-unit">${prefix}</span>` : ''}<span class="verdict-value">${value.replace(' à ', ' <span class="verdict-sep">à</span> ')}</span><span class="verdict-unit">${unit}</span>${unsureHtml}</p>
                 <p class="verdict-sub">
                     <span>${what}, <span class="nowrap">${by}<button class="verdict-help-btn" aria-expanded="${helpOpen}" aria-label="Qui sont ces modèles ?" title="Qui sont ces modèles ?" onclick="App.toggleModelsHelp(this)"><i data-lucide="circle-help"></i></button></span></span>
-                    ${agreeHtml}
                 </p>
                 ${facts.length ? `<ul class="verdict-facts">${facts.map(([icon, text]) => `<li><i data-lucide="${icon}"></i>${text}</li>`).join('')}</ul>` : ''}
                 <div class="verdict-models" role="group" aria-label="Modèle affiché en détail">${cells}</div>

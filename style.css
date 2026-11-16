@@ -1202,6 +1202,7 @@ main.tab-enter-l > :not(.swipe-peek) { animation: tab-in-l 0.25s cubic-bezier(0.
     margin: 0;
     padding: 0 var(--space-0-5);
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: var(--space-1-5);
     line-height: 1;
@@ -1242,28 +1243,29 @@ main.tab-enter-l > :not(.swipe-peek) { animation: tab-in-l 0.25s cubic-bezier(0.
     color: var(--text-soft);
 }
 
-.verdict-agree {
+/* Modèles qui se contredisent : « Peu fiable », en haut à droite du bloc, sur la ligne du chiffre.
+   Une fourchette trop longue pour la partager (« 0,4 à 26,8 mm » à 320 px) le renvoie dessous, à droite
+   (.verdict-main passe à la ligne) */
+.verdict-unsure {
+    align-self: flex-start;
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
+    margin-left: auto;
     padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--warn);
     border-radius: var(--radius-pill);
     font-size: var(--text-label);
-    color: var(--text);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--warn);
+    white-space: nowrap;
 }
 
-.verdict-agree .lucide {
+.verdict-unsure .lucide {
     width: 13px;
     height: 13px;
     flex-shrink: 0;
-}
-
-/* Modèles qui se contredisent : prévision peu fiable */
-.verdict-agree.is-warn {
-    border-color: var(--warn);
-    color: var(--warn);
-    font-weight: 600;
 }
 
 /* "?" collé à "selon les 3 modèles" : cible de 44 px sans agrandir la ligne */
