@@ -6,6 +6,10 @@
 # Claude Code
 .claude/
 
+# Agent skills (installed locally)
+.agents/
+skills-lock.json
+
 # Cache and debug data
 cache/
 debug/
