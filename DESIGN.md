@@ -256,9 +256,11 @@ A single column, centred, at most 900px wide (`main`, padding 1rem; 1.5rem from 
 point title and two square icon buttons; its side padding follows `main`, so the title lines up with
 the content. A floating bar at the bottom (max 456px, 12px above the screen edge, radius 22px, one
 block, the same on desktop) holds the seven days above three tabs: La Foux, Mes points, Résumé
-(Phosphor duotone icons, the light part only on the open tab). On a phone the days fold away while
-scrolling down and come back when scrolling up. The Résumé lists every point for one day, one row
-each, with night / morning / midday / evening of the chosen model and the model picker on top.
+(Phosphor duotone icons left of their label, the light part only on the open tab). On a phone the
+days fold away while scrolling down and come back when scrolling up. The Résumé shows the week of
+every point without a day bar: one row per point, one cell per day with the verdict of the 3 models
+(the day bar's indicator), snow cells tinted by depth (cyan, three steps), an amber outline when the
+models contradict; a cell opens that point at that day.
 
 Each day is a section, in this order:
 1. **Header** (desktop only, where every day stacks): the date, "Mardi 10 novembre".

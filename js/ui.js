@@ -467,16 +467,14 @@ const App = {
     // Barre des jours : "AUJ." puis les jours de la semaine, chacun avec l'indicateur du verdict
     // pour le point affiché (flocon + cm, nuage de pluie + mm, soleil + max), l'unité sur sa propre ligne
     // (« 28–49 mm » ne tient pas dans un bouton de 44 px), en ambre si les modèles se contredisent.
-    // Dans le Résumé, le plus fort du domaine. À refaire quand le point ou l'onglet change.
+    // Masquée sur le Résumé (il montre la semaine). À refaire quand le point ou l'onglet change.
     renderDayNav() {
         const pointData = this.showsPoint() ? DataService.state.data[this.state.currentPoint] : null;
-        const resume = this.state.tab === 'resume';
 
         document.getElementById('day-nav').innerHTML = this.state.days.map((day, index) => {
             const isActive = day === this.state.currentDay;
             const label = index === 0 ? 'AUJ.' : CONFIG.dayLabels[Utils.getDayOfWeek(day)];
-            const ind = resume ? this.domainIndicator(day)
-                : pointData ? this.dayIndicator(DataNormalizer.dayVerdict(pointData, day).verdict) : null;
+            const ind = pointData ? this.dayIndicator(DataNormalizer.dayVerdict(pointData, day).verdict) : null;
             const indicatorHtml = !ind ? '' : `<span class="day-indicator is-${ind.mode}${ind.unsure ? ' is-unsure' : ''}">${Components.modeIcon(ind.mode)}${ind.short}</span>
                     <span class="day-unit">${ind.unit}</span>`;
 
@@ -507,27 +505,9 @@ const App = {
         };
     },
 
-    // Résumé : pas de point affiché, la barre des jours donne le plus fort du domaine (neige d'abord,
-    // puis pluie, sinon la plus haute température)
-    domainIndicator(day) {
-        const verdicts = CONFIG.domain.map(k => DataService.state.data[k])
-            .filter(Boolean).map(pd => DataNormalizer.dayVerdict(pd, day).verdict).filter(Boolean);
-        if (!verdicts.length) return null;
-        const deg = n => String(Math.round(n)).replace('-', '−');
-        const mode = verdicts.some(v => v.mode === 'snow') ? 'snow' : verdicts.some(v => v.mode === 'rain') ? 'rain' : 'dry';
-        if (mode === 'dry') {
-            const max = deg(Math.max(...verdicts.map(v => v.tempMax)));
-            return { mode, short: `${max}°`, unit: 'max', spoken: ` : sec sur le domaine, jusqu’à ${max} °C` };
-        }
-        const hi = Math.round(Math.max(...verdicts.filter(v => v.mode === mode).map(v => v.range.hi)));
-        const unit = mode === 'snow' ? 'cm' : 'mm';
-        return { mode, short: `${hi}`, unit: `${unit} max`,
-            spoken: ` : jusqu’à ${hi} ${unit} de ${mode === 'snow' ? 'neige' : 'pluie'} sur le domaine` };
-    },
-
     // === Onglets (barre du bas) ===
-    // La Foux : les points du domaine ; Mes points : les points perso ; Résumé : tous les points, un
-    // jour, sans graphique. Le balayage reste entre les points de l'onglet (ses deux groupes)
+    // La Foux : les points du domaine ; Mes points : les points perso ; Résumé : la semaine de tous
+    // les points, sans barre des jours. Le balayage reste entre les points de l'onglet (ses deux groupes)
 
     tabOf(key) {
         return CONFIG.domain.includes(key) ? 'lafoux' : 'mes';
@@ -553,6 +533,8 @@ const App = {
             if (b.dataset.tab === this.state.tab) b.setAttribute('aria-current', 'page');
             else b.removeAttribute('aria-current');
         });
+        // Le Résumé montre déjà les sept jours : la barre des jours s'efface, la barre du bas raccourcit
+        document.getElementById('dock').classList.toggle('no-days', this.state.tab === 'resume');
     },
 
     // Jours dépliés ; la zone reste rognée le temps de se déplier (le contenu déborderait sur les onglets)
@@ -597,12 +579,15 @@ const App = {
         this._enterTimer = setTimeout(() => content.classList.remove('tab-enter-r', 'tab-enter-l'), 300);
     },
 
-    // Une bande du Résumé : son point, dans son onglet, en haut de la page
-    async openFromResume(key) {
+    // Une case du Résumé : ce point à ce jour, dans son onglet, en haut de la page (sur ordinateur,
+    // où les jours s'empilent, au jour touché)
+    async openFromResume(key, day) {
+        this.state.currentDay = day;
         this.expandDock();
         window.scrollTo(0, 0);
         await this.selectPoint(key);
         this.enterTab(-1);
+        if (!Utils.isMobile()) document.querySelector(`.day-section[data-day="${day}"]`)?.scrollIntoView();
     },
 
     // Jours repliés en défilant vers le bas (téléphone), revenus en remontant : la page gagne de la
@@ -670,10 +655,10 @@ const App = {
         const dateEl = document.getElementById('current-date');
         if (this.state.currentDay) {
             // Sur ordinateur, tous les jours s'empilent et chacun a sa date en tête : en haut, la
-            // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste. Le Résumé,
-            // lui, ne montre qu'un jour, et la fraîcheur du point le plus ancien
+            // date d'un seul jour contredisait celui qu'on lisait. Seule la fraîcheur y reste. Le Résumé
+            // montre la semaine : pas de date, la fraîcheur du point le plus ancien
             const resume = this.state.tab === 'resume';
-            const formatted = Utils.isMobile() || resume ? Utils.formatDateShort(this.state.currentDay) : '';
+            const formatted = Utils.isMobile() && !resume ? Utils.formatDateShort(this.state.currentDay) : '';
             const meta = resume && !point
                 ? CONFIG.points.map(p => DataService.state.data[p.key]?.meta).filter(m => m?.generated_at)
                     .sort((a, b) => Date.parse(a.generated_at) - Date.parse(b.generated_at))[0]
@@ -882,26 +867,21 @@ const App = {
     },
 
     // Un point vient de (re)charger en arrière-plan : feuille des points, voisin du balayage, ou le
-    // Résumé. Là, seule sa bande change (avec la phrase et les noms des modèles, qui en dépendent) :
-    // un redessin complet faisait perdre le focus clavier, et un appui tombé pendant ce temps
+    // Résumé. Là, seule sa ligne change : un redessin complet faisait perdre le focus clavier, et un
+    // appui tombé pendant ce temps
     onPointLoaded(key) {
         this.refreshPointSheet();
         if (this.state.tab !== 'resume') { this.scheduleNeighbors(key); return; }
-        const page = document.querySelector('#content > .resume');
+        const page = document.querySelector('#content > .week');
         if (!page) return; // premier point pas encore affiché : le rendu viendra avec lui
         const fresh = document.createElement('div');
-        fresh.innerHTML = Components.Resume(this.state.currentDay);
-        const selector = `.resume-row[data-key="${key}"]`;
+        fresh.innerHTML = Components.Resume();
+        const selector = `.week-point[data-key="${key}"]`;
         const oldRow = page.querySelector(selector), newRow = fresh.querySelector(selector);
         if (!oldRow || !newRow) return;
-        const hadFocus = oldRow === document.activeElement;
+        const focusedDay = oldRow.contains(document.activeElement) ? document.activeElement.dataset.day : null;
         oldRow.replaceWith(newRow);
-        if (hadFocus) newRow.focus();
-        page.querySelector('.resume-intro').replaceWith(fresh.querySelector('.resume-intro'));
-        // Les boutons du choix du modèle restent (focus) : leur texte seul suit
-        const names = fresh.querySelectorAll('.resume-src button');
-        page.querySelectorAll('.resume-src button').forEach((b, i) => { b.textContent = names[i].textContent; });
-        this.renderDayNav();
+        if (focusedDay) newRow.querySelector(`[data-day="${focusedDay}"]`)?.focus();
     },
 
     // Squelette de la page pendant un chargement, le détail aux couleurs du modèle choisi
@@ -940,7 +920,7 @@ const App = {
 
         if (!this.showsPoint()) {
             document.getElementById('content').innerHTML = this.state.tab === 'resume'
-                ? Components.Resume(this.state.currentDay) : Components.NoCustomPoint();
+                ? Components.Resume() : Components.NoCustomPoint();
             lucide.createIcons();
             this.scheduleNeighbors();
             return;
@@ -2148,74 +2128,40 @@ const Components = {
         return `<svg class="ph" viewBox="0 0 256 256" aria-hidden="true"><path d="${PATHS[mode]}"/></svg>`;
     },
 
-    // Résumé : tous les points pour un jour, une bande chacun (nuit, matin, midi, soir du modèle
-    // choisi, sans graphique), le verdict des 3 modèles près du nom. Le choix du modèle est en tête :
-    // le même que celui des cases du verdict (un seul pour toute l'app), mais visible là où il compte.
-    // Toucher une bande ouvre ce point dans son onglet
-    Resume(day) {
+    // Résumé : la semaine de tous les points d'un coup d'œil, sans clic. Une ligne par point (le
+    // domaine, puis « Mes points »), une case par jour : le verdict des 3 modèles, comme la barre des
+    // jours (neige en cm, pluie en mm, sinon la max), la neige teintée selon sa hauteur, en ambre si
+    // les modèles se contredisent. Toucher une case ouvre ce point à ce jour, dans son onglet
+    Resume() {
         const data = DataService.state.data;
-        const deg = n => String(Math.round(n)).replace('-', '−');
-        const amount = v => v >= 9.95 ? String(Math.round(v)) : v.toFixed(1).replace('.', ',');
-        const pad = n => String(n).padStart(2, '0');
-        // Pas de 6 h alignés sur 0/6/12/18 h UTC : leurs heures locales changent avec la saison
-        const cols = [0, 6, 12, 18].map(h => {
-            const from = new Date(`${day}T${pad(h)}:00:00Z`).getHours();
-            return { label: Utils.periodLabel(h), hours: `${from}–${(from + 6) % 24 || 24} h`, time: `${day}T${pad(h)}:00` };
-        });
-        const chosen = App.state.globalSource;
-        let relay = null;   // modèle qui prend le relais au-delà de l'horizon du modèle choisi
+        const days = App.state.days;
+        const head = title => `<div class="week-head"><h2>${title}</h2>${days.map((d, i) =>
+            `<span aria-hidden="true"><b>${i === 0 ? 'AUJ.' : CONFIG.dayLabels[Utils.getDayOfWeek(d)]}</b>${Number(d.slice(8))}</span>`).join('')}</div>`;
 
-        // Une bande = un bouton. Pas d'aria-label : il remplacerait tout le contenu, et un lecteur
-        // d'écran n'entendrait que le nom du point, sans ses prévisions. Des span (un bouton ne
-        // contient pas de div), mis en grille par le CSS
         const row = point => {
             const pd = data[point.key];
-            const name = `<span class="resume-name"><span class="point-dot" style="--point-color: ${point.color}"></span><b>${Utils.escapeHtml(point.name)}</b></span>`;
-            const open = `data-key="${point.key}" onclick="App.openFromResume('${point.key}')"`;
-            if (!pd) {
-                const status = DataService.state.failed[point.key] ? 'Indisponible' : 'Chargement…';
-                return `<button class="resume-row is-loading" ${open}><span class="resume-point">${name}<span class="resume-status">${status}</span></span></button>`;
-            }
-            const { summaries, verdict } = DataNormalizer.dayVerdict(pd, day);
-            const source = App.daySource(pd, summaries);
-            if (source !== chosen && summaries[source]) relay = relay || Components.sourceLabel(source, summaries[source]);
-            const six = App.getSourceData(pd, source).sixHourly;
-            const ind = App.dayIndicator(verdict);
-            const verdictHtml = !verdict ? ''
-                : verdict.mode === 'dry'
-                    ? `<span class="resume-verdict is-dry">${this.modeIcon('dry')}${deg(verdict.range.lo)} à ${deg(verdict.range.hi)}°</span>`
-                    : `<span class="resume-verdict is-${ind.mode}${ind.unsure ? ' is-unsure' : ''}">${this.modeIcon(ind.mode)}${ind.short}<small>&nbsp;${ind.unit}</small></span>`;
-            const cells = cols.map(c => {
-                const s = six[c.time];
-                if (!s || s.tempMax === null) return `<span class="resume-per is-empty"><span class="sr-only">${c.label}, pas de donnée</span><span aria-hidden="true">—</span></span>`;
-                const lo = deg(s.tempMin), hi = deg(s.tempMax);
-                const q = [];
-                if (s.snow >= 0.05) q.push(`<span class="q is-snow">${amount(s.snow)} cm</span>`);
-                if (s.rain >= 0.05) q.push(`<span class="q is-rain">${amount(s.rain)} mm</span>`);
-                if (!q.length) q.push('<span class="q is-none">sec</span>');
-                return `<span class="resume-per"><span class="sr-only">${c.label}, </span><img src="weather/svg/${s.icon}.svg" alt="${Utils.symbolLabel(s.icon)}" width="30" height="30"><span class="t">${lo === hi ? `${hi}°` : `${lo}° à ${hi}°`}</span>${q.join('')}</span>`;
+            const name = `<span class="week-name"><span class="point-dot" style="--point-color: ${point.color}"></span><b>${Utils.escapeHtml(point.name)}</b><small>${
+                pd ? `${Math.round(pd.elevation)} m` : DataService.state.failed[point.key] ? 'Indisponible' : 'Chargement…'}</small></span>`;
+            if (!pd) return `<div class="week-point is-loading" data-key="${point.key}">${name}</div>`;
+            const cells = days.map(day => {
+                const verdict = DataNormalizer.dayVerdict(pd, day).verdict;
+                const ind = App.dayIndicator(verdict);
+                const label = `${Utils.escapeHtml(point.name)}, ${Utils.formatDateLabel(day)}`;
+                if (!ind) return `<span class="week-cell is-empty" role="img" aria-label="${label} : pas de prévision">—</span>`;
+                // Hauteur de neige du modèle le plus fort : la teinte se lit avant le chiffre
+                const level = ind.mode !== 'snow' ? '' : ` lvl-${verdict.range.hi >= 15 ? 3 : verdict.range.hi >= 5 ? 2 : 1}`;
+                return `<button class="week-cell is-${ind.mode}${level}${ind.unsure ? ' is-unsure' : ''}" data-day="${day}" aria-label="${label}${ind.spoken}"
+                    onclick="App.openFromResume('${point.key}', '${day}')">${this.modeIcon(ind.mode)}<b>${ind.short}</b><small>${ind.unit}</small></button>`;
             }).join('');
-            return `<button class="resume-row" ${open}>
-                <span class="resume-point">${name}<span class="resume-alt">${Math.round(pd.elevation)} m</span>${verdictHtml}</span>${cells}</button>`;
+            return `<div class="week-point" data-key="${point.key}">${name}${cells}</div>`;
         };
 
-        const head = title => `<div class="resume-head"><h2>${title}</h2>${cols.map(c => `<span aria-hidden="true">${c.label}<small>${c.hours}</small></span>`).join('')}</div>`;
         const customs = CONFIG.points.filter(p => p.custom);
         const domain = CONFIG.domain.map(key => CONFIG.points.find(p => p.key === key));
-        const body = head('La Foux d’Allos') + domain.map(row).join('')
-            + (customs.length ? head('Mes points') + customs.map(row).join('') : '');
-
-        // Noms des modèles ce jour-là (AROME ou ARPEGE, ICON-D2…), pris sur le premier point chargé du domaine
-        const ref = CONFIG.domain.map(k => data[k]).find(Boolean);
-        const refSummaries = ref ? DataNormalizer.dayVerdict(ref, day).summaries : {};
-        const picker = ['arome', 'openmeteo', 'metno'].map(key =>
-            `<button data-source="${key}" aria-pressed="${key === chosen}" onclick="App.selectSource('${key}')">${this.sourceLabel(key, refSummaries[key])}</button>`).join('');
-
-        return `<section class="resume">
-            <div class="resume-src" role="group" aria-label="Modèle affiché">${picker}</div>
-            <p class="resume-intro">Nuit, matin, midi et soir selon <strong>${this.sourceLabel(chosen, refSummaries[chosen])}</strong>${
-                relay ? ` (${relay} au-delà de son horizon)` : ''}. Près du nom, la journée selon les 3 modèles. Touchez un point pour ses heures.</p>
-            ${body}</section>`;
+        return `<section class="week">
+            <p class="week-intro">La semaine selon les 3 modèles : neige en cm, pluie en mm, sinon la température max. Touchez un jour pour l’ouvrir.</p>
+            ${head('La Foux d’Allos')}${domain.map(row).join('')}
+            ${customs.length ? head('Mes points') + customs.map(row).join('') : ''}</section>`;
     },
 
     // Onglet « Mes points » sans point perso : il invite à en ajouter un

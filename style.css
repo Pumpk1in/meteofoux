@@ -67,15 +67,15 @@
     --dock-shadow-up: 0 -3px 12px -2px rgb(0 0 0 / 0.4), 0 -20px 48px -8px rgb(0 0 0 / 0.5);
     --dock-gap: 12px;             /* entre la barre et le bas de l'écran */
     --safe-b: env(safe-area-inset-bottom, 0px);
-    --dock-h: 132px;              /* hauteur de la barre, mesurée en JS (App.initDockCollapse) */
-    --dock-full: 132px;           /* la même, jours dépliés : la marge du bas de la page */
+    --dock-h: 120px;              /* hauteur de la barre, mesurée en JS (App.initDockCollapse) */
+    --dock-full: 120px;           /* la même, jours dépliés : la marge du bas de la page */
 
-    /* Verdict d'un jour (barre des jours, Résumé) : icônes, et quantités du Résumé (= lignes horaires) */
+    /* Verdict d'un jour (barre des jours, Résumé) : icônes, et teinte des jours de neige du Résumé
+       (= neige des lignes horaires) */
     --snow-ico: #60a5fa;
     --rain-ico: #3b82f6;
     --dry-ico: #fbbf24;
     --snow-text: #67e8f9;
-    --rain-text: #60a5fa;
 }
 
 /* Thème clair. Fond de page un cran plus foncé que les cartes blanches : elles ressortent */
@@ -93,7 +93,6 @@
     --rain-ico: #1d4ed8;
     --dry-ico: #b45309;
     --snow-text: #0e7490;
-    --rain-text: #1d4ed8;
     --card: rgba(255, 255, 255, 1);
     --card-hover: #ffffff;
     --text: #1e293b;
@@ -564,32 +563,40 @@ body {
     }
 }
 
-/* Onglets : icône Phosphor duotone, sa partie claire seulement sur l'onglet actif */
+/* Le Résumé montre la semaine : pas de zone des jours (App.renderTabs) */
+.dock.no-days .dock-days {
+    display: none;
+}
+
+/* Onglets : icône Phosphor duotone à gauche du texte (la barre en est plus basse), sa partie claire
+   seulement sur l'onglet actif */
 .dock-tabs {
     display: flex;
-    height: 58px;
+    height: 46px;
     border-top: 1px solid var(--dock-line);
 }
 
-.dock.is-compact .dock-tabs {
+.dock.is-compact .dock-tabs,
+.dock.no-days .dock-tabs {
     border-top-color: transparent;
 }
 
 .dock-tabs button {
     flex: 1;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: var(--space-1-5);
+    min-width: 0;
     min-height: 44px;
     border: 0;
     border-radius: 22px;
     background: none;
     color: var(--dock-ink-2);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-small);
     font-weight: 600;
+    white-space: nowrap;
     cursor: pointer;
     transition: color 0.16s;
 }
@@ -604,8 +611,9 @@ body {
 }
 
 .tab-ico {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
     fill: currentColor;
 }
 
@@ -743,11 +751,11 @@ body {
 }
 
 .day-indicator.is-snow .ph,
-.resume-verdict.is-snow .ph { color: var(--snow-ico); }
+.week-cell.is-snow .ph { color: var(--snow-ico); }
 .day-indicator.is-rain .ph,
-.resume-verdict.is-rain .ph { color: var(--rain-ico); }
+.week-cell.is-rain .ph { color: var(--rain-ico); }
 .day-indicator.is-dry .ph,
-.resume-verdict.is-dry .ph { color: var(--dry-ico); }
+.week-cell.is-dry .ph { color: var(--dry-ico); }
 
 /* Modèles qui se contredisent ce jour-là : la fourchette en ambre, comme l'alerte du verdict */
 .day-indicator.is-unsure {
@@ -890,251 +898,189 @@ main.tab-enter-r > :not(.swipe-peek) { animation: tab-in-r 0.25s cubic-bezier(0.
 main.tab-enter-l > :not(.swipe-peek) { animation: tab-in-l 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
 
 /* ============================================
-   RÉSUMÉ — tous les points pour un jour (Components.Resume) : une bande par point, quatre
-   colonnes alignées (nuit, matin, midi, soir), le choix du modèle en tête
+   RÉSUMÉ — la semaine de tous les points (Components.Resume) : une ligne par point, une case par
+   jour (le verdict des 3 modèles), alignées sous les jours. Téléphone : le nom au-dessus des sept
+   cases ; à partir de 600 px, dans une colonne à gauche
    ============================================ */
-.resume {
+.week {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-}
-
-/* Texte pour les lecteurs d'écran seulement (le nom de la période dans chaque case du Résumé) */
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-/* Choix du modèle : les couleurs des cases du verdict */
-.resume-src {
-    display: flex;
     gap: var(--space-1-5);
 }
 
-.resume-src button {
-    --m: #c084fc;
-    flex: 1;
-    min-width: 0;
-    min-height: 44px;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card);
-    color: var(--m);
-    font: inherit;
-    font-size: var(--text-small);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    transition: background 0.16s, border-color 0.16s;
-}
-
-.resume-src button[data-source="openmeteo"] { --m: #38bdf8; }
-.resume-src button[data-source="metno"] { --m: #f59f30; }
-
-.resume-src button[aria-pressed="true"] {
-    border-color: var(--m);
-    background: color-mix(in srgb, var(--m) 16%, transparent);
-}
-
-.resume-src button:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-}
-
-[data-theme="light"] .resume-src button { --m: #7e22ce; background: #fff; }
-[data-theme="light"] .resume-src button[data-source="openmeteo"] { --m: #0369a1; }
-[data-theme="light"] .resume-src button[data-source="metno"] { --m: #b45309; }
-[data-theme="light"] .resume-src button[aria-pressed="true"] { background: color-mix(in srgb, var(--m) 12%, #fff); }
-
-.resume-intro {
-    margin: 0 0 var(--space-1);
+.week-intro {
+    margin: 0;
     font-size: var(--text-small);
     color: var(--muted);
 }
 
-.resume-intro strong {
-    color: var(--text);
-    font-weight: 600;
-}
-
-/* En-tête de groupe puis bandes : le nom du point sur toute la largeur, les quatre périodes dessous */
-.resume-head,
-.resume-row {
+.week-head,
+.week-point {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     column-gap: 2px;
-    row-gap: 6px;
+    row-gap: var(--space-1-5);
     align-items: center;
 }
 
-.resume-head {
-    padding: var(--space-3) var(--space-2) 0;
-    font-size: var(--text-micro);
+.week-head {
+    padding: var(--space-3) 6px 0;
     color: var(--muted);
 }
 
-.resume-head h2 {
+.week-head h2 {
     grid-column: 1 / -1;
-    margin: 0 0 4px;
+    margin: 0;
     font-size: var(--text-small);
     font-weight: 600;
     color: var(--text);
 }
 
-.resume-head span {
-    text-align: center;
-    line-height: 1.2;
-}
-
-.resume-head small {
-    display: block;
+/* Jour : « ME » puis la date */
+.week-head span {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     font-size: var(--text-micro);
-    opacity: 0.8;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
 }
 
-.resume-row {
-    width: 100%;
-    min-height: 76px;
-    padding: var(--space-2) 6px;
-    border: 0;
+.week-head b {
+    font-weight: 600;
+    color: var(--text-soft);
+}
+
+.week-point {
+    padding: var(--space-2) 6px 6px;
     border-radius: var(--radius-sm);
     background: var(--card);
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.15s;
 }
 
-[data-theme="light"] .resume-row {
-    background: #fff;
+[data-theme="light"] .week-point {
     box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
 }
 
-.resume-row:active {
-    background: var(--card-hover);
-}
-
-@media (hover: hover) {
-    .resume-row:hover {
-        background: var(--card-hover);
-    }
-}
-
-.resume-row:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-}
-
-button.resume-row:active {
-    transform: scale(0.98);
-}
-
-.resume-point {
+.week-name {
     grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: 0;
-    padding: 0 4px;
-}
-
-.resume-name {
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
+    padding: 0 4px;
     font-size: var(--text-body);
 }
 
-.resume-name b {
+.week-name b {
     overflow: hidden;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.resume-alt,
-.resume-status {
+.week-name small {
     font-size: var(--text-micro);
     color: var(--muted);
     white-space: nowrap;
 }
 
-.resume-row.is-loading {
-    min-height: 0;
-}
-
-.resume-verdict {
-    display: inline-flex;
+/* Une case : icône, quantité, unité (comme la barre des jours). Elle ouvre ce point à ce jour */
+.week-cell {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 3px;
-    margin-left: auto;
-    font-size: var(--text-small);
-    font-weight: 700;
+    justify-content: center;
+    gap: 1px;
+    min-width: 0;
+    min-height: 52px;
+    padding: var(--space-1) 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, scale 0.1s;
 }
 
-.resume-verdict .ph {
+.week-cell .ph {
     width: 13px;
     height: 13px;
     flex-shrink: 0;
     fill: currentColor;
 }
 
-.resume-verdict.is-unsure {
-    color: var(--warn);
-}
-
-.resume-verdict small {
-    font-weight: 500;
-    color: var(--muted);
-}
-
-.resume-per {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    font-variant-numeric: tabular-nums;
-}
-
-.resume-per img {
-    width: 30px;
-    height: 30px;
-}
-
-.resume-per .t,
-.resume-per .q {
-    font-size: var(--text-micro);
-    font-weight: 600;
+.week-cell b {
+    font-size: var(--text-small);
+    font-weight: 700;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
-.resume-per .q {
-    min-height: 1.2em;
-}
-
-.resume-per .q.is-snow { color: var(--snow-text); }
-.resume-per .q.is-rain { color: var(--rain-text); }
-
-.resume-per .q.is-none {
-    font-weight: 400;
+.week-cell small {
+    font-size: var(--text-micro);
+    line-height: 1;
     color: var(--muted);
 }
 
-.resume-per.is-empty {
+/* Modèles qui se contredisent : la quantité en ambre, comme dans la barre des jours, et un liseré
+   ambre (sur les teintes fortes, l'ambre du chiffre ne se lirait plus : le liseré seul le dit) */
+.week-cell.is-unsure {
+    box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+
+.week-cell.is-unsure:not(.lvl-2, .lvl-3) b {
+    color: var(--warn);
+}
+
+.week-cell.is-empty {
     font-size: var(--text-micro);
     color: var(--muted);
+    cursor: default;
+}
+
+/* Neige : la case se teinte selon la hauteur (moins de 5 cm, 5 à 15, 15 et plus). Sur les teintes
+   fortes, icône et unité passent à la couleur du texte : elles resteraient lisibles */
+.week-cell.lvl-1 { background: color-mix(in srgb, var(--snow-text) 10%, transparent); }
+.week-cell.lvl-2 { background: color-mix(in srgb, var(--snow-text) 22%, transparent); }
+.week-cell.lvl-3 { background: color-mix(in srgb, var(--snow-text) 45%, transparent); }
+
+.week-cell.lvl-2 .ph,
+.week-cell.lvl-3 .ph {
+    color: currentColor;
+}
+
+.week-cell.lvl-2 small,
+.week-cell.lvl-3 small {
+    color: var(--text-soft);
+}
+
+.week-cell:not(.is-empty):active {
+    scale: 0.94;
+}
+
+@media (hover: hover) {
+    .week-cell:not(.is-empty, .is-unsure):hover {
+        box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+}
+
+.week-cell:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+@media (min-width: 600px) {
+    .week-head,
+    .week-point {
+        grid-template-columns: minmax(120px, 1.6fr) repeat(7, minmax(0, 1fr));
+    }
+
+    .week-head h2,
+    .week-name {
+        grid-column: auto;
+    }
 }
 
 /* « Mes points » sans point perso */
