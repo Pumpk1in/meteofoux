@@ -2137,8 +2137,8 @@ const Components = {
 
     // Résumé : la semaine de tous les points d'un coup d'œil, sans clic. Une ligne par point (le
     // domaine, puis « Mes points »), une case par jour : le verdict des 3 modèles, comme la barre des
-    // jours (neige en cm, pluie en mm, sinon la max), la neige teintée selon sa hauteur, en ambre si
-    // les modèles se contredisent. Toucher une case ouvre ce point à ce jour, dans son onglet
+    // jours (neige en cm, pluie en mm, sinon la max), le chiffre en ambre si les modèles se
+    // contredisent. Toucher une case ouvre ce point à ce jour, dans son onglet
     Resume() {
         const data = DataService.state.data;
         const days = App.state.days;
@@ -2155,9 +2155,7 @@ const Components = {
                 const ind = App.dayIndicator(verdict);
                 const label = `${Utils.escapeHtml(point.name)}, ${Utils.formatDateLabel(day)}`;
                 if (!ind) return `<span class="week-cell is-empty" role="img" aria-label="${label} : pas de prévision">—</span>`;
-                // Hauteur de neige du modèle le plus fort : la teinte se lit avant le chiffre
-                const level = ind.mode !== 'snow' ? '' : ` lvl-${verdict.range.hi >= 15 ? 3 : verdict.range.hi >= 5 ? 2 : 1}`;
-                return `<button class="week-cell is-${ind.mode}${level}${ind.unsure ? ' is-unsure' : ''}" data-day="${day}" aria-label="${label}${ind.spoken}"
+                return `<button class="week-cell is-${ind.mode}${ind.unsure ? ' is-unsure' : ''}" data-day="${day}" aria-label="${label}${ind.spoken}"
                     onclick="App.openFromResume('${point.key}', '${day}')">${this.modeIcon(ind.mode)}<b>${ind.short}</b><small>${ind.unit}</small></button>`;
             }).join('');
             return `<div class="week-point" data-key="${point.key}">${name}${cells}</div>`;

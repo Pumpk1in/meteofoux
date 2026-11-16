@@ -70,12 +70,11 @@
     --dock-h: 120px;              /* hauteur de la barre, mesurée en JS (App.initDockCollapse) */
     --dock-full: 120px;           /* la même, jours dépliés : la marge du bas de la page */
 
-    /* Verdict d'un jour (barre des jours, Résumé) : icônes, et teinte des jours de neige du Résumé
-       (= neige des lignes horaires) */
+    /* Verdict d'un jour (barre des jours, Résumé) : icônes */
     --snow-ico: #60a5fa;
     --rain-ico: #3b82f6;
     --dry-ico: #fbbf24;
-    --snow-text: #67e8f9;
+    --week-stripe: rgb(0 0 0 / 0.2);  /* Résumé : un jour sur deux, pour suivre une colonne */
 }
 
 /* Thème clair. Fond de page un cran plus foncé que les cartes blanches : elles ressortent */
@@ -92,7 +91,7 @@
     --snow-ico: #0369a1;
     --rain-ico: #1d4ed8;
     --dry-ico: #b45309;
-    --snow-text: #0e7490;
+    --week-stripe: rgb(15 23 42 / 0.045);
     --card: rgba(255, 255, 255, 1);
     --card-hover: #ffffff;
     --text: #1e293b;
@@ -1024,36 +1023,32 @@ main.tab-enter-l > :not(.swipe-peek) { animation: tab-in-l 0.25s cubic-bezier(0.
     color: var(--muted);
 }
 
-/* Modèles qui se contredisent : la quantité en ambre, comme dans la barre des jours, et un liseré
-   ambre (sur les teintes fortes, l'ambre du chiffre ne se lirait plus : le liseré seul le dit) */
+/* Modèles qui se contredisent : la quantité en ambre, comme dans la barre des jours, et un léger
+   liseré ambre autour de la case */
 .week-cell.is-unsure {
-    box-shadow: inset 0 0 0 1.5px var(--warn);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent);
 }
 
-.week-cell.is-unsure:not(.lvl-2, .lvl-3) b {
+.week-cell.is-unsure b {
     color: var(--warn);
+}
+
+/* Un jour sur deux (MA, JE, SA… : le 2e, 4e, 6e) légèrement plus foncé, de l'en-tête à la
+   dernière ligne, pour descendre une colonne à l'œil. Le premier enfant est le titre / le nom */
+.week-head span:nth-child(odd),
+.week-cell:nth-child(odd) {
+    background: var(--week-stripe);
+}
+
+.week-head span {
+    padding: 2px 0;
+    border-radius: var(--radius-sm);
 }
 
 .week-cell.is-empty {
     font-size: var(--text-micro);
     color: var(--muted);
     cursor: default;
-}
-
-/* Neige : la case se teinte selon la hauteur (moins de 5 cm, 5 à 15, 15 et plus). Sur les teintes
-   fortes, icône et unité passent à la couleur du texte : elles resteraient lisibles */
-.week-cell.lvl-1 { background: color-mix(in srgb, var(--snow-text) 10%, transparent); }
-.week-cell.lvl-2 { background: color-mix(in srgb, var(--snow-text) 22%, transparent); }
-.week-cell.lvl-3 { background: color-mix(in srgb, var(--snow-text) 45%, transparent); }
-
-.week-cell.lvl-2 .ph,
-.week-cell.lvl-3 .ph {
-    color: currentColor;
-}
-
-.week-cell.lvl-2 small,
-.week-cell.lvl-3 small {
-    color: var(--text-soft);
 }
 
 .week-cell:not(.is-empty):active {

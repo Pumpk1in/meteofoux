@@ -259,8 +259,8 @@ block, the same on desktop) holds the seven days above three tabs: La Foux, Mes 
 (Phosphor duotone icons left of their label, the light part only on the open tab). On a phone the
 days fold away while scrolling down and come back when scrolling up. The Résumé shows the week of
 every point without a day bar: one row per point, one cell per day with the verdict of the 3 models
-(the day bar's indicator), snow cells tinted by depth (cyan, three steps), an amber outline when the
-models contradict; a cell opens that point at that day.
+(the day bar's indicator, with no background tint, like the day bar), the figure in amber and a light
+amber outline when the models contradict; a cell opens that point at that day.
 
 Each day is a section, in this order:
 1. **Header** (desktop only, where every day stacks): the date, "Mardi 10 novembre".
