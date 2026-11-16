@@ -537,14 +537,21 @@ const App = {
         document.getElementById('dock').classList.toggle('no-days', this.state.tab === 'resume');
     },
 
-    // Jours dépliés ; la zone reste rognée le temps de se déplier (le contenu déborderait sur les onglets)
+    // Jours dépliés ; la zone reste rognée le temps de se déplier (le contenu déborderait sur les onglets).
+    // Hauteur dépliée remesurée à la fin : un changement d'onglet pendant le dépliement ajoute ou retire
+    // la zone des jours (Résumé), et l'observateur ignore les mesures prises pendant ce temps
     expandDock() {
         const dock = document.getElementById('dock');
         if (!dock.classList.contains('is-compact')) return;
         dock.classList.remove('is-compact');
         dock.classList.add('is-expanding');
         clearTimeout(this._expandTimer);
-        this._expandTimer = setTimeout(() => dock.classList.remove('is-expanding'), 260);
+        this._expandTimer = setTimeout(() => {
+            dock.classList.remove('is-expanding');
+            if (!dock.classList.contains('is-compact')) {
+                document.documentElement.style.setProperty('--dock-full', `${dock.offsetHeight}px`);
+            }
+        }, 260);
     },
 
     // Toucher l'onglet ouvert remonte en haut de la page
